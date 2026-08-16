@@ -797,6 +797,141 @@ td.stat-num {
   line-height: 1.6;
 }
 
+/* ---------- Weekly Schedule (schedule.html) ---------- */
+.schedule-bar {
+  max-width: 1200px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.schedule-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.legend-swatch.sched-home { background: rgba(79, 179, 255, 0.35); }
+.legend-swatch.sched-away { background: var(--bg-hover); border: 1px solid var(--border); }
+
+.schedule-table-wrap {
+  overflow-x: auto;
+}
+
+.schedule-table {
+  min-width: 980px;
+}
+
+.schedule-table th.sched-day-head {
+  text-align: center;
+  padding: 10px 8px;
+}
+
+.sched-day-abbr {
+  display: block;
+  font-size: 11px;
+}
+
+.sched-day-date {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.schedule-table td.sched-day-cell {
+  text-align: center;
+  padding: 6px 6px;
+  vertical-align: middle;
+}
+
+.sched-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  min-width: 52px;
+  position: relative;
+}
+
+.sched-cell.sched-home {
+  background: rgba(79, 179, 255, 0.12);
+}
+
+.sched-cell.sched-away {
+  background: var(--bg-hover);
+}
+
+.sched-opp {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sched-time {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.sched-score {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.sched-score.win { color: #59d97c; }
+.sched-score.loss { color: var(--accent-2); }
+
+.sched-live {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: 0.4px;
+}
+
+.sched-bye {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.sched-b2b {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  background: var(--gold);
+  color: #2a1c00;
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 1px 3px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
 .cards-grid {
   max-width: 1200px;
   margin: 0 auto;

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Schedule — NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🗓</span>
+      <div>
+        <h1>Weekly Schedule</h1>
+        <p class="subtitle" id="weekLabel">Loading week…</p>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="visually-hidden" for="searchInput">Search teams</label>
+      <input id="searchInput" type="search" placeholder="Search team…" aria-label="Search teams" autocomplete="off">
+    </div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Cards</a>
+    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
+    <a href="schedule.html" class="nav-tab active">🗓 Schedule</a>
+    <a href="admin.html" class="nav-tab">⚙ Columns</a>
+  </nav>
+</header>
+
+<main>
+  <div id="statusBanner" class="status-banner" hidden></div>
+
+  <div class="schedule-bar">
+    <button type="button" id="prevWeekBtn" class="ghost-btn">← Previous Week</button>
+    <button type="button" id="thisWeekBtn" class="ghost-btn">This Week</button>
+    <button type="button" id="nextWeekBtn" class="ghost-btn">Next Week →</button>
+    <span class="schedule-legend">
+      <span class="legend-item"><span class="legend-swatch sched-home"></span>Home</span>
+      <span class="legend-item"><span class="legend-swatch sched-away"></span>Away</span>
+      <span class="legend-item"><span class="sched-b2b">B2B</span>Back-to-back</span>
+    </span>
+  </div>
+
+  <div class="table-wrap schedule-table-wrap">
+    <table id="scheduleTable" class="stats-table schedule-table">
+      <caption class="visually-hidden">Weekly schedule by team</caption>
+      <thead>
+        <tr id="scheduleHeadRow">
+          <th scope="col" class="sortable" data-key="name" data-type="string">Team</th>
+        </tr>
+      </thead>
+      <tbody id="scheduleBody"></tbody>
+    </table>
+    <div id="skeleton" class="skeleton" aria-hidden="true"></div>
+    <p id="emptyState" class="empty-state" hidden>No teams match your search.</p>
+  </div>
+
+  <p id="resultCount" class="result-count"></p>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Games-per-week is handy for streaming decisions in weekly fantasy leagues — sort by the GP column to
+    find teams with the most games this week. Back-to-back only looks within the displayed week (not
+    across a week boundary). Data via the unofficial
+    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="schedule.js" defer></script>
+</body>
+</html>
