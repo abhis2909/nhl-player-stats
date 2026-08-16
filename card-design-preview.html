@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Design Preview</title>
+<style>
+  :root {
+    --bronze-1: #7a4a2b; --bronze-2: #3d2414; --bronze-accent: #d98e4a;
+    --silver-1: #8a97a6; --silver-2: #333d49; --silver-accent: #d7e0ea;
+    --gold-1: #caa23a; --gold-2: #4a3a10; --gold-accent: #ffd76a;
+    --diamond-1: #7dd3fc; --diamond-2: #0c2f4a; --diamond-accent: #e0f7ff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: #0a0d12;
+    background-image: radial-gradient(circle at 50% 0%, #182230 0%, #0a0d12 60%);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 40px 20px;
+  }
+
+  h1 {
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #6b7688;
+    margin: 0 0 32px;
+    font-weight: 700;
+  }
+
+  .showcase {
+    display: flex;
+    gap: 34px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .card {
+    width: 300px;
+    height: 470px;
+    border-radius: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 3px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  }
+
+  /* Tier-colored animated shimmer border */
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    padding: 3px;
+    background: linear-gradient(115deg, var(--t1), var(--t-accent), var(--t2), var(--t-accent), var(--t1));
+    background-size: 300% 300%;
+    animation: shimmer 6s ease infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  .card.tier-diamond { --t1: var(--diamond-1); --t2: var(--diamond-2); --t-accent: var(--diamond-accent); }
+  .card.tier-gold    { --t1: var(--gold-1);    --t2: var(--gold-2);    --t-accent: var(--gold-accent); }
+  .card.tier-silver  { --t1: var(--silver-1);  --t2: var(--silver-2);  --t-accent: var(--silver-accent); }
+  .card.tier-bronze  { --t1: var(--bronze-1);  --t2: var(--bronze-2);  --t-accent: var(--bronze-accent); }
+
+  .card-inner {
+    position: relative;
+    flex: 1;
+    border-radius: 17px;
+    overflow: hidden;
+    background: linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tier-tag {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--t2);
+    background: linear-gradient(120deg, var(--t-accent), var(--t1));
+    padding: 3px 12px;
+    border-radius: 20px;
+    z-index: 3;
+  }
+
+  .top-row {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 34px 14px 0;
+  }
+
+  .ovr-badge {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 35% 30%, var(--t-accent), var(--t1) 60%, var(--t2) 100%);
+    border: 2px solid rgba(255,255,255,0.85);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--t1) 60%, transparent), inset 0 2px 4px rgba(255,255,255,0.5);
+    color: #0b0f14;
+  }
+
+  .ovr-badge .val { font-size: 21px; font-weight: 900; line-height: 1; }
+  .ovr-badge .lbl { font-size: 8px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
+
+  .pos-badge {
+    margin-top: 6px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 800;
+    background: rgba(0,0,0,0.45);
+    color: var(--t-accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .team-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 20px;
+    padding: 5px 11px 5px 5px;
+  }
+
+  .team-pill img { width: 22px; height: 22px; object-fit: contain; }
+  .team-pill span { font-size: 12px; font-weight: 800; letter-spacing: 0.3px; }
+
+  .photo-wrap {
+    position: relative;
+    flex: 1;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .photo-wrap img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  .photo-fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 45%, #0c0f14 96%);
+  }
+
+  .card-info {
+    position: relative;
+    z-index: 3;
+    padding: 0 18px 18px;
+    margin-top: -6px;
+  }
+
+  .player-name {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .first-name {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.65);
+    text-transform: uppercase;
+  }
+
+  .last-name {
+    display: block;
+    font-size: 25px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1.15;
+    background: linear-gradient(180deg, #fff, var(--t-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+  }
+
+  .stat {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 9px;
+    padding: 7px 2px;
+    text-align: center;
+  }
+
+  .stat-val {
+    display: block;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--t-accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-lbl {
+    display: block;
+    font-size: 8.5px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.4px;
+    margin-top: 2px;
+  }
+
+  .notes {
+    max-width: 620px;
+    margin-top: 40px;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #8b98ab;
+    text-align: center;
+  }
+
+  .notes b { color: #d7e0ea; }
+</style>
+</head>
+<body>
+
+<h1>Card Design Preview — Top 3 by Overall</h1>
+
+<div class="showcase" id="showcase"></div>
+
+<p class="notes">
+  Tier (Bronze/Silver/Gold/Diamond) is driven by the overall rating bucket
+  — Diamond 90+, Gold 80–89, Silver 65–79, Bronze &lt;65 — so it lines up
+  with the normal-distribution curve: most players land Silver, Diamond is
+  genuinely rare. Team stays as a small badge rather than the whole card's
+  color, so tier communicates <b>"how good"</b> at a glance and team stays
+  identifiable but secondary. Border shimmers subtly on all tiers, more
+  noticeably on Diamond. Not deployed anywhere yet — just this preview page.
+</p>
+
+<script>
+const PLAYERS = [
+  {
+    name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 99,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8477960.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
+    stats: [["G",98],["A",94],["PPP",89],["SHP",92],["PIM",94],["SOG",97],["HIT",92],["BLK",76]],
+  },
+  {
+    name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 99,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8482116.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
+    stats: [["G",97],["A",97],["PPP",97],["SHP",92],["PIM",86],["SOG",95],["HIT",92],["BLK",80]],
+  },
+  {
+    name: "Matt Boldy", pos: "L", team: "MIN", teamName: "Minnesota Wild", overall: 97,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8481557.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/MIN_light.svg",
+    stats: [["G",98],["A",96],["PPP",98],["SHP",98],["PIM",79],["SOG",98],["HIT",78],["BLK",86]],
+  },
+];
+
+function tierFor(overall) {
+  if (overall >= 90) return 'diamond';
+  if (overall >= 80) return 'gold';
+  if (overall >= 65) return 'silver';
+  return 'bronze';
+}
+
+function buildCard(p) {
+  const tier = tierFor(p.overall);
+  const [first, ...rest] = p.name.split(' ');
+  const last = rest.join(' ');
+  const el = document.createElement('div');
+  el.className = `card tier-${tier}`;
+  el.innerHTML = `
+    <div class="card-inner">
+      <div class="tier-tag">${tier}</div>
+      <div class="top-row">
+        <div>
+          <div class="ovr-badge"><span class="val">${p.overall}</span><span class="lbl">OVR</span></div>
+          <div class="pos-badge">${p.pos}</div>
+        </div>
+        <div class="team-pill">
+          <img src="${p.teamLogo}" alt="">
+          <span>${p.team}</span>
+        </div>
+      </div>
+      <div class="photo-wrap">
+        <img src="${p.headshot}" alt="" onerror="this.style.display='none'">
+        <div class="photo-fade"></div>
+      </div>
+      <div class="card-info">
+        <div class="player-name">
+          <span class="first-name">${first}</span>
+          <span class="last-name">${last}</span>
+        </div>
+        <div class="stats-grid">
+          ${p.stats.map(([lbl, val]) => `
+            <div class="stat"><span class="stat-val">${val}</span><span class="stat-lbl">${lbl}</span></div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  return el;
+}
+
+const showcase = document.getElementById('showcase');
+PLAYERS.forEach(p => showcase.appendChild(buildCard(p)));
+</script>
+</body>
+</html>

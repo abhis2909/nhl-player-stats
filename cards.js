@@ -26,7 +26,7 @@
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
-const RATING_FLOOR = 55;   // per-category ratings (uniform 0-100 -> floor..ceil)
+const RATING_FLOOR = 25;   // per-category ratings (uniform 0-100 -> floor..ceil)
 const RATING_CEIL = 99;
 const OVERALL_MEAN = 75;   // overall badge (normal distribution around this...
 const OVERALL_STDDEV = 8;  // ...with this spread)
