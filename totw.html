@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team of the Week — NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🏆</span>
+      <div>
+        <h1>Team of the Week</h1>
+        <p class="subtitle">The top skater at each position (plus the top goalie), scored on that week's stats alone</p>
+      </div>
+    </div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Cards</a>
+    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
+    <a href="schedule.html" class="nav-tab">🗓 Schedule</a>
+    <a href="totw.html" class="nav-tab active">🏆 Team of the Week</a>
+    <a href="admin.html" class="nav-tab">⚙ Columns</a>
+  </nav>
+</header>
+
+<main>
+  <div id="statusBanner" class="status-banner" hidden></div>
+
+  <div class="totw-controls">
+    <div class="range-field">
+      <label for="weekSelect">Week</label>
+      <select id="weekSelect"></select>
+    </div>
+    <span class="totw-new-badge" id="newBadge" hidden>NEW</span>
+    <button type="button" id="skipBtn" class="ghost-btn" hidden>Skip Animation</button>
+  </div>
+
+  <div id="totwEmpty" class="range-empty" hidden>
+    <p>You need at least one full week of snapshots to compute a Team of the Week: retrieve stats at the
+    start of a week, then again the following week (or just use the current in-progress week, scored
+    against Live). Head to <a href="cards.html">Player Cards</a> or <a href="range.html">Range Ratings</a>
+    and click <strong>📥 Retrieve Latest Stats</strong> to get started.</p>
+  </div>
+
+  <div class="totw-stage" id="totwStage">
+    <div class="totw-announce" id="totwAnnounce"></div>
+    <div class="totw-lineup" id="totwLineup"></div>
+    <div class="totw-curtain-wrap closed" id="totwCurtainWrap" aria-hidden="true">
+      <div class="totw-curtain totw-curtain-left"></div>
+      <div class="totw-curtain totw-curtain-right"></div>
+    </div>
+    <button type="button" id="revealBtn" class="totw-reveal-btn">🎬 Reveal Team of the Week</button>
+  </div>
+
+  <section class="totw-leaderboard" id="totwLeaderboard" hidden>
+    <h2>Top 50 Skaters</h2>
+    <div class="table-wrap">
+      <table class="stats-table">
+        <caption class="visually-hidden">Top 50 rated skaters</caption>
+        <thead>
+          <tr><th class="col-rank">#</th><th>Player</th><th>Team</th><th>Pos</th><th class="is-numeric">OVR</th><th>Top stats</th></tr>
+        </thead>
+        <tbody id="totwSkaterBoardBody"></tbody>
+      </table>
+    </div>
+
+    <h2>Top 10 Goalies</h2>
+    <div class="table-wrap">
+      <table class="stats-table">
+        <caption class="visually-hidden">Top 10 rated goalies</caption>
+        <thead>
+          <tr><th class="col-rank">#</th><th>Player</th><th>Team</th><th>Pos</th><th class="is-numeric">OVR</th><th>Top stats</th></tr>
+        </thead>
+        <tbody id="totwGoalieBoardBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Each position's pick is whoever rated highest, among players with at least one game that week, using
+    the same percentile-based rating engine as Player Cards and Range Ratings — just scored against that
+    single week's stat delta instead of the season. A finished week (one with a snapshot both at its start
+    and its end) is computed once and stored permanently, so it stays put even if older raw snapshots
+    later get pruned; the current in-progress week is always recomputed live against Live data. Data via
+    the unofficial <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="columns.js" defer></script>
+<script src="snapshots.js" defer></script>
+<script src="ratings.js" defer></script>
+<script src="totw.js" defer></script>
+</body>
+</html>

@@ -142,6 +142,82 @@ function ratePool(pool, mode) {
   });
 }
 
+// ---------------------------------------------------------------------
+// Delta-window rating — same rating engine (ratePool above), fed a pool
+// built from the DIFFERENCE between two season-data snapshots instead of
+// season-to-date totals. Used by range.js (a chosen [from, to] window)
+// and totw.js (a single calendar week's window, for Team of the Week).
+// ---------------------------------------------------------------------
+
+const MIN_RANGE_GP = 1; // must have played at least 1 game in the window to be ranked
+
+const SKATER_COUNTING = new Set([
+  'goals', 'assists', 'points', 'plusMinus', 'ppGoals', 'ppPoints', 'shGoals', 'shPoints',
+  'gameWinningGoals', 'otGoals', 'pim', 'sog', 'gamesPlayed', 'hits', 'blocks', 'giveaways', 'takeaways',
+]);
+const GOALIE_COUNTING = new Set([
+  'wins', 'losses', 'otLosses', 'saves', 'shutouts', 'gamesPlayed', 'gamesStarted', 'goalsAgainst', 'shotsAgainst',
+]);
+
+/** A single category's value over the [from, to] window for one player.
+ *  Plain counting stats just subtract. shooting%/save%/GAA are true
+ *  rates, so they're recomputed from their underlying counts (goals/SOG,
+ *  goals-against/shots-against, goals-against/starts) rather than
+ *  subtracted directly. faceoff% has no raw win/loss counts available at
+ *  all in this data, so it falls back to the end-of-window season rate —
+ *  a known approximation, same spirit as the rating-trend chart's. */
+function deltaValue(catId, fromP, toP, isGoalie) {
+  if (isGoalie) {
+    if (GOALIE_COUNTING.has(catId)) return (toP[catId] ?? 0) - (fromP[catId] ?? 0);
+    if (catId === 'savePct') {
+      const gaD = (toP.goalsAgainst ?? 0) - (fromP.goalsAgainst ?? 0);
+      const saD = (toP.shotsAgainst ?? 0) - (fromP.shotsAgainst ?? 0);
+      return saD > 0 ? 1 - gaD / saD : (toP.savePct ?? 0);
+    }
+    if (catId === 'gaa') {
+      const gaD = (toP.goalsAgainst ?? 0) - (fromP.goalsAgainst ?? 0);
+      const gsD = (toP.gamesStarted ?? 0) - (fromP.gamesStarted ?? 0);
+      return gsD > 0 ? gaD / gsD : (toP.gaa ?? 0);
+    }
+    return toP[catId] ?? 0;
+  }
+  if (SKATER_COUNTING.has(catId)) return (toP[catId] ?? 0) - (fromP[catId] ?? 0);
+  if (catId === 'shootingPct') {
+    const gD = (toP.goals ?? 0) - (fromP.goals ?? 0);
+    const sD = (toP.sog ?? 0) - (fromP.sog ?? 0);
+    return sD > 0 ? gD / sD : (toP.shootingPct ?? 0);
+  }
+  return toP[catId] ?? 0; // faceoffPct fallback — see comment above
+}
+
+/** Builds a pool of "delta players" for `mode` between two season-data
+ *  snapshots. A player missing from `fromData` (call-up, trade-in,
+ *  rookie debut) is treated as having zero stats at the start of the
+ *  window — their whole season-to-date line counts as their "delta",
+ *  which is exactly what you want if they weren't around yet. */
+function buildDeltaPool(fromData, toData, mode) {
+  const isGoalie = mode === 'goalies';
+  const toList = isGoalie ? toData.goalies : toData.skaters;
+  const fromList = isGoalie ? fromData.goalies : fromData.skaters;
+  const fromMap = new Map(fromList.map((p) => [p.playerId, p]));
+  const catalog = columnCatalog(mode);
+
+  const out = [];
+  for (const toP of toList) {
+    const fromP = fromMap.get(toP.playerId) || {};
+    const gpDelta = (toP.gamesPlayed ?? 0) - (fromP.gamesPlayed ?? 0);
+    if (gpDelta < MIN_RANGE_GP) continue;
+
+    const player = { playerId: toP.playerId, name: toP.name, pos: toP.pos, team: toP.team, gamesPlayed: gpDelta };
+    for (const cat of catalog) {
+      if (cat.id === 'gamesPlayed') continue;
+      player[cat.id] = deltaValue(cat.id, fromP, toP, isGoalie);
+    }
+    out.push(player);
+  }
+  return out;
+}
+
 /** Builds one gem-tier card as a DOM node. `teamMeta` is the Map from
  *  data.js's buildTeamMeta() (for the logo). `onOpen(player)`, if given,
  *  is called on click/Enter/Space — pass a function that opens whatever
