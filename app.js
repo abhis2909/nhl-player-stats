@@ -53,32 +53,6 @@ const state = {
 /* getJSON / escapeHtml / lastTeam / seasonLabel / loadSeasonData all come
    from data.js (loaded before this file). */
 
-function formatHeight(inches) {
-  if (!inches && inches !== 0) return '—';
-  const ft = Math.floor(inches / 12);
-  const inch = inches % 12;
-  return `${ft}'${inch}"`;
-}
-
-function ageFromBirthDate(birthDate) {
-  if (!birthDate) return null;
-  const b = new Date(birthDate + 'T00:00:00Z');
-  if (Number.isNaN(b.getTime())) return null;
-  const now = new Date();
-  let age = now.getUTCFullYear() - b.getUTCFullYear();
-  const beforeBirthday = (now.getUTCMonth() < b.getUTCMonth()) ||
-    (now.getUTCMonth() === b.getUTCMonth() && now.getUTCDate() < b.getUTCDate());
-  if (beforeBirthday) age -= 1;
-  return age;
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso + 'T00:00:00Z');
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-}
-
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
@@ -96,12 +70,13 @@ async function init() {
   toggleSkeleton(true);
   hideBanner();
   try {
-    const { seasonId, teamMeta, skaters, goalies } = await loadSeasonData();
+    const { seasonId, teamMeta, skaters, goalies, source, snapshotLabel } = await getSeasonData();
     state.seasonId = seasonId;
     state.teamMeta = teamMeta;
     state.skaters = skaters;
     state.goalies = goalies;
-    el.seasonLabel.textContent = `${seasonLabel(state.seasonId)} · Regular Season stats`;
+    el.seasonLabel.textContent = `${seasonLabel(state.seasonId)} · Regular Season stats` +
+      (source === 'snapshot' ? ` · ${snapshotLabel}` : '');
 
     populateTeamSelect();
     ensureValidSort();
@@ -532,5 +507,7 @@ window.addEventListener('storage', (e) => {
   renderTableHeaders();
   render();
 });
+
+wireDataBar(init, (err) => showBanner(`Couldn't retrieve latest stats (${err.message}).`));
 
 init();

@@ -16,21 +16,22 @@
    - Each category's rating = that player's percentile rank for the
      mapped stat, within the eligibility pool, rescaled to
      RATING_FLOOR-RATING_CEIL. (Giveaways is inverted — fewer is better.)
-   - Overall (the circular badge): a straight average-of-percentiles
-     regresses hard toward the middle (central limit theorem — averaging
-     several roughly-independent percentiles rarely lands near either
-     end), which is why ratings looked bunched in the 70s-80s for almost
-     everyone. So overall is computed in two stages instead: (1) each
-     player's position-weighted composite percentile, then (2) THAT
-     composite is itself re-percentiled across the pool before the final
-     floor/ceil rescale. Same relative ordering (it's a monotonic
-     transform), but restores real use of the full 55-99 range instead of
-     compressing everyone into a narrow band.
+   - Overall (the circular badge): each player's position-weighted
+     composite percentile is re-percentiled across the pool (so it uses
+     the full 0-100 range instead of clustering around the middle the
+     way an average-of-percentiles does), then run through the inverse
+     normal CDF and rescaled to a mean/stddev — i.e. a genuine bell
+     curve, not a flat 55-99 spread: most players land near
+     OVERALL_MEAN, fewer out toward the tails. See toOverallRating().
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
-const RATING_FLOOR = 55;
+const RATING_FLOOR = 55;   // per-category ratings (uniform 0-100 -> floor..ceil)
 const RATING_CEIL = 99;
+const OVERALL_MEAN = 75;   // overall badge (normal distribution around this...
+const OVERALL_STDDEV = 8;  // ...with this spread)
+const OVERALL_MIN = 40;
+const OVERALL_MAX = 99;
 const BATCH_SIZE = 48;
 
 // Stats where a LOWER raw value is the better outcome (percentile gets
@@ -96,10 +97,15 @@ const el = {
   searchInput: document.getElementById('searchInput'),
   teamSelect: document.getElementById('teamSelect'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
+  modalRoot: document.getElementById('modalRoot'),
+  modalOverlay: document.getElementById('modalOverlay'),
+  modalClose: document.getElementById('modalClose'),
+  modalContent: document.getElementById('modalContent'),
 };
 
 const state = {
   teamMeta: new Map(),
+  seasonId: null,
   rawSkaters: [],   // eligible skaters, unrated (re-rated whenever the column config changes)
   players: [],      // rawSkaters + .ratings + .overall for the CURRENT column config
   search: '',
@@ -107,6 +113,23 @@ const state = {
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
 };
+
+const GAMES_TO_SHOW = 5;
+
+// Per-game data sources for the "Last N Games" panel. Regular-season box
+// score fields (goals, assists, PPP, etc.) come straight from the game-log
+// endpoint. Hits/blocks/giveaways/takeaways aren't in that response at all
+// — they come from a second, batched query to the stats-rest API's
+// per-game realtime report (isGame=true). Anything not listed in either
+// map (shootingPct, faceoffPct, gamesPlayed) isn't meaningfully available
+// per game, so it shows as "—".
+const GAMELOG_FIELD_MAP = {
+  goals: 'goals', assists: 'assists', points: 'points', plusMinus: 'plusMinus',
+  ppGoals: 'powerPlayGoals', ppPoints: 'powerPlayPoints', shGoals: 'shorthandedGoals',
+  shPoints: 'shorthandedPoints', gameWinningGoals: 'gameWinningGoals', otGoals: 'otGoals',
+  pim: 'pim', sog: 'shots',
+};
+const REALTIME_FIELD_MAP = { hits: 'hits', blocks: 'blockedShots', giveaways: 'giveaways', takeaways: 'takeaways' };
 
 /** Percentile rank (0-100) of `value` within `pool` — 0 = lowest, 100 = highest. */
 function percentileRank(value, pool) {
@@ -120,6 +143,47 @@ function percentileRank(value, pool) {
 function toCardRating(percentile) {
   const raw = RATING_FLOOR + (percentile / 100) * (RATING_CEIL - RATING_FLOOR);
   return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
+}
+
+/**
+ * Inverse standard normal CDF (probit function) — Peter Acklam's rational
+ * approximation, ~1.15e-9 relative error. Converts a uniform(0,1) input
+ * into a standard-normal z-score; used to turn a percentile into a
+ * bell-curve rating instead of a flat linear one.
+ */
+function inverseNormalCDF(p) {
+  const pc = Math.min(Math.max(p, 1e-9), 1 - 1e-9); // keep finite at the extremes
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+    1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+    6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+    -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+
+  if (pc < pLow) {
+    const q = Math.sqrt(-2 * Math.log(pc));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (pc <= pHigh) {
+    const q = pc - 0.5;
+    const r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+      (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - pc));
+  return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+    ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+}
+
+/** Percentile (0-100) -> a normally-distributed overall rating around OVERALL_MEAN. */
+function toOverallRating(percentile) {
+  const z = inverseNormalCDF(percentile / 100);
+  const raw = OVERALL_MEAN + z * OVERALL_STDDEV;
+  return Math.max(OVERALL_MIN, Math.min(OVERALL_MAX, Math.round(raw)));
 }
 
 function showBanner(message) {
@@ -169,13 +233,13 @@ function rateAllPlayers() {
     return { player, ratings, compositePct: weightTotal ? weightedSum / weightTotal : 50 };
   });
 
-  // Stage 2: re-percentile the composite score itself so overall actually
-  // spans the full range instead of clustering around the middle.
+  // Stage 2: re-percentile the composite score, then map through the
+  // normal-distribution curve for the final overall.
   const compositePool = withComposite.map((w) => w.compositePct);
   state.players = withComposite.map(({ player, ratings, compositePct }) => ({
     ...player,
     ratings,
-    overall: toCardRating(percentileRank(compositePct, compositePool)),
+    overall: toOverallRating(percentileRank(compositePct, compositePool)),
   }));
 }
 
@@ -185,9 +249,11 @@ async function init() {
   el.grid.innerHTML = '';
 
   try {
-    const { seasonId, teamMeta, skaters } = await loadSeasonData();
+    const { seasonId, teamMeta, skaters, source, snapshotLabel } = await getSeasonData();
     state.teamMeta = teamMeta;
-    el.seasonLabel.textContent = `${seasonLabel(seasonId)} · Ratings`;
+    state.seasonId = seasonId;
+    el.seasonLabel.textContent = `${seasonLabel(seasonId)} · Ratings` +
+      (source === 'snapshot' ? ` · ${snapshotLabel}` : '');
 
     const maxGP = seasonGameCount(skaters);
     const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
@@ -196,7 +262,8 @@ async function init() {
     el.eligibilityNote.textContent =
       `Showing the ${state.rawSkaters.length.toLocaleString()} skaters who've played at least ${minGP} games ` +
       `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for skaters — change it there ` +
-      `and these update too. Ratings are percentile ranks within this group, scaled to ${RATING_FLOOR}–${RATING_CEIL}.`;
+      `and these update too. Category ratings are percentile ranks scaled to ${RATING_FLOOR}–${RATING_CEIL}; ` +
+      `the overall badge is normally distributed around ${OVERALL_MEAN}.`;
 
     rateAllPlayers();
     populateTeamSelect();
@@ -283,6 +350,8 @@ window.addEventListener('storage', (e) => {
   render(true);
 });
 
+wireDataBar(init, (err) => showBanner(`Couldn't retrieve latest stats (${err.message}).`));
+
 function buildCard(player) {
   const colors = teamColor(player.team);
   const headshot = `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
@@ -321,7 +390,130 @@ function buildCard(player) {
       `).join('')}
     </div>
   `;
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  card.addEventListener('click', () => openPlayerModal(player));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlayerModal(player); }
+  });
   return card;
+}
+
+/* ------------------------------ player detail modal ------------------------------ */
+
+function closeModal() {
+  el.modalRoot.hidden = true;
+  document.body.style.overflow = '';
+  el.modalContent.innerHTML = '';
+}
+
+el.modalClose.addEventListener('click', closeModal);
+el.modalOverlay.addEventListener('click', closeModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el.modalRoot.hidden) closeModal();
+});
+
+function openPlayerModal(player) {
+  el.modalRoot.hidden = false;
+  document.body.style.overflow = 'hidden';
+  el.modalContent.innerHTML = '<div class="modal-spinner">Loading…</div>';
+
+  Promise.all([
+    getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`).catch(() => null),
+    fetchLastGames(player),
+  ])
+    .then(([landing, games]) => renderPlayerModal(player, landing, games))
+    .catch((err) => {
+      el.modalContent.innerHTML = `<div class="modal-spinner">Couldn't load player details (${escapeHtml(err.message)}).</div>`;
+    });
+}
+
+/** Last GAMES_TO_SHOW regular-season games, box score fields from the
+ *  game-log endpoint plus a batched per-game realtime query (hits/blocks/
+ *  giveaways/takeaways) if any active category needs those. */
+async function fetchLastGames(player) {
+  const logData = await getJSON(`${API_WEB}/v1/player/${player.playerId}/game-log/${state.seasonId}/2`);
+  const games = (logData.gameLog || []).slice(0, GAMES_TO_SHOW);
+  if (games.length === 0) return games;
+
+  const categories = activeColumns('skaters');
+  const needsRealtime = categories.some((c) => REALTIME_FIELD_MAP[c.id]);
+  if (needsRealtime) {
+    const orExpr = games.map((g) => `gameId=${g.gameId}`).join(' or ');
+    const filter = `(${orExpr}) and playerId=${player.playerId}`;
+    try {
+      const rt = await getJSON(`${API_STATS}/en/skater/realtime?isGame=true&cayenneExp=${encodeURIComponent(filter)}`);
+      const byGame = new Map((rt.data || []).map((r) => [r.gameId, r]));
+      for (const g of games) g._realtime = byGame.get(g.gameId) || {};
+    } catch {
+      // Non-fatal — those columns just show "—" for this player.
+    }
+  }
+  return games;
+}
+
+function buildBioSection(player, landing) {
+  if (!landing) {
+    return `<div class="ph-bio"><div class="ph-bio-item"><span class="value">Bio unavailable right now.</span></div></div>`;
+  }
+  const age = ageFromBirthDate(landing.birthDate);
+  const height = formatHeight(landing.heightInInches);
+  const weight = landing.weightInPounds ? `${landing.weightInPounds} lb` : '—';
+  const teamName = landing.fullTeamName?.default || state.teamMeta.get(player.team)?.name || player.team;
+  const birthplace = [landing.birthCity?.default, landing.birthStateProvince?.default, landing.birthCountry]
+    .filter(Boolean).join(', ');
+  const draft = landing.draftDetails
+    ? `${landing.draftDetails.year} · Rd ${landing.draftDetails.round}, Pick ${landing.draftDetails.overallPick}`
+    : 'Undrafted';
+
+  return `
+    <div class="ph-bio">
+      <div class="ph-bio-item"><span class="label">Age</span><span class="value">${age ?? '—'}</span></div>
+      <div class="ph-bio-item"><span class="label">Height</span><span class="value">${height}</span></div>
+      <div class="ph-bio-item"><span class="label">Weight</span><span class="value">${weight}</span></div>
+      <div class="ph-bio-item"><span class="label">Team</span><span class="value">${escapeHtml(teamName)}</span></div>
+      <div class="ph-bio-item"><span class="label">Draft</span><span class="value">${escapeHtml(draft)}</span></div>
+      <div class="ph-bio-item"><span class="label">Shoots</span><span class="value">${landing.shootsCatches ?? '—'}</span></div>
+      <div class="ph-bio-item"><span class="label">Birthplace</span><span class="value">${escapeHtml(birthplace) || '—'}</span></div>
+    </div>
+  `;
+}
+
+function buildLastGamesTable(games) {
+  if (!games || games.length === 0) {
+    return '<div class="gamelog-empty">No regular-season games found yet.</div>';
+  }
+  const categories = activeColumns('skaters');
+  const head = `<tr><th>Date</th><th>Opp</th>${categories.map((c) => `<th title="${escapeHtml(c.label)}">${escapeHtml(c.short)}</th>`).join('')}</tr>`;
+
+  const rows = games.map((g) => {
+    const opp = (g.homeRoadFlag === 'H' ? 'vs ' : '@ ') + (g.opponentAbbrev ?? '');
+    const cells = categories.map((c) => {
+      let raw;
+      if (REALTIME_FIELD_MAP[c.id]) raw = g._realtime?.[REALTIME_FIELD_MAP[c.id]];
+      else if (GAMELOG_FIELD_MAP[c.id]) raw = g[GAMELOG_FIELD_MAP[c.id]];
+      const display = raw == null ? '—' : escapeHtml(formatColumnValue(c, raw));
+      return `<td>${display}</td>`;
+    }).join('');
+    return `<tr><td>${formatDate(g.gameDate)}</td><td>${escapeHtml(opp)}</td>${cells}</tr>`;
+  }).join('');
+
+  return `<div class="gamelog-table-wrap"><table class="gamelog-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderPlayerModal(player, landing, games) {
+  el.modalContent.innerHTML = `
+    <div class="pcard-modal-body">
+      <div class="pcard-modal-left">
+        ${buildCard(player).outerHTML}
+        ${buildBioSection(player, landing)}
+      </div>
+      <div class="pcard-modal-right">
+        <h3 id="modalPlayerName">${escapeHtml(player.name)} — Last ${games.length || GAMES_TO_SHOW} Games</h3>
+        ${buildLastGamesTable(games)}
+      </div>
+    </div>
+  `;
 }
 
 init();

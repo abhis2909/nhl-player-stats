@@ -41,6 +41,13 @@
 </header>
 
 <main>
+  <div class="data-bar">
+    <span class="data-bar-label" id="dataSourceLabel">Live data</span>
+    <label class="visually-hidden" for="snapshotSelect">Data snapshot</label>
+    <select id="snapshotSelect"></select>
+    <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
+  </div>
+
   <div id="statusBanner" class="status-banner" hidden></div>
 
   <p class="eligibility-note" id="eligibilityNote"></p>
@@ -60,17 +67,26 @@
   <p id="resultCount" class="result-count"></p>
 </main>
 
+<div id="modalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="modalOverlay"></div>
+  <div class="modal-panel pcard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
+    <button class="modal-close" id="modalClose" aria-label="Close player details">✕</button>
+    <div id="modalContent"><div class="modal-spinner">Loading…</div></div>
+  </div>
+</div>
+
 <footer class="site-footer">
   <p>
-    Ratings are percentile ranks within this season's qualified skaters (see note above), mapped to a
-    55–99 scale — not official NHL or fantasy-provider ratings.
-    Data via the unofficial
+    Category ratings are percentile ranks within this season's qualified skaters (see note above);
+    the overall badge is normally distributed, not a flat scale — neither is an official NHL or
+    fantasy-provider rating. Data via the unofficial
     <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
   </p>
 </footer>
 
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
+<script src="snapshots.js" defer></script>
 <script src="team-colors.js" defer></script>
 <script src="cards.js" defer></script>
 </body>

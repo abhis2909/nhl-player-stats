@@ -41,6 +41,32 @@ function seasonLabel(seasonId) {
   return `${s.slice(0, 4)}–${s.slice(6, 8)}`;
 }
 
+function formatHeight(inches) {
+  if (!inches && inches !== 0) return '—';
+  const ft = Math.floor(inches / 12);
+  const inch = inches % 12;
+  return `${ft}'${inch}"`;
+}
+
+function ageFromBirthDate(birthDate) {
+  if (!birthDate) return null;
+  const b = new Date(birthDate + 'T00:00:00Z');
+  if (Number.isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - b.getUTCFullYear();
+  const beforeBirthday = (now.getUTCMonth() < b.getUTCMonth()) ||
+    (now.getUTCMonth() === b.getUTCMonth() && now.getUTCDate() < b.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
 function fallbackSeasonId() {
   const now = new Date();
   const y = now.getUTCFullYear();

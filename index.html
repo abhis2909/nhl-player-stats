@@ -40,6 +40,13 @@
 </header>
 
 <main>
+  <div class="data-bar">
+    <span class="data-bar-label" id="dataSourceLabel">Live data</span>
+    <label class="visually-hidden" for="snapshotSelect">Data snapshot</label>
+    <select id="snapshotSelect"></select>
+    <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
+  </div>
+
   <div id="statusBanner" class="status-banner" hidden></div>
 
   <div class="table-wrap">
@@ -94,6 +101,7 @@
 
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
+<script src="snapshots.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>
