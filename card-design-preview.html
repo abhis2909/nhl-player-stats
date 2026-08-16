@@ -45,7 +45,7 @@
 
   .card {
     width: 300px;
-    height: 545px;
+    height: 500px;
     border-radius: 20px;
     position: relative;
     display: flex;
@@ -90,9 +90,11 @@
     flex-direction: column;
   }
 
+  /* Badges float over the photo now (see .photo-wrap below) instead of
+     reserving their own row, so the photo can start right at the top edge. */
   .tier-tag {
     position: absolute;
-    top: 14px;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 9.5px;
@@ -103,21 +105,23 @@
     background: linear-gradient(120deg, var(--t-accent), var(--t1));
     padding: 3px 12px;
     border-radius: 20px;
-    z-index: 3;
+    z-index: 4;
   }
 
   .top-row {
-    position: relative;
-    z-index: 3;
+    position: absolute;
+    top: 14px;
+    left: 12px;
+    right: 12px;
+    z-index: 4;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 24px 14px 0;
   }
 
   .ovr-badge {
-    width: 58px;
-    height: 58px;
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -125,19 +129,19 @@
     align-items: center;
     background: radial-gradient(circle at 35% 30%, var(--t-accent), var(--t1) 60%, var(--t2) 100%);
     border: 2px solid rgba(255,255,255,0.85);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--t1) 60%, transparent), inset 0 2px 4px rgba(255,255,255,0.5);
+    box-shadow: 0 0 18px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.5);
     color: #0b0f14;
   }
 
-  .ovr-badge .val { font-size: 21px; font-weight: 900; line-height: 1; }
-  .ovr-badge .lbl { font-size: 8px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
+  .ovr-badge .val { font-size: 20px; font-weight: 900; line-height: 1; }
+  .ovr-badge .lbl { font-size: 7.5px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
 
   .pos-badge {
     margin-top: 6px;
     text-align: center;
     font-size: 10px;
     font-weight: 800;
-    background: rgba(0,0,0,0.45);
+    background: rgba(0,0,0,0.5);
     color: var(--t-accent);
     border-radius: 6px;
     padding: 2px 8px;
@@ -148,7 +152,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.5);
     border-radius: 20px;
     padding: 5px 11px 5px 5px;
   }
@@ -159,24 +163,23 @@
   .photo-wrap {
     position: relative;
     flex: 1;
-    min-height: 240px;
-    margin-top: 8px;
+    min-height: 275px;
     overflow: hidden;
   }
 
-  .photo-wrap img {
+  .photo-wrap > img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center 8%;
+    object-position: center 4%;
   }
 
   .photo-fade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 70%, #0c0f14 99%);
+    background: linear-gradient(180deg, transparent 72%, #0c0f14 99%);
   }
 
   .card-info {
@@ -215,36 +218,50 @@
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 7px;
+    gap: 8px 6px;
   }
 
   .stat {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 9px;
-    padding: 7px 2px;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
   }
 
+  /* Tile shape reflects tier — a visual "rarity" cue on top of the color/
+     shimmer treatment: diamond = literal diamond, gold = hexagon (faceted
+     gem cut), silver = circle, bronze = plain rounded square. */
+  .stat-shape {
+    width: 46px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(155deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .tier-diamond .stat-shape { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+  .tier-gold .stat-shape { clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0% 50%); }
+  .tier-silver .stat-shape { border-radius: 50%; }
+  .tier-bronze .stat-shape { border-radius: 10px; }
+
   .stat-val {
-    display: block;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
     color: var(--t-accent);
     font-variant-numeric: tabular-nums;
   }
 
   .stat-lbl {
-    display: block;
     font-size: 8.5px;
     font-weight: 700;
     color: rgba(255,255,255,0.55);
     letter-spacing: 0.4px;
-    margin-top: 2px;
   }
 
   .notes {
-    max-width: 620px;
+    max-width: 640px;
     margin-top: 40px;
     font-size: 12.5px;
     line-height: 1.7;
@@ -262,41 +279,43 @@
 <div class="showcase" id="showcase"></div>
 
 <p class="notes">
-  Tier (Bronze/Silver/Gold/Diamond) is driven by the overall rating bucket
-  — Diamond 90+, Gold 80–89, Silver 65–79, Bronze &lt;65 — so it lines up
-  with the normal-distribution curve: most players land Silver, Diamond is
-  genuinely rare. Team stays as a small badge rather than the whole card's
-  color, so tier communicates <b>"how good"</b> at a glance and team stays
-  identifiable but secondary. Border shimmers subtly on all tiers, more
-  noticeably on Diamond. Not deployed anywhere yet — just this preview page.
+  Tier now calibrated against the real (reverted-to-weighted-average)
+  rating distribution — measured on the live 693-skater pool: min 28,
+  max 89, mean 60. So: <b>Diamond 85+</b> (~top 3%), <b>Gold 75–84</b>
+  (~next 17%), <b>Silver 50–74</b> (the big middle, ~55%), <b>Bronze
+  &lt;50</b> (~25%). Stat tiles are now shaped by tier too — diamond,
+  hexagon, circle, rounded square — with just the number inside and the
+  label underneath, unclipped. Photo now starts at the very top of the
+  card with badges floating over it, instead of pushing the photo down.
+  Not deployed anywhere yet — just this preview page.
 </p>
 
 <script>
 const PLAYERS = [
   {
-    name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 99,
-    headshot: "https://assets.nhle.com/mugs/nhl/latest/8477960.png",
-    teamLogo: "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
-    stats: [["G",97],["A",90],["PPP",82],["SHP",88],["PIM",90],["SOG",96],["HIT",87],["BLK",61]],
-  },
-  {
-    name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 99,
+    name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 89,
     headshot: "https://assets.nhle.com/mugs/nhl/latest/8482116.png",
     teamLogo: "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
     stats: [["G",96],["A",95],["PPP",96],["SHP",88],["PIM",77],["SOG",92],["HIT",87],["BLK",67]],
   },
   {
-    name: "Matt Boldy", pos: "L", team: "MIN", teamName: "Minnesota Wild", overall: 97,
-    headshot: "https://assets.nhle.com/mugs/nhl/latest/8481557.png",
-    teamLogo: "https://assets.nhle.com/logos/nhl/svg/MIN_light.svg",
-    stats: [["G",98],["A",94],["PPP",97],["SHP",97],["PIM",66],["SOG",98],["HIT",63],["BLK",76]],
+    name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 88,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8477960.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
+    stats: [["G",97],["A",90],["PPP",82],["SHP",88],["PIM",90],["SOG",96],["HIT",87],["BLK",61]],
+  },
+  {
+    name: "Jake Guentzel", pos: "C", team: "TBL", teamName: "Tampa Bay Lightning", overall: 87,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8477404.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/TBL_light.svg",
+    stats: [["G",97],["A",96],["PPP",97],["SHP",88],["PIM",92],["SOG",95],["HIT",49],["BLK",63]],
   },
 ];
 
 function tierFor(overall) {
-  if (overall >= 90) return 'diamond';
-  if (overall >= 80) return 'gold';
-  if (overall >= 65) return 'silver';
+  if (overall >= 85) return 'diamond';
+  if (overall >= 75) return 'gold';
+  if (overall >= 50) return 'silver';
   return 'bronze';
 }
 
@@ -309,19 +328,19 @@ function buildCard(p) {
   el.innerHTML = `
     <div class="card-inner">
       <div class="tier-tag">${tier}</div>
-      <div class="top-row">
-        <div>
-          <div class="ovr-badge"><span class="val">${p.overall}</span><span class="lbl">OVR</span></div>
-          <div class="pos-badge">${p.pos}</div>
-        </div>
-        <div class="team-pill">
-          <img src="${p.teamLogo}" alt="">
-          <span>${p.team}</span>
-        </div>
-      </div>
       <div class="photo-wrap">
         <img src="${p.headshot}" alt="" onerror="this.style.display='none'">
         <div class="photo-fade"></div>
+        <div class="top-row">
+          <div>
+            <div class="ovr-badge"><span class="val">${p.overall}</span><span class="lbl">OVR</span></div>
+            <div class="pos-badge">${p.pos}</div>
+          </div>
+          <div class="team-pill">
+            <img src="${p.teamLogo}" alt="">
+            <span>${p.team}</span>
+          </div>
+        </div>
       </div>
       <div class="card-info">
         <div class="player-name">
@@ -330,7 +349,10 @@ function buildCard(p) {
         </div>
         <div class="stats-grid">
           ${p.stats.map(([lbl, val]) => `
-            <div class="stat"><span class="stat-val">${val}</span><span class="stat-lbl">${lbl}</span></div>
+            <div class="stat">
+              <div class="stat-shape"><span class="stat-val">${val}</span></div>
+              <span class="stat-lbl">${lbl}</span>
+            </div>
           `).join('')}
         </div>
       </div>
