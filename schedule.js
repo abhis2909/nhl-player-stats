@@ -1,20 +1,29 @@
 'use strict';
 
 /* ======================================================================
-   Weekly Schedule: a team x day grid for one week at a time, similar to
-   Daily Faceoff's schedule grid — who each team plays, home or away,
-   each day, plus a games-this-week count (handy for streaming decisions
-   in weekly fantasy leagues) and a back-to-back flag.
+   Weekly Schedule: a team x day grid, similar to Daily Faceoff's
+   schedule grid — who each team plays, home or away, each day in a
+   chosen date range, plus a games-in-range count (handy for streaming
+   decisions in weekly fantasy leagues), a back-to-back flag, and a
+   matchup-strength color per cell (see computeTeamStrength() below).
 
-   One API call per week: /v1/schedule/{date} (or /v1/schedule/now for
-   the current one) returns a full league-wide week already grouped by
-   day — { nextStartDate, previousStartDate, gameWeek: [{ date,
-   dayAbbrev, games: [...] }] } — so there's no need to fetch anything
-   per-team; the response already carries every game for every team that
-   week, and nextStartDate/previousStartDate make Prev/Next navigation
-   trivial. Team metadata (name, logo) is a separate, rarely-changing
-   fetch shared with data.js's buildTeamMeta().
+   Data comes from /v1/schedule/{date} — one call per 7-day window,
+   already grouped by day and covering every team, so a multi-week range
+   just means a few chained calls (fetchRange()) rather than one call per
+   team. Team metadata (name, logo, standings) is a separate, rarely-
+   changing fetch shared with data.js's buildTeamMeta().
+
+   Everything here operates on an explicit [fromDate, toDate] range
+   rather than "the current week" — Prev/This Week/Next are just
+   shortcuts that set a plain Monday-Sunday range; the date inputs allow
+   any custom span up to MAX_RANGE_DAYS, and the team-filter checkboxes
+   narrow which rows show. NHL's own /v1/schedule/{date} redirect isn't
+   used for navigation math (only for finding "now" once at init) — Prev/
+   Next/custom ranges are computed with plain date arithmetic instead, so
+   there's no dependency on the API's own week boundaries once loaded.
    ====================================================================== */
+
+const MAX_RANGE_DAYS = 31; // caps both the grid width and the number of chained week-fetches
 
 const el = {
   weekLabel: document.getElementById('weekLabel'),
@@ -25,21 +34,31 @@ const el = {
   body: document.getElementById('scheduleBody'),
   emptyState: document.getElementById('emptyState'),
   resultCount: document.getElementById('resultCount'),
+  scheduleNote: document.getElementById('scheduleNote'),
   searchInput: document.getElementById('searchInput'),
   prevWeekBtn: document.getElementById('prevWeekBtn'),
   nextWeekBtn: document.getElementById('nextWeekBtn'),
   thisWeekBtn: document.getElementById('thisWeekBtn'),
+  fromDateInput: document.getElementById('fromDate'),
+  toDateInput: document.getElementById('toDate'),
+  teamFilterBtn: document.getElementById('teamFilterBtn'),
+  teamFilterPanel: document.getElementById('teamFilterPanel'),
+  teamFilterGrid: document.getElementById('teamFilterGrid'),
+  teamFilterAll: document.getElementById('teamFilterAll'),
+  teamFilterNone: document.getElementById('teamFilterNone'),
 };
 
 const state = {
   teamMeta: new Map(),
-  gameWeek: [], // [{ date, dayAbbrev, games: [...] }]
-  nextStartDate: null,
-  previousStartDate: null,
+  teamStrength: new Map(), // abbrev -> { score, rank, gfPerGame, gaPerGame } | null
+  selectedTeams: null, // Set of abbrevs, or null until populated (= all)
+  days: [], // [{ date, dayAbbrev, games: [...] }] across the selected range
+  fromDate: null,
+  toDate: null,
   grid: new Map(), // teamAbbrev -> Map(date -> cellInfo)
   search: '',
   sort: { key: 'name', dir: 'asc' },
-  currentWeekMonday: null, // the Monday that "This Week" / the initial load should land on
+  currentWeekMonday: null, // the Monday "This Week" should land on
 };
 
 function debounce(fn, ms) {
@@ -52,12 +71,17 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 /** The Monday (ISO date string) of the week containing `dateStr`. NHL's
  *  /v1/schedule/{date} returns whatever 7-day window starts at the date
- *  you give it — not necessarily Monday-aligned — so every fetch in this
- *  file anchors to a Monday first. Confirmed by testing: once you DO
- *  anchor to a Monday, the API's own nextStartDate/previousStartDate
- *  stay Monday-aligned on every subsequent page too. */
+ *  you give it — not necessarily Monday-aligned (confirmed: its "now"
+ *  alias can jump to a Tuesday) — so every week-fetch anchors to a
+ *  Monday first. */
 function mondayOf(dateStr) {
   const d = new Date(dateStr + 'T00:00:00Z');
   const day = d.getUTCDay(); // 0=Sun .. 6=Sat
@@ -78,14 +102,41 @@ function showBanner(message) {
   el.statusBanner.hidden = false;
 }
 
-/** Turns the flat gameWeek array into a per-team lookup: abbrev -> Map(date -> cellInfo). */
-function buildGrid(gameWeek) {
+// ---------------------------------------------------------------------
+// Fetching a date range (possibly several chained week-fetches)
+// ---------------------------------------------------------------------
+
+/** All game-days between fromDate and toDate (inclusive), fetched as
+ *  however many 7-day /v1/schedule/{monday} pages that spans. Days are
+ *  pushed in chronological order with no gaps, so consecutive entries in
+ *  the result are always consecutive calendar days (buildRow's
+ *  back-to-back check relies on that). */
+async function fetchRange(fromDate, toDate) {
+  const days = [];
+  let cursor = mondayOf(fromDate);
+  let guard = 0;
+  while (guard < 12) { // defensive cap regardless of MAX_RANGE_DAYS, in case of an odd API response
+    const data = await getJSON(`${API_WEB}/v1/schedule/${cursor}`);
+    const week = data.gameWeek || [];
+    for (const day of week) {
+      if (day.date >= fromDate && day.date <= toDate) days.push(day);
+    }
+    const lastDate = week[week.length - 1]?.date;
+    if (!lastDate || lastDate >= toDate || !data.nextStartDate) break;
+    cursor = data.nextStartDate;
+    guard += 1;
+  }
+  return days;
+}
+
+/** Turns the flat days array into a per-team lookup: abbrev -> Map(date -> cellInfo). */
+function buildGrid(days) {
   const grid = new Map();
   const setCell = (abbrev, date, info) => {
     if (!grid.has(abbrev)) grid.set(abbrev, new Map());
     grid.get(abbrev).set(date, info);
   };
-  for (const day of gameWeek) {
+  for (const day of days) {
     for (const g of day.games) {
       const home = g.homeTeam;
       const away = g.awayTeam;
@@ -102,13 +153,125 @@ function buildGrid(gameWeek) {
   return grid;
 }
 
+// ---------------------------------------------------------------------
+// Matchup strength — standing position + offense + defense, blended
+// ---------------------------------------------------------------------
+
+function percentileRank(value, pool) {
+  const n = pool.length;
+  if (n <= 1) return 100;
+  let below = 0;
+  for (const v of pool) if (v < value) below += 1;
+  return (below / (n - 1)) * 100;
+}
+
+/** abbrev -> { score(0-100), rank, gfPerGame, gaPerGame } | null. Blends
+ *  three percentile-ranked signals, each relative to the other teams
+ *  with standings data: standing position (leagueSequence, inverted so
+ *  rank #1 scores highest), offense (goalFor/gamesPlayed), and defense
+ *  (goalAgainst/gamesPlayed, inverted so fewer goals allowed scores
+ *  highest). Equal weight, simple average — higher score = tougher
+ *  opponent. A team with no games-played data yet (shouldn't normally
+ *  happen — /v1/standings/now falls back to last season's final table
+ *  before a new season starts) gets null: "no rating", not a 0. */
+function computeTeamStrength(teamMeta) {
+  const withData = Array.from(teamMeta.values()).filter((m) => m.gamesPlayed > 0 && typeof m.leagueSequence === 'number');
+  const rankPool = withData.map((m) => m.leagueSequence);
+  const offPool = withData.map((m) => m.goalFor / m.gamesPlayed);
+  const defPool = withData.map((m) => m.goalAgainst / m.gamesPlayed);
+
+  const strength = new Map();
+  for (const [abbrev, m] of teamMeta.entries()) {
+    if (!m.gamesPlayed || typeof m.leagueSequence !== 'number') { strength.set(abbrev, null); continue; }
+    const gfPerGame = m.goalFor / m.gamesPlayed;
+    const gaPerGame = m.goalAgainst / m.gamesPlayed;
+    const rankPct = 100 - percentileRank(m.leagueSequence, rankPool);
+    const offPct = percentileRank(gfPerGame, offPool);
+    const defPct = 100 - percentileRank(gaPerGame, defPool);
+    strength.set(abbrev, {
+      score: Math.round((rankPct + offPct + defPct) / 3),
+      rank: m.leagueSequence,
+      gfPerGame,
+      gaPerGame,
+    });
+  }
+  return strength;
+}
+
+function strengthTier(score) {
+  if (score == null) return null;
+  if (score >= 80) return 'brutal';
+  if (score >= 60) return 'tough';
+  if (score >= 40) return 'even';
+  if (score >= 20) return 'favorable';
+  return 'easy';
+}
+
+const TIER_LABEL = { brutal: 'Brutal', tough: 'Tough', even: 'Even', favorable: 'Favorable', easy: 'Easy' };
+
+// ---------------------------------------------------------------------
+// Team filter panel
+// ---------------------------------------------------------------------
+
+function populateTeamFilter() {
+  const teams = Array.from(state.teamMeta.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  el.teamFilterGrid.innerHTML = teams.map(([abbrev, meta]) => `
+    <label class="check-item">
+      <input type="checkbox" value="${escapeHtml(abbrev)}" checked>
+      <span>${escapeHtml(meta.name)}</span>
+    </label>
+  `).join('');
+  el.teamFilterGrid.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', onTeamFilterChange);
+  });
+}
+
+function onTeamFilterChange() {
+  const checked = Array.from(el.teamFilterGrid.querySelectorAll('input:checked')).map((cb) => cb.value);
+  state.selectedTeams = new Set(checked);
+  updateTeamFilterLabel();
+  render();
+}
+
+function updateTeamFilterLabel() {
+  const total = state.teamMeta.size;
+  const n = state.selectedTeams.size;
+  const label = n === total ? 'Teams: All' : n === 0 ? 'Teams: None' : `Teams: ${n}`;
+  el.teamFilterBtn.innerHTML = `${escapeHtml(label)} <span class="caret">▾</span>`;
+}
+
+el.teamFilterAll.addEventListener('click', () => {
+  el.teamFilterGrid.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = true; });
+  onTeamFilterChange();
+});
+el.teamFilterNone.addEventListener('click', () => {
+  el.teamFilterGrid.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
+  onTeamFilterChange();
+});
+el.teamFilterBtn.addEventListener('click', () => {
+  const willOpen = el.teamFilterPanel.hidden;
+  el.teamFilterPanel.hidden = !willOpen;
+  el.teamFilterBtn.setAttribute('aria-expanded', String(willOpen));
+});
+document.addEventListener('click', (e) => {
+  if (!el.teamFilterPanel.hidden && !e.target.closest('.team-filter')) {
+    el.teamFilterPanel.hidden = true;
+    el.teamFilterBtn.setAttribute('aria-expanded', 'false');
+  }
+});
+
+// ---------------------------------------------------------------------
+// Rows / rendering
+// ---------------------------------------------------------------------
+
 function teamRows() {
   const q = state.search.trim().toLowerCase();
   const rows = [];
   for (const [abbrev, meta] of state.teamMeta.entries()) {
+    if (state.selectedTeams && !state.selectedTeams.has(abbrev)) continue;
     if (q && !meta.name.toLowerCase().includes(q) && !abbrev.toLowerCase().includes(q)) continue;
     const teamGrid = state.grid.get(abbrev);
-    const days = state.gameWeek.map((day) => teamGrid?.get(day.date) || null);
+    const days = state.days.map((day) => teamGrid?.get(day.date) || null);
     const gp = days.filter(Boolean).length;
     rows.push({ abbrev, name: meta.name, logo: meta.logo, days, gp });
   }
@@ -139,7 +302,7 @@ function renderHead() {
   teamTh.addEventListener('click', () => onSortClick('name', 'string'));
   el.headRow.appendChild(teamTh);
 
-  for (const day of state.gameWeek) {
+  for (const day of state.days) {
     const th = document.createElement('th');
     th.scope = 'col';
     th.className = 'sched-day-head';
@@ -152,7 +315,7 @@ function renderHead() {
   gpTh.className = 'sortable is-numeric';
   gpTh.dataset.key = 'gp';
   gpTh.dataset.type = 'number';
-  gpTh.title = 'Games this week';
+  gpTh.title = 'Games in the selected range';
   gpTh.textContent = 'GP';
   gpTh.addEventListener('click', () => onSortClick('gp', 'number'));
   el.headRow.appendChild(gpTh);
@@ -177,17 +340,21 @@ function updateSortHeaders() {
   });
 }
 
-/** One day's cell for a team — opponent + home/away, plus a final score
- *  (once the game's official) or a scheduled start time, plus a small
- *  B2B tag if this game and the previous displayed day's game are both
- *  present (back-to-back only within the visible week — see footer note). */
+/** One day's cell for a team — opponent + home/away, tinted by the
+ *  opponent's matchup-strength tier, plus either a final score
+ *  (color-coded win/loss, once the game's official), a scheduled start
+ *  time, or "LIVE" — falls back to a plain "–" for a bye day. A B2B tag
+ *  shows when this game and the previous displayed day's game are both
+ *  present (only within the selected range — see footer note). */
 function cellHtml(info, isB2B) {
   if (!info) return '<span class="sched-bye">–</span>';
 
   const prefix = info.isHome ? 'vs' : '@';
-  const sideClass = info.isHome ? 'sched-home' : 'sched-away';
-  let extra = '';
+  const strength = state.teamStrength.get(info.opp);
+  const tier = strengthTier(strength?.score);
+  const tierClass = tier ? `opp-${tier}` : '';
 
+  let extra = '';
   if (info.gameState === 'OFF' && typeof info.ownScore === 'number' && typeof info.oppScore === 'number') {
     const outcome = info.ownScore > info.oppScore ? 'win' : 'loss';
     extra = `<span class="sched-score ${outcome}">${info.ownScore}–${info.oppScore}</span>`;
@@ -199,7 +366,11 @@ function cellHtml(info, isB2B) {
   }
 
   const b2bTag = isB2B ? '<span class="sched-b2b" title="Back-to-back">B2B</span>' : '';
-  return `<span class="sched-cell ${sideClass}">${b2bTag}<span class="sched-opp">${prefix} ${escapeHtml(info.opp)}</span>${extra}</span>`;
+  const title = strength
+    ? `${info.opp} — rank #${strength.rank}, ${strength.gfPerGame.toFixed(2)} GF/G, ${strength.gaPerGame.toFixed(2)} GA/G — ${TIER_LABEL[tier]} matchup (${strength.score}/100)`
+    : `${info.opp} — no rating available`;
+
+  return `<span class="sched-cell ${tierClass}" title="${escapeHtml(title)}">${b2bTag}<span class="sched-opp">${prefix} ${escapeHtml(info.opp)}</span>${extra}</span>`;
 }
 
 function buildRow(row) {
@@ -251,34 +422,38 @@ function render() {
   updateSortHeaders();
 }
 
-function formatWeekLabel(gameWeek) {
-  if (gameWeek.length === 0) return '';
-  const first = new Date(gameWeek[0].date + 'T00:00:00Z');
-  const last = new Date(gameWeek[gameWeek.length - 1].date + 'T00:00:00Z');
+function formatRangeLabel(fromDate, toDate) {
+  const first = new Date(fromDate + 'T00:00:00Z');
+  const last = new Date(toDate + 'T00:00:00Z');
   const opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
   const yearOpts = { ...opts, year: 'numeric' };
+  if (fromDate === toDate) return first.toLocaleDateString(undefined, yearOpts);
   return `${first.toLocaleDateString(undefined, opts)} – ${last.toLocaleDateString(undefined, yearOpts)}`;
 }
 
-async function loadWeek(date) {
+// ---------------------------------------------------------------------
+// Loading a range
+// ---------------------------------------------------------------------
+
+async function loadRange(fromDate, toDate, clamped = false) {
   el.statusBanner.hidden = true;
   el.skeleton.hidden = false;
   el.body.innerHTML = '';
+  state.fromDate = fromDate;
+  state.toDate = toDate;
 
   try {
-    // Always anchor to that date's Monday — see mondayOf()'s comment.
-    const anchored = mondayOf(date);
-    const data = await getJSON(`${API_WEB}/v1/schedule/${anchored}`);
-    state.gameWeek = data.gameWeek || [];
-    state.nextStartDate = data.nextStartDate || null;
-    state.previousStartDate = data.previousStartDate || null;
-    state.grid = buildGrid(state.gameWeek);
+    state.days = await fetchRange(fromDate, toDate);
+    state.grid = buildGrid(state.days);
 
-    const isCurrent = state.gameWeek[0]?.date === state.currentWeekMonday;
-    el.weekLabel.innerHTML = escapeHtml(formatWeekLabel(state.gameWeek)) +
-      (isCurrent ? ' <span class="current-week-badge">Current Week</span>' : '');
-    el.nextWeekBtn.disabled = !state.nextStartDate;
-    el.prevWeekBtn.disabled = !state.previousStartDate;
+    const isCurrentWeek = Boolean(state.currentWeekMonday) &&
+      fromDate === state.currentWeekMonday && toDate === addDays(state.currentWeekMonday, 6);
+    el.weekLabel.innerHTML = escapeHtml(formatRangeLabel(fromDate, toDate)) +
+      (isCurrentWeek ? ' <span class="current-week-badge">Current Week</span>' : '');
+
+    el.scheduleNote.textContent = clamped
+      ? `Showing the first ${MAX_RANGE_DAYS} days of your selection — pick a shorter range to see the rest.`
+      : '';
 
     renderHead();
     render();
@@ -289,21 +464,80 @@ async function loadWeek(date) {
   }
 }
 
+function setDateInputs(from, to) {
+  el.fromDateInput.value = from;
+  el.toDateInput.value = to;
+}
+
+function onDateInputChange() {
+  let from = el.fromDateInput.value;
+  let to = el.toDateInput.value;
+  if (!from || !to) return; // wait until both are filled in
+
+  if (from > to) { const tmp = from; from = to; to = tmp; }
+  let clamped = false;
+  const maxTo = addDays(from, MAX_RANGE_DAYS - 1);
+  if (to > maxTo) { to = maxTo; clamped = true; }
+
+  setDateInputs(from, to);
+  loadRange(from, to, clamped);
+}
+
+// Debounced so two near-simultaneous 'change' events (e.g. a script or
+// browser firing both inputs' events back to back) collapse into one
+// call that reads both inputs' FINAL values, instead of the second call
+// silently clobbering a clamp note the first call just set.
+const onDateInputChangeDebounced = debounce(onDateInputChange, 50);
+el.fromDateInput.addEventListener('change', onDateInputChangeDebounced);
+el.toDateInput.addEventListener('change', onDateInputChangeDebounced);
+
+el.prevWeekBtn.addEventListener('click', () => {
+  const from = addDays(mondayOf(state.fromDate || todayISO()), -7);
+  const to = addDays(from, 6);
+  setDateInputs(from, to);
+  loadRange(from, to);
+});
+el.nextWeekBtn.addEventListener('click', () => {
+  const from = addDays(mondayOf(state.fromDate || todayISO()), 7);
+  const to = addDays(from, 6);
+  setDateInputs(from, to);
+  loadRange(from, to);
+});
+el.thisWeekBtn.addEventListener('click', () => {
+  const from = state.currentWeekMonday || mondayOf(todayISO());
+  const to = addDays(from, 6);
+  setDateInputs(from, to);
+  loadRange(from, to);
+});
+
+el.searchInput.addEventListener('input', debounce(() => {
+  state.search = el.searchInput.value;
+  render();
+}, 150));
+
+// ---------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------
+
 async function init() {
   try {
     const standings = await getJSON(`${API_WEB}/v1/standings/now`);
     state.teamMeta = buildTeamMeta(standings);
+    state.teamStrength = computeTeamStrength(state.teamMeta);
+    state.selectedTeams = new Set(state.teamMeta.keys());
   } catch (err) {
     showBanner(`Couldn't load team info (${err.message}). Make sure the local server is running, then retry.`);
     return;
   }
+  populateTeamFilter();
+  updateTeamFilterLabel();
 
   // "now" is the NHL API's own idea of "the relevant week" — during the
   // season that's just today's week; off-season it jumps forward to the
-  // next week with real games (e.g. the season opener) instead of
-  // showing an empty current calendar week. Either way, anchor it to a
-  // Monday and remember that Monday as "current" for the badge above,
-  // decoupled from whatever week gets navigated to afterward.
+  // next week with real games (e.g. the season opener) instead of an
+  // empty current calendar week. Anchor it to a Monday and remember that
+  // as "current" for the badge, decoupled from whatever range the user
+  // navigates to afterward.
   try {
     const nowData = await getJSON(`${API_WEB}/v1/schedule/now`);
     const anchorDate = nowData.gameWeek?.[0]?.date || todayISO();
@@ -312,20 +546,10 @@ async function init() {
     state.currentWeekMonday = mondayOf(todayISO());
   }
 
-  await loadWeek(state.currentWeekMonday);
+  const from = state.currentWeekMonday;
+  const to = addDays(from, 6);
+  setDateInputs(from, to);
+  await loadRange(from, to);
 }
-
-el.searchInput.addEventListener('input', debounce(() => {
-  state.search = el.searchInput.value;
-  render();
-}, 150));
-
-el.prevWeekBtn.addEventListener('click', () => {
-  if (state.previousStartDate) loadWeek(state.previousStartDate);
-});
-el.nextWeekBtn.addEventListener('click', () => {
-  if (state.nextStartDate) loadWeek(state.nextStartDate);
-});
-el.thisWeekBtn.addEventListener('click', () => loadWeek(state.currentWeekMonday || todayISO()));
 
 init();

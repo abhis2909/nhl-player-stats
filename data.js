@@ -88,6 +88,18 @@ function buildTeamMeta(standings) {
       division: row.divisionName,
       record: `${row.wins}-${row.losses}-${row.otLosses}`,
       points: row.points,
+      // Raw standing/offense/defense inputs — kept here (not just on the
+      // Schedule page) since "how strong is this team" is generically
+      // useful team metadata. Used by schedule.js to score matchup
+      // difficulty by opponent. gamesPlayed=0 (e.g. a future/expansion
+      // season with no standings data at all yet) means the per-game
+      // rates below aren't meaningful — callers should treat that as
+      // "no rating available" rather than a real 0.
+      leagueSequence: row.leagueSequence,
+      gamesPlayed: row.gamesPlayed ?? 0,
+      goalFor: row.goalFor ?? 0,
+      goalAgainst: row.goalAgainst ?? 0,
+      pointPctg: row.pointPctg,
     });
   }
   return teamMeta;

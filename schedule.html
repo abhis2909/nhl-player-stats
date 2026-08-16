@@ -39,16 +39,45 @@
     <button type="button" id="prevWeekBtn" class="ghost-btn">← Previous Week</button>
     <button type="button" id="thisWeekBtn" class="ghost-btn">This Week</button>
     <button type="button" id="nextWeekBtn" class="ghost-btn">Next Week →</button>
-    <span class="schedule-legend">
-      <span class="legend-item"><span class="legend-swatch sched-home"></span>Home</span>
-      <span class="legend-item"><span class="legend-swatch sched-away"></span>Away</span>
-      <span class="legend-item"><span class="sched-b2b">B2B</span>Back-to-back</span>
-    </span>
+
+    <div class="range-field">
+      <label for="fromDate">From</label>
+      <input type="date" id="fromDate">
+    </div>
+    <div class="range-field">
+      <label for="toDate">To</label>
+      <input type="date" id="toDate">
+    </div>
+
+    <div class="team-filter">
+      <button type="button" id="teamFilterBtn" class="ghost-btn" aria-expanded="false" aria-haspopup="true">
+        Teams: All <span class="caret">▾</span>
+      </button>
+      <div id="teamFilterPanel" class="team-filter-panel" hidden>
+        <div class="team-filter-actions">
+          <button type="button" class="link-btn" id="teamFilterAll">Select all</button>
+          <button type="button" class="link-btn" id="teamFilterNone">Clear</button>
+        </div>
+        <div class="checkbox-grid team-filter-grid" id="teamFilterGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="range-note" id="scheduleNote"></p>
+
+  <div class="schedule-legend">
+    <span class="legend-item"><span class="legend-swatch opp-easy"></span>Easy matchup</span>
+    <span class="legend-item"><span class="legend-swatch opp-favorable"></span>Favorable</span>
+    <span class="legend-item"><span class="legend-swatch opp-even"></span>Even</span>
+    <span class="legend-item"><span class="legend-swatch opp-tough"></span>Tough</span>
+    <span class="legend-item"><span class="legend-swatch opp-brutal"></span>Brutal</span>
+    <span class="legend-item legend-note">"vs" = home · "@" = away</span>
+    <span class="legend-item"><span class="sched-b2b">B2B</span>Back-to-back</span>
   </div>
 
   <div class="table-wrap schedule-table-wrap">
     <table id="scheduleTable" class="stats-table schedule-table">
-      <caption class="visually-hidden">Weekly schedule by team</caption>
+      <caption class="visually-hidden">Schedule by team, colored by opponent matchup strength</caption>
       <thead>
         <tr id="scheduleHeadRow">
           <th scope="col" class="sortable" data-key="name" data-type="string">Team</th>
@@ -57,7 +86,7 @@
       <tbody id="scheduleBody"></tbody>
     </table>
     <div id="skeleton" class="skeleton" aria-hidden="true"></div>
-    <p id="emptyState" class="empty-state" hidden>No teams match your search.</p>
+    <p id="emptyState" class="empty-state" hidden>No teams match your filters.</p>
   </div>
 
   <p id="resultCount" class="result-count"></p>
@@ -65,10 +94,12 @@
 
 <footer class="site-footer">
   <p>
-    Games-per-week is handy for streaming decisions in weekly fantasy leagues — sort by the GP column to
-    find teams with the most games this week. Back-to-back only looks within the displayed week (not
-    across a week boundary). Data via the unofficial
-    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
+    GP counts games within whatever range is selected above — sort that column to find teams with the most
+    games (handy for streaming decisions in weekly fantasy leagues). Each cell is tinted by opponent
+    matchup strength: a blend of that opponent's league standing position, offense (goals-for/game), and
+    defense (goals-against/game, inverted), each percentile-ranked against the other 31 teams, then
+    averaged — hover a cell for the exact numbers. B2B only looks at consecutive days within the selected
+    range. Data via the unofficial <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
   </p>
 </footer>
 

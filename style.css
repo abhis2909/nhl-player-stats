@@ -131,7 +131,8 @@ a { color: var(--accent); }
 }
 
 select,
-input[type="search"] {
+input[type="search"],
+input[type="date"] {
   font: inherit;
   font-size: 13.5px;
   background: var(--bg-elevated);
@@ -144,9 +145,14 @@ input[type="search"] {
 }
 
 select:focus,
-input[type="search"]:focus {
+input[type="search"]:focus,
+input[type="date"]:focus {
   border-color: var(--accent-dim);
   box-shadow: 0 0 0 3px rgba(79, 179, 255, 0.15);
+}
+
+input[type="date"] {
+  color-scheme: dark;
 }
 
 input[type="search"] {
@@ -825,10 +831,13 @@ td.stat-num {
 }
 
 .schedule-legend {
+  max-width: 1200px;
+  margin: 0 auto 16px;
+  padding: 0 4px;
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-left: auto;
+  flex-wrap: wrap;
   font-size: 11.5px;
   color: var(--text-faint);
 }
@@ -839,6 +848,11 @@ td.stat-num {
   gap: 5px;
 }
 
+.legend-note {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
 .legend-swatch {
   width: 10px;
   height: 10px;
@@ -846,8 +860,51 @@ td.stat-num {
   display: inline-block;
 }
 
-.legend-swatch.sched-home { background: rgba(79, 179, 255, 0.35); }
-.legend-swatch.sched-away { background: var(--bg-hover); border: 1px solid var(--border); }
+.legend-swatch.opp-easy { background: rgba(89, 217, 124, 0.55); }
+.legend-swatch.opp-favorable { background: rgba(89, 217, 124, 0.25); }
+.legend-swatch.opp-even { background: var(--bg-hover); border: 1px solid var(--border); }
+.legend-swatch.opp-tough { background: rgba(255, 176, 32, 0.3); }
+.legend-swatch.opp-brutal { background: rgba(255, 77, 94, 0.35); }
+
+/* ---------- Team filter (schedule.html) ---------- */
+.team-filter {
+  position: relative;
+}
+
+.team-filter .caret {
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.team-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 420px;
+  max-width: 80vw;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 12px 12px;
+}
+
+.team-filter-panel[hidden] { display: none; }
+
+.team-filter-actions {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.team-filter-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
 
 .schedule-table-wrap {
   overflow-x: auto;
@@ -893,13 +950,14 @@ td.stat-num {
   position: relative;
 }
 
-.sched-cell.sched-home {
-  background: rgba(79, 179, 255, 0.12);
-}
-
-.sched-cell.sched-away {
-  background: var(--bg-hover);
-}
+/* Cell background = opponent matchup strength (see computeTeamStrength()
+   in schedule.js). Home/away is conveyed by the "vs"/"@" text prefix,
+   not color, so it doesn't compete with this signal. */
+.sched-cell.opp-easy { background: rgba(89, 217, 124, 0.22); }
+.sched-cell.opp-favorable { background: rgba(89, 217, 124, 0.1); }
+.sched-cell.opp-even { background: var(--bg-hover); }
+.sched-cell.opp-tough { background: rgba(255, 176, 32, 0.16); }
+.sched-cell.opp-brutal { background: rgba(255, 77, 94, 0.18); }
 
 .sched-opp {
   font-size: 12px;
