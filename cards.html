@@ -19,7 +19,11 @@
       </div>
     </div>
     <div class="controls">
-      <div class="toggle-group" role="tablist" aria-label="Position">
+      <div class="toggle-group" role="tablist" aria-label="Player type">
+        <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+        <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+      </div>
+      <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
         <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
         <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
         <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
@@ -29,8 +33,6 @@
       <select id="teamSelect" aria-label="Filter by team">
         <option value="ALL">All Teams</option>
       </select>
-      <label class="visually-hidden" for="searchInput">Search players</label>
-      <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
     </div>
   </div>
   <nav class="site-nav" aria-label="Site">
@@ -51,6 +53,11 @@
   <div id="statusBanner" class="status-banner" hidden></div>
 
   <p class="eligibility-note" id="eligibilityNote"></p>
+
+  <div class="cards-search-bar">
+    <label class="visually-hidden" for="searchInput">Search players</label>
+    <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+  </div>
 
   <div id="cardsSkeleton" class="cards-skeleton" aria-hidden="true">
     <div class="card-skel"></div>
@@ -77,15 +84,16 @@
 
 <footer class="site-footer">
   <p>
-    Ratings are percentile ranks within this season's qualified skaters (see note above); overall
-    is a position-weighted average of the category percentiles — not an official NHL or
-    fantasy-provider rating. Data via the unofficial
+    Ratings are percentile ranks within this season's qualified players (see note above); overall
+    is a weighted average of the category percentiles — not an official NHL or fantasy-provider
+    rating. Data via the unofficial
     <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
   </p>
 </footer>
 
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
-<script src="snapshots.js" defer></script><script src="cards.js" defer></script>
+<script src="snapshots.js" defer></script>
+<script src="cards.js" defer></script>
 </body>
 </html>

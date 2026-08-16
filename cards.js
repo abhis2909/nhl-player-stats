@@ -2,27 +2,27 @@
 
 /* ======================================================================
    Player cards: percentile-based fantasy ratings for every qualified
-   skater. Uses the same season data as the stats page (data.js) AND the
-   same stat-column selection as the admin page (columns.js) — whichever
-   skater columns are enabled in ⚙ Columns are exactly the categories
-   shown here, so changing that selection changes the cards too (see the
-   `storage` listener at the bottom for the same-tab-open-elsewhere case).
+   skater AND goalie. Uses the same season data as the stats page
+   (data.js) AND the same stat-column selections as the admin page
+   (columns.js) — whichever skater/goalie columns are enabled in
+   ⚙ Columns are exactly the categories shown here, so changing that
+   selection changes the cards too (see the `storage` listener near the
+   bottom for the same-tab-open-elsewhere case).
 
    Rating methodology:
-   - Eligibility pool = skaters with gamesPlayed >= MIN_GP_FRACTION of the
-     season's game count (itself derived from the data, not hardcoded —
-     see seasonGameCount() in data.js — so this keeps working once
-     2026-27 stats replace these). Only eligible skaters get a card.
+   - Eligibility pool = players with gamesPlayed >= MIN_GP_FRACTION of
+     that position group's own season game count (skaters and goalies
+     are counted separately — goalies play far fewer games than skaters,
+     so a goalie-specific max keeps the bar meaningful). Derived from the
+     data itself (seasonGameCount() in data.js), not hardcoded, so this
+     keeps working once 2026-27 stats replace these.
    - Each category's rating = that player's percentile rank for the
      mapped stat, within the eligibility pool, rescaled to
-     RATING_FLOOR-RATING_CEIL. (Giveaways is inverted — fewer is better.)
-   - Overall (the circular badge) = the position-weighted average of the
-     category percentiles, rescaled the same way (RATING_FLOOR-RATING_CEIL).
-     Straightforward and matches "weighted average" literally, at the cost
-     of clustering more players toward the middle than a flat percentile
-     spread would (averaging several percentiles regresses toward the mean)
-     — a normal-distribution remap was tried and reverted; if ratings feel
-     too bunched again, that's the tradeoff to revisit.
+     RATING_FLOOR-RATING_CEIL. (Giveaways/losses/OT-losses/GAA/goals
+     against are inverted — lower is better for those.)
+   - Overall (the circular badge) = a weighted average of the category
+     percentiles (position-weighted for skaters via POSITION_WEIGHTS,
+     goalie-weighted via GOALIE_WEIGHTS), rescaled the same way.
    - Every rating (category and overall) then gets a flat +4% premium
      (RATING_PREMIUM), capped at RATING_CEIL — see toCardRating().
 
@@ -30,8 +30,12 @@
    / Gold / Emerald / Ruby / Amethyst / Diamond — and tier drives more
    than color: border shimmer speed, sheen-sweep strength, badge/aura
    glow, pulse, sparkles, and stat-tile shape all scale with rarity (see
-   the .tier-* rules in style.css). No more per-team card coloring —
-   team is just the small logo+abbreviation pill now.
+   the .tier-* rules in style.css). Team is just the small logo+
+   abbreviation pill, not the card's theme color.
+
+   Detail modal (click a card): bio, a monthly rating-trend chart, and
+   the full scrollable game log for whichever season/type is selected —
+   see the "player detail modal" section below.
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
@@ -41,10 +45,16 @@ const RATING_PREMIUM = 1.04; // flat +4% applied to every rating (category and o
 const BATCH_SIZE = 48;
 
 // Stats where a LOWER raw value is the better outcome (percentile gets
-// inverted before rating). Everything else: higher = better.
-const INVERT_STATS = new Set(['giveaways']);
+// inverted before rating). Everything else: higher = better. Skater and
+// goalie catalogs don't share ids, so one set covers both.
+const INVERT_STATS = new Set(['giveaways', 'losses', 'otLosses', 'gaa', 'goalsAgainst']);
 
-// How much each stat counts toward a player's OVERALL badge, by position
+// Ratio-type stats that are already a rate (not a count to divide by
+// games played) — used both for the league per-game comparison pool and
+// the monthly trend aggregation.
+const RATE_STAT_IDS = new Set(['gaa', 'savePct', 'shootingPct', 'faceoffPct']);
+
+// How much each stat counts toward a skater's OVERALL badge, by position
 // group (L and R share the winger profile). Individual category ratings
 // are always plain percentiles — this only changes how they blend into
 // one number. Covers every stat in columns.js's SKATER_COLUMNS catalog;
@@ -73,6 +83,15 @@ const POSITION_WEIGHTS = {
   },
 };
 
+// Single weight profile for goalies (no position sub-groups). Wins/GAA/
+// Save% are the core "how good" indicators; shutouts a bonus; saves/GP/
+// shots-against more workload than skill.
+const GOALIE_WEIGHTS = {
+  wins: 1.3, losses: 0.8, otLosses: 0.7, gaa: 1.4, savePct: 1.4,
+  saves: 0.8, shutouts: 1.1, gamesPlayed: 0.6, gamesStarted: 0.7,
+  goalsAgainst: 0.8, shotsAgainst: 0.5,
+};
+
 /** Maps a raw position code (C/L/R/D) to a POSITION_WEIGHTS group. */
 function positionGroup(pos) {
   if (pos === 'D') return 'D';
@@ -95,9 +114,9 @@ function tierFor(overall) {
   return 'silver';
 }
 
-/** Catalog entries (from columns.js) for whichever skater stats are currently
- *  enabled on the admin page — read fresh each call so this always reflects
- *  the latest saved selection, not a stale snapshot. */
+/** Catalog entries (from columns.js) for whichever stats are currently
+ *  enabled on the admin page for `mode` ('skaters' | 'goalies') — read
+ *  fresh each call so this always reflects the latest saved selection. */
 function activeColumns(mode) {
   const config = loadColumnConfig();
   const selected = new Set(config[mode] || []);
@@ -115,6 +134,8 @@ const el = {
   loadMoreBtn: document.getElementById('loadMoreBtn'),
   searchInput: document.getElementById('searchInput'),
   teamSelect: document.getElementById('teamSelect'),
+  modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
+  posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
   modalRoot: document.getElementById('modalRoot'),
   modalOverlay: document.getElementById('modalOverlay'),
@@ -125,23 +146,21 @@ const el = {
 const state = {
   teamMeta: new Map(),
   seasonId: null,
-  rawSkaters: [],   // eligible skaters, unrated (re-rated whenever the column config changes)
-  players: [],      // rawSkaters + .ratings + .overall for the CURRENT column config
+  mode: 'skaters', // 'skaters' | 'goalies'
+  rawSkaters: [], ratedSkaters: [], skaterMinGP: 0, skaterMaxGP: 0,
+  rawGoalies: [], ratedGoalies: [], goalieMinGP: 0, goalieMaxGP: 0,
   search: '',
   team: 'ALL',
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
 };
 
-const GAMES_TO_SHOW = 5;
-
-// Per-game data sources for the "Last N Games" panel. Regular-season box
-// score fields (goals, assists, PPP, etc.) come straight from the game-log
-// endpoint. Hits/blocks/giveaways/takeaways aren't in that response at all
-// — they come from a second, batched query to the stats-rest API's
-// per-game realtime report (isGame=true). Anything not listed in either
-// map (shootingPct, faceoffPct, gamesPlayed) isn't meaningfully available
-// per game, so it shows as "—".
+// Per-game data sources for the game log + monthly trend. Regular-season
+// box score fields (goals, assists, PPP, etc.) come straight from the
+// game-log endpoint. Hits/blocks/giveaways/takeaways aren't in that
+// response at all — they come from a second, batched query to the
+// stats-rest API's per-game realtime report (isGame=true). Anything not
+// resolvable per game (shootingPct, faceoffPct) shows as "—".
 const GAMELOG_FIELD_MAP = {
   goals: 'goals', assists: 'assists', points: 'points', plusMinus: 'plusMinus',
   ppGoals: 'powerPlayGoals', ppPoints: 'powerPlayPoints', shGoals: 'shorthandedGoals',
@@ -181,26 +200,22 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-/** Recomputes ratings + overall for every skater, using whichever columns are
- *  currently enabled on the admin page. Cheap (~tens of ms for ~700 players),
- *  safe to call whenever the column config might have changed. */
-function rateAllPlayers() {
-  const categories = activeColumns('skaters'); // from columns.js: catalog entries filtered to the saved selection
-  const pool = state.rawSkaters;
-
+/** Rates one pool (skaters or goalies) against itself, using whichever
+ *  columns are currently enabled for that mode. Cheap (~tens of ms for
+ *  ~700 players), safe to call whenever the column config might change. */
+function ratePool(pool, mode) {
+  const categories = activeColumns(mode);
   const statPools = {};
   for (const cat of categories) statPools[cat.id] = pool.map((p) => p[cat.id] ?? 0);
 
-  // Stage 1: per-category percentile (also this player's individually-displayed rating)
-  // and this player's position-weighted composite percentile.
-  const withComposite = pool.map((player) => {
+  return pool.map((player) => {
     const ratings = categories.map((cat) => {
       const value = player[cat.id] ?? 0;
       let pct = percentileRank(value, statPools[cat.id]);
       if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
       return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct), pct };
     });
-    const weights = POSITION_WEIGHTS[positionGroup(player.pos)];
+    const weights = mode === 'goalies' ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
     let weightedSum = 0;
     let weightTotal = 0;
     for (const r of ratings) {
@@ -208,14 +223,14 @@ function rateAllPlayers() {
       weightedSum += r.pct * w;
       weightTotal += w;
     }
-    return { player, ratings, compositePct: weightTotal ? weightedSum / weightTotal : 50 };
+    const compositePct = weightTotal ? weightedSum / weightTotal : 50;
+    return { ...player, ratings, overall: toCardRating(compositePct) };
   });
+}
 
-  state.players = withComposite.map(({ player, ratings, compositePct }) => ({
-    ...player,
-    ratings,
-    overall: toCardRating(compositePct),
-  }));
+function rateAllPlayers() {
+  state.ratedSkaters = ratePool(state.rawSkaters, 'skaters');
+  state.ratedGoalies = ratePool(state.rawGoalies, 'goalies');
 }
 
 async function init() {
@@ -224,30 +239,41 @@ async function init() {
   el.grid.innerHTML = '';
 
   try {
-    const { seasonId, teamMeta, skaters, source, snapshotLabel } = await getSeasonData();
+    const { seasonId, teamMeta, skaters, goalies, source, snapshotLabel } = await getSeasonData();
     state.teamMeta = teamMeta;
     state.seasonId = seasonId;
     el.seasonLabel.textContent = `${seasonLabel(seasonId)} · Ratings` +
       (source === 'snapshot' ? ` · ${snapshotLabel}` : '');
 
-    const maxGP = seasonGameCount(skaters);
-    const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
-    state.rawSkaters = skaters.filter((p) => p.gamesPlayed >= minGP);
+    state.skaterMaxGP = seasonGameCount(skaters);
+    state.skaterMinGP = Math.ceil(state.skaterMaxGP * MIN_GP_FRACTION);
+    state.rawSkaters = skaters.filter((p) => p.gamesPlayed >= state.skaterMinGP);
 
-    el.eligibilityNote.textContent =
-      `Showing the ${state.rawSkaters.length.toLocaleString()} skaters who've played at least ${minGP} games ` +
-      `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for skaters — change it there ` +
-      `and these update too. Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}–${RATING_CEIL}; ` +
-      `overall is a position-weighted average of the category percentiles.`;
+    state.goalieMaxGP = seasonGameCount(goalies);
+    state.goalieMinGP = Math.ceil(state.goalieMaxGP * MIN_GP_FRACTION);
+    state.rawGoalies = goalies.filter((p) => p.gamesPlayed >= state.goalieMinGP);
 
     rateAllPlayers();
     populateTeamSelect();
+    updateEligibilityNote();
     el.skeleton.hidden = true;
     render(true);
   } catch (err) {
     el.skeleton.hidden = true;
     showBanner(`Couldn't load NHL data (${err.message}). Make sure the local server is running, then retry.`);
   }
+}
+
+function updateEligibilityNote() {
+  const isGoalie = state.mode === 'goalies';
+  const pool = isGoalie ? state.rawGoalies : state.rawSkaters;
+  const minGP = isGoalie ? state.goalieMinGP : state.skaterMinGP;
+  const maxGP = isGoalie ? state.goalieMaxGP : state.skaterMaxGP;
+  el.eligibilityNote.textContent =
+    `Showing the ${pool.length.toLocaleString()} ${state.mode} who've played at least ${minGP} games ` +
+    `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for ${state.mode} — change it ` +
+    `there and these update too. Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}` +
+    `–${RATING_CEIL}; overall is a weighted average of the category percentiles.`;
 }
 
 function populateTeamSelect() {
@@ -269,17 +295,18 @@ function populateTeamSelect() {
 
 function getFiltered() {
   const q = state.search.trim().toLowerCase();
-  return state.players
+  const pool = state.mode === 'goalies' ? state.ratedGoalies : state.ratedSkaters;
+  return pool
     .filter((p) => {
       if (state.team !== 'ALL' && p.team !== state.team) return false;
-      if (state.pos !== 'ALL' && positionGroup(p.pos) !== state.pos) return false;
+      if (state.mode === 'skaters' && state.pos !== 'ALL' && positionGroup(p.pos) !== state.pos) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     })
     .sort((a, b) => b.overall - a.overall);
 }
 
-/** @param reset - true when a filter (or the column config) changed; false for "load more". */
+/** @param reset - true when a filter/mode/column-config changed; false for "load more". */
 function render(reset) {
   if (reset) state.visibleCount = BATCH_SIZE;
   const filtered = getFiltered();
@@ -290,9 +317,25 @@ function render(reset) {
   slice.forEach((p) => frag.appendChild(buildCard(p)));
   el.grid.appendChild(frag);
 
-  el.resultCount.textContent = `Showing ${slice.length.toLocaleString()} of ${filtered.length.toLocaleString()} skaters`;
+  el.resultCount.textContent = `Showing ${slice.length.toLocaleString()} of ${filtered.length.toLocaleString()} ${state.mode}`;
   el.loadMoreWrap.hidden = slice.length >= filtered.length;
 }
+
+el.modeButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.mode = btn.dataset.mode;
+    el.modeButtons.forEach((b) => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+    // Position (C/W/D) filter is skater-only.
+    el.posToggleGroup.hidden = state.mode === 'goalies';
+    state.pos = 'ALL';
+    el.posButtons.forEach((b) => b.classList.toggle('active', b.dataset.pos === 'ALL'));
+    updateEligibilityNote();
+    render(true);
+  });
+});
 
 el.searchInput.addEventListener('input', debounce(() => {
   state.search = el.searchInput.value;
@@ -322,17 +365,20 @@ el.loadMoreBtn.addEventListener('click', () => {
 window.addEventListener('storage', (e) => {
   if (e.key !== COLUMN_STORAGE_KEY) return;
   rateAllPlayers();
+  updateEligibilityNote();
   render(true);
 });
 
 wireDataBar(init, (err) => showBanner(`Couldn't retrieve latest stats (${err.message}).`));
 
 function buildCard(player) {
+  const isGoalie = player.pos === 'G';
   const tier = tierFor(player.overall);
   const headshot = `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
   const meta = state.teamMeta.get(player.team);
   const [first, ...rest] = player.name.split(' ');
   const last = rest.join(' ') || player.name;
+  const weightLabel = isGoalie ? 'goalies' : `${POSITION_GROUP_LABEL[positionGroup(player.pos)]}s`;
 
   const card = document.createElement('div');
   card.className = `player-card tier-${tier}`;
@@ -348,7 +394,7 @@ function buildCard(player) {
         <div class="pc-photo-fade"></div>
         <div class="pc-top-row">
           <div>
-            <div class="pc-ovr-badge" title="Overall, weighted for ${POSITION_GROUP_LABEL[positionGroup(player.pos)]}s">
+            <div class="pc-ovr-badge" title="Overall, weighted for ${weightLabel}">
               <span class="val">${player.overall}</span><span class="lbl">OVR</span>
             </div>
             <div class="pc-pos-badge">${escapeHtml(player.pos)}</div>
@@ -403,38 +449,14 @@ function openPlayerModal(player) {
   document.body.style.overflow = 'hidden';
   el.modalContent.innerHTML = '<div class="modal-spinner">Loading…</div>';
 
-  Promise.all([
-    getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`).catch(() => null),
-    fetchLastGames(player),
-  ])
-    .then(([landing, games]) => renderPlayerModal(player, landing, games))
+  getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`)
+    .then((landing) => {
+      renderModalShell(player, landing);
+      wireModalGameLog(player, landing);
+    })
     .catch((err) => {
       el.modalContent.innerHTML = `<div class="modal-spinner">Couldn't load player details (${escapeHtml(err.message)}).</div>`;
     });
-}
-
-/** Last GAMES_TO_SHOW regular-season games, box score fields from the
- *  game-log endpoint plus a batched per-game realtime query (hits/blocks/
- *  giveaways/takeaways) if any active category needs those. */
-async function fetchLastGames(player) {
-  const logData = await getJSON(`${API_WEB}/v1/player/${player.playerId}/game-log/${state.seasonId}/2`);
-  const games = (logData.gameLog || []).slice(0, GAMES_TO_SHOW);
-  if (games.length === 0) return games;
-
-  const categories = activeColumns('skaters');
-  const needsRealtime = categories.some((c) => REALTIME_FIELD_MAP[c.id]);
-  if (needsRealtime) {
-    const orExpr = games.map((g) => `gameId=${g.gameId}`).join(' or ');
-    const filter = `(${orExpr}) and playerId=${player.playerId}`;
-    try {
-      const rt = await getJSON(`${API_STATS}/en/skater/realtime?isGame=true&cayenneExp=${encodeURIComponent(filter)}`);
-      const byGame = new Map((rt.data || []).map((r) => [r.gameId, r]));
-      for (const g of games) g._realtime = byGame.get(g.gameId) || {};
-    } catch {
-      // Non-fatal — those columns just show "—" for this player.
-    }
-  }
-  return games;
 }
 
 function buildBioSection(player, landing) {
@@ -450,6 +472,7 @@ function buildBioSection(player, landing) {
   const draft = landing.draftDetails
     ? `${landing.draftDetails.year} · Rd ${landing.draftDetails.round}, Pick ${landing.draftDetails.overallPick}`
     : 'Undrafted';
+  const shootsLabel = player.pos === 'G' ? 'Catches' : 'Shoots';
 
   return `
     <div class="ph-bio">
@@ -458,25 +481,166 @@ function buildBioSection(player, landing) {
       <div class="ph-bio-item"><span class="label">Weight</span><span class="value">${weight}</span></div>
       <div class="ph-bio-item"><span class="label">Team</span><span class="value">${escapeHtml(teamName)}</span></div>
       <div class="ph-bio-item"><span class="label">Draft</span><span class="value">${escapeHtml(draft)}</span></div>
-      <div class="ph-bio-item"><span class="label">Shoots</span><span class="value">${landing.shootsCatches ?? '—'}</span></div>
+      <div class="ph-bio-item"><span class="label">${shootsLabel}</span><span class="value">${landing.shootsCatches ?? '—'}</span></div>
       <div class="ph-bio-item"><span class="label">Birthplace</span><span class="value">${escapeHtml(birthplace) || '—'}</span></div>
     </div>
   `;
 }
 
-function buildLastGamesTable(games) {
-  if (!games || games.length === 0) {
-    return '<div class="gamelog-empty">No regular-season games found yet.</div>';
+function renderModalShell(player, landing) {
+  el.modalContent.innerHTML = `
+    <div class="pcard-modal-body">
+      <div class="pcard-modal-left">
+        ${buildCard(player).outerHTML}
+        ${buildBioSection(player, landing)}
+      </div>
+      <div class="pcard-modal-right">
+        <div class="pcard-section">
+          <h3 id="modalPlayerName">${escapeHtml(player.name)} — Rating Trend</h3>
+          <div id="trendWrap"><div class="trend-empty">Loading…</div></div>
+        </div>
+        <div class="pcard-section">
+          <div class="gamelog-head">
+            <h3>Game Log</h3>
+            <div class="gamelog-controls">
+              <select id="gameLogSeason" aria-label="Season"></select>
+              <button type="button" id="gtRegular" class="active">Regular</button>
+              <button type="button" id="gtPlayoffs">Playoffs</button>
+            </div>
+          </div>
+          <div id="gameLogWrap"><div class="gamelog-loading">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wireModalGameLog(player, landing) {
+  const seasons = Array.from(new Set(
+    (landing?.seasonTotals || [])
+      .filter((s) => s.leagueAbbrev === 'NHL')
+      .map((s) => s.season),
+  )).sort((a, b) => b - a);
+  if (seasons.length === 0) seasons.push(state.seasonId);
+
+  const seasonSelect = document.getElementById('gameLogSeason');
+  seasonSelect.innerHTML = seasons.map((s) => `<option value="${s}">${seasonLabel(s)}</option>`).join('');
+
+  const btnReg = document.getElementById('gtRegular');
+  const btnPo = document.getElementById('gtPlayoffs');
+  let gameType = 2;
+
+  const load = () => loadGameLogAndTrend(player, seasonSelect.value, gameType);
+
+  seasonSelect.addEventListener('change', load);
+  btnReg.addEventListener('click', () => {
+    gameType = 2;
+    btnReg.classList.add('active');
+    btnPo.classList.remove('active');
+    load();
+  });
+  btnPo.addEventListener('click', () => {
+    gameType = 3;
+    btnPo.classList.add('active');
+    btnReg.classList.remove('active');
+    load();
+  });
+
+  load();
+}
+
+async function loadGameLogAndTrend(player, season, gameType) {
+  const gameLogWrap = document.getElementById('gameLogWrap');
+  const trendWrap = document.getElementById('trendWrap');
+  if (!gameLogWrap || !trendWrap) return;
+  gameLogWrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
+  trendWrap.innerHTML = '<div class="trend-empty">Loading…</div>';
+
+  const isGoalie = player.pos === 'G';
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+
+  try {
+    const logData = await getJSON(`${API_WEB}/v1/player/${player.playerId}/game-log/${season}/${gameType}`);
+    const games = logData.gameLog || [];
+
+    if (games.length === 0) {
+      const label = gameType === 3 ? 'playoff' : 'regular season';
+      gameLogWrap.innerHTML = `<div class="gamelog-empty">No ${label} games found for ${seasonLabel(season)}.</div>`;
+      trendWrap.innerHTML = '<div class="trend-empty">No games to chart for this season.</div>';
+      return;
+    }
+
+    if (!isGoalie) {
+      const needsRealtime = categories.some((c) => REALTIME_FIELD_MAP[c.id]);
+      if (needsRealtime) {
+        const orExpr = games.map((g) => `gameId=${g.gameId}`).join(' or ');
+        const filter = `(${orExpr}) and playerId=${player.playerId}`;
+        try {
+          const rt = await getJSON(`${API_STATS}/en/skater/realtime?isGame=true&cayenneExp=${encodeURIComponent(filter)}`);
+          const byGame = new Map((rt.data || []).map((r) => [r.gameId, r]));
+          for (const g of games) g._realtime = byGame.get(g.gameId) || {};
+        } catch {
+          // Non-fatal — those columns just show "—" for this player.
+        }
+      }
+    }
+
+    gameLogWrap.innerHTML = buildGameLogTable(games, categories, isGoalie);
+    trendWrap.innerHTML = buildTrendSection(player, games, categories);
+  } catch (err) {
+    gameLogWrap.innerHTML = `<div class="gamelog-empty">Couldn't load game log (${escapeHtml(err.message)}).</div>`;
+    trendWrap.innerHTML = `<div class="trend-empty">Couldn't load trend.</div>`;
   }
-  const categories = activeColumns('skaters');
+}
+
+/** A single game's value for `catId` — the shared building block for both
+ *  the game-log table and the monthly trend aggregation. Returns null if
+ *  that stat isn't resolvable per game (shootingPct, faceoffPct). */
+function perGameValue(g, catId, isGoalie) {
+  if (isGoalie) {
+    switch (catId) {
+      case 'wins': return g.decision === 'W' ? 1 : 0;
+      case 'losses': return g.decision === 'L' ? 1 : 0;
+      case 'otLosses': return g.decision === 'O' ? 1 : 0;
+      case 'shutouts': return g.shutouts ?? 0;
+      case 'gamesStarted': return g.gamesStarted ?? 0;
+      case 'gamesPlayed': return 1;
+      case 'goalsAgainst': return g.goalsAgainst ?? 0;
+      case 'shotsAgainst': return g.shotsAgainst ?? 0;
+      case 'saves': return Math.max(0, (g.shotsAgainst ?? 0) - (g.goalsAgainst ?? 0));
+      case 'gaa': {
+        const minutes = parseToiMinutes(g.toi);
+        return minutes > 0 && typeof g.goalsAgainst === 'number' ? (g.goalsAgainst / minutes) * 60 : null;
+      }
+      case 'savePct': return typeof g.savePctg === 'number' ? g.savePctg : null;
+      default: return null;
+    }
+  }
+  if (REALTIME_FIELD_MAP[catId]) return g._realtime?.[REALTIME_FIELD_MAP[catId]] ?? null;
+  if (GAMELOG_FIELD_MAP[catId]) return g[GAMELOG_FIELD_MAP[catId]] ?? null;
+  return null;
+}
+
+function parseToiMinutes(toi) {
+  if (!toi || typeof toi !== 'string') return 0;
+  const [m, s] = toi.split(':').map(Number);
+  return (m || 0) + (s || 0) / 60;
+}
+
+function buildGameLogTable(games, categories, isGoalie) {
+  const DECISION_COL = { wins: 'W', losses: 'L', otLosses: 'O' };
   const head = `<tr><th>Date</th><th>Opp</th>${categories.map((c) => `<th title="${escapeHtml(c.label)}">${escapeHtml(c.short)}</th>`).join('')}</tr>`;
 
   const rows = games.map((g) => {
     const opp = (g.homeRoadFlag === 'H' ? 'vs ' : '@ ') + (g.opponentAbbrev ?? '');
     const cells = categories.map((c) => {
-      let raw;
-      if (REALTIME_FIELD_MAP[c.id]) raw = g._realtime?.[REALTIME_FIELD_MAP[c.id]];
-      else if (GAMELOG_FIELD_MAP[c.id]) raw = g[GAMELOG_FIELD_MAP[c.id]];
+      if (isGoalie && DECISION_COL[c.id]) {
+        const isThis = g.decision === DECISION_COL[c.id];
+        const cls = isThis ? (c.id === 'wins' ? 'result-w' : c.id === 'losses' ? 'result-l' : 'result-o') : '';
+        const label = c.id === 'otLosses' ? 'OT' : DECISION_COL[c.id];
+        return `<td class="${cls}">${isThis ? label : '–'}</td>`;
+      }
+      const raw = perGameValue(g, c.id, isGoalie);
       const display = raw == null ? '—' : escapeHtml(formatColumnValue(c, raw));
       return `<td>${display}</td>`;
     }).join('');
@@ -486,18 +650,108 @@ function buildLastGamesTable(games) {
   return `<div class="gamelog-table-wrap"><table class="gamelog-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function renderPlayerModal(player, landing, games) {
-  el.modalContent.innerHTML = `
-    <div class="pcard-modal-body">
-      <div class="pcard-modal-left">
-        ${buildCard(player).outerHTML}
-        ${buildBioSection(player, landing)}
-      </div>
-      <div class="pcard-modal-right">
-        <h3 id="modalPlayerName">${escapeHtml(player.name)} — Last ${games.length || GAMES_TO_SHOW} Games</h3>
-        ${buildLastGamesTable(games)}
-      </div>
-    </div>
+/** Games grouped into calendar-month buckets, in chronological order. */
+function monthBuckets(games) {
+  const map = new Map();
+  for (const g of games) {
+    const d = new Date(g.gameDate + 'T00:00:00Z');
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!map.has(key)) {
+      map.set(key, { key, label: d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }), games: [] });
+    }
+    map.get(key).games.push(g);
+  }
+  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Mean of a stat's per-game values across a set of games (skips games
+ *  where that stat isn't resolvable). Simple average rather than a true
+ *  weighted ratio (e.g. true monthly GAA needs total-goals/total-minutes)
+ *  — close enough for a trend line, much simpler than carrying separate
+ *  aggregation rules per stat. */
+function monthlyAggregate(games, catId, isGoalie) {
+  const values = games.map((g) => perGameValue(g, catId, isGoalie)).filter((v) => v != null);
+  if (values.length === 0) return null;
+  return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+/** Per-game rate for every player in `rawPool`, for percentile comparison
+ *  against a monthly per-game average. Ratio stats (gaa, savePct, etc)
+ *  are already a rate; counting stats get divided by games played. */
+function leaguePerGamePool(rawPool, catId) {
+  if (RATE_STAT_IDS.has(catId)) return rawPool.map((p) => p[catId] ?? 0);
+  return rawPool.map((p) => (p[catId] ?? 0) / Math.max(1, p.gamesPlayed || 1));
+}
+
+/** Builds the monthly rating-trend chart for the currently-loaded game
+ *  log. Each month's "rating" is computed the same way the card's overall
+ *  is — percentile rank (against the season-long per-game-rate pool for
+ *  the SAME position group), weighted average, rescaled — just fed that
+ *  month's per-game averages instead of season totals. The comparison
+ *  pool is always the current season's, even when viewing an older
+ *  season's game log (building a historical pool for every past season
+ *  isn't feasible client-side) — a reasonable trend indicator, not a
+ *  precise historical rating. */
+function buildTrendSection(player, games, categories) {
+  const isGoalie = player.pos === 'G';
+  const buckets = monthBuckets(games);
+  if (buckets.length < 2) {
+    return '<div class="trend-empty">Not enough months of games yet for a trend.</div>';
+  }
+
+  const rawPool = isGoalie ? state.rawGoalies : state.rawSkaters;
+  const weights = isGoalie ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
+  const leaguePools = {};
+  for (const cat of categories) leaguePools[cat.id] = leaguePerGamePool(rawPool, cat.id);
+
+  const points = buckets.map((b) => {
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const cat of categories) {
+      const raw = monthlyAggregate(b.games, cat.id, isGoalie);
+      if (raw == null) continue;
+      let pct = percentileRank(raw, leaguePools[cat.id]);
+      if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
+      const w = weights[cat.id] ?? 1;
+      weightedSum += pct * w;
+      weightTotal += w;
+    }
+    return { label: b.label, value: weightTotal ? toCardRating(weightedSum / weightTotal) : null };
+  }).filter((p) => p.value != null);
+
+  if (points.length < 2) {
+    return '<div class="trend-empty">Not enough data across months to chart a trend.</div>';
+  }
+  return `<div class="trend-chart-wrap">${buildTrendSvg(points)}</div>`;
+}
+
+function buildTrendSvg(points) {
+  const w = 600, h = 170, padL = 26, padR = 14, padT = 20, padB = 24;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const values = points.map((p) => p.value);
+  const minV = Math.min(...values, RATING_FLOOR);
+  const maxV = Math.max(...values, RATING_FLOOR + 5);
+  const span = Math.max(1, maxV - minV);
+  const xFor = (i) => (points.length === 1 ? padL + innerW / 2 : padL + (i / (points.length - 1)) * innerW);
+  const yFor = (v) => padT + innerH - ((v - minV) / span) * innerH;
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L ${xFor(points.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${xFor(0).toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
+
+  const marks = points.map((p, i) => `
+    <circle cx="${xFor(i).toFixed(1)}" cy="${yFor(p.value).toFixed(1)}" r="3.5" fill="var(--accent)" stroke="#0b0f14" stroke-width="1"></circle>
+    <text x="${xFor(i).toFixed(1)}" y="${(yFor(p.value) - 9).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">${p.value}</text>
+    <text x="${xFor(i).toFixed(1)}" y="${h - 6}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${escapeHtml(p.label)}</text>
+  `).join('');
+
+  return `
+    <svg class="trend-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Monthly rating trend">
+      <path d="${areaD}" fill="var(--accent)" opacity="0.12"></path>
+      <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2"></path>
+      ${marks}
+    </svg>
   `;
 }
 
