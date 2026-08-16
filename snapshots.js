@@ -85,6 +85,16 @@ async function retrieveAndSaveSnapshot() {
   return { key, label, data };
 }
 
+/** { key, label, data } for ANY saved snapshot by key (not just the active
+ *  one), or null if it doesn't exist. No network call — pure localStorage
+ *  read — used to build the rating-trend chart from snapshot history. */
+function getSnapshotByKey(key) {
+  const store = readSnapshotStore();
+  const snap = store[key];
+  if (!snap) return null;
+  return { key, label: snap.label, data: deserializeSeasonData(snap.data) };
+}
+
 /** { key, label, data } for the active snapshot, or null if set to Live /
  *  the saved snapshot no longer exists (caller should fetch live instead). */
 function getActiveSnapshot() {

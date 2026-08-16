@@ -33,7 +33,9 @@
    the .tier-* rules in style.css). Team is just the small logo+
    abbreviation pill, not the card's theme color.
 
-   Detail modal (click a card): bio, a monthly rating-trend chart, and
+   Detail modal (click a card): bio, a rating-trend chart built from
+   saved weekly snapshots (shows "Start of season" until at least 2
+   points exist — see snapshots.js and buildSnapshotTrendPoints()), and
    the full scrollable game log for whichever season/type is selected —
    see the "player detail modal" section below.
    ====================================================================== */
@@ -48,11 +50,6 @@ const BATCH_SIZE = 48;
 // inverted before rating). Everything else: higher = better. Skater and
 // goalie catalogs don't share ids, so one set covers both.
 const INVERT_STATS = new Set(['giveaways', 'losses', 'otLosses', 'gaa', 'goalsAgainst']);
-
-// Ratio-type stats that are already a rate (not a count to divide by
-// games played) — used both for the league per-game comparison pool and
-// the monthly trend aggregation.
-const RATE_STAT_IDS = new Set(['gaa', 'savePct', 'shootingPct', 'faceoffPct']);
 
 // How much each stat counts toward a skater's OVERALL badge, by position
 // group (L and R share the winger profile). Individual category ratings
@@ -452,6 +449,7 @@ function openPlayerModal(player) {
   getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`)
     .then((landing) => {
       renderModalShell(player, landing);
+      renderSnapshotTrend(player);
       wireModalGameLog(player, landing);
     })
     .catch((err) => {
@@ -497,7 +495,7 @@ function renderModalShell(player, landing) {
       <div class="pcard-modal-right">
         <div class="pcard-section">
           <h3 id="modalPlayerName">${escapeHtml(player.name)} — Rating Trend</h3>
-          <div id="trendWrap"><div class="trend-empty">Loading…</div></div>
+          <div id="trendWrap"><div class="trend-empty">Start of season.</div></div>
         </div>
         <div class="pcard-section">
           <div class="gamelog-head">
@@ -530,7 +528,7 @@ function wireModalGameLog(player, landing) {
   const btnPo = document.getElementById('gtPlayoffs');
   let gameType = 2;
 
-  const load = () => loadGameLogAndTrend(player, seasonSelect.value, gameType);
+  const load = () => loadGameLog(player, seasonSelect.value, gameType);
 
   seasonSelect.addEventListener('change', load);
   btnReg.addEventListener('click', () => {
@@ -549,12 +547,10 @@ function wireModalGameLog(player, landing) {
   load();
 }
 
-async function loadGameLogAndTrend(player, season, gameType) {
+async function loadGameLog(player, season, gameType) {
   const gameLogWrap = document.getElementById('gameLogWrap');
-  const trendWrap = document.getElementById('trendWrap');
-  if (!gameLogWrap || !trendWrap) return;
+  if (!gameLogWrap) return;
   gameLogWrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
-  trendWrap.innerHTML = '<div class="trend-empty">Loading…</div>';
 
   const isGoalie = player.pos === 'G';
   const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
@@ -566,7 +562,6 @@ async function loadGameLogAndTrend(player, season, gameType) {
     if (games.length === 0) {
       const label = gameType === 3 ? 'playoff' : 'regular season';
       gameLogWrap.innerHTML = `<div class="gamelog-empty">No ${label} games found for ${seasonLabel(season)}.</div>`;
-      trendWrap.innerHTML = '<div class="trend-empty">No games to chart for this season.</div>';
       return;
     }
 
@@ -586,10 +581,8 @@ async function loadGameLogAndTrend(player, season, gameType) {
     }
 
     gameLogWrap.innerHTML = buildGameLogTable(games, categories, isGoalie);
-    trendWrap.innerHTML = buildTrendSection(player, games, categories);
   } catch (err) {
     gameLogWrap.innerHTML = `<div class="gamelog-empty">Couldn't load game log (${escapeHtml(err.message)}).</div>`;
-    trendWrap.innerHTML = `<div class="trend-empty">Couldn't load trend.</div>`;
   }
 }
 
@@ -650,80 +643,56 @@ function buildGameLogTable(games, categories, isGoalie) {
   return `<div class="gamelog-table-wrap"><table class="gamelog-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
-/** Games grouped into calendar-month buckets, in chronological order. */
-function monthBuckets(games) {
-  const map = new Map();
-  for (const g of games) {
-    const d = new Date(g.gameDate + 'T00:00:00Z');
-    if (Number.isNaN(d.getTime())) continue;
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-    if (!map.has(key)) {
-      map.set(key, { key, label: d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }), games: [] });
-    }
-    map.get(key).games.push(g);
-  }
-  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-}
-
-/** Mean of a stat's per-game values across a set of games (skips games
- *  where that stat isn't resolvable). Simple average rather than a true
- *  weighted ratio (e.g. true monthly GAA needs total-goals/total-minutes)
- *  — close enough for a trend line, much simpler than carrying separate
- *  aggregation rules per stat. */
-function monthlyAggregate(games, catId, isGoalie) {
-  const values = games.map((g) => perGameValue(g, catId, isGoalie)).filter((v) => v != null);
-  if (values.length === 0) return null;
-  return values.reduce((s, v) => s + v, 0) / values.length;
-}
-
-/** Per-game rate for every player in `rawPool`, for percentile comparison
- *  against a monthly per-game average. Ratio stats (gaa, savePct, etc)
- *  are already a rate; counting stats get divided by games played. */
-function leaguePerGamePool(rawPool, catId) {
-  if (RATE_STAT_IDS.has(catId)) return rawPool.map((p) => p[catId] ?? 0);
-  return rawPool.map((p) => (p[catId] ?? 0) / Math.max(1, p.gamesPlayed || 1));
-}
-
-/** Builds the monthly rating-trend chart for the currently-loaded game
- *  log. Each month's "rating" is computed the same way the card's overall
- *  is — percentile rank (against the season-long per-game-rate pool for
- *  the SAME position group), weighted average, rescaled — just fed that
- *  month's per-game averages instead of season totals. The comparison
- *  pool is always the current season's, even when viewing an older
- *  season's game log (building a historical pool for every past season
- *  isn't feasible client-side) — a reasonable trend indicator, not a
- *  precise historical rating. */
-function buildTrendSection(player, games, categories) {
+/** Builds the rating-trend chart's data points from saved weekly
+ *  snapshots (see snapshots.js), NOT from the game log — this is a trend
+ *  of "what would this player's overall rating have been at each
+ *  snapshot", not a per-game breakdown. Each snapshot is re-rated
+ *  independently against its OWN eligibility pool (same MIN_GP_FRACTION
+ *  rule as the live pool) so the comparison is always fair for that
+ *  point in time. Only snapshots from the CURRENT season are included, so
+ *  this naturally resets once the 2026-27 season's snapshots replace
+ *  today's — no manual season rollover needed here. A final "Live" point
+ *  is appended from the already-rated in-memory pool (no recomputation). */
+function buildSnapshotTrendPoints(player) {
   const isGoalie = player.pos === 'G';
-  const buckets = monthBuckets(games);
-  if (buckets.length < 2) {
-    return '<div class="trend-empty">Not enough months of games yet for a trend.</div>';
+  const mode = isGoalie ? 'goalies' : 'skaters';
+  const points = [];
+
+  const chronological = listSnapshots().slice().reverse(); // listSnapshots() is newest-first
+  for (const snap of chronological) {
+    const full = getSnapshotByKey(snap.key);
+    if (!full || full.data.seasonId !== state.seasonId) continue;
+
+    const rawPool = isGoalie ? full.data.goalies : full.data.skaters;
+    const maxGP = seasonGameCount(rawPool);
+    const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
+    const eligible = rawPool.filter((p) => p.gamesPlayed >= minGP);
+
+    const rated = ratePool(eligible, mode);
+    const found = rated.find((p) => p.playerId === player.playerId);
+    if (found) points.push({ label: snap.label, value: found.overall });
   }
 
-  const rawPool = isGoalie ? state.rawGoalies : state.rawSkaters;
-  const weights = isGoalie ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
-  const leaguePools = {};
-  for (const cat of categories) leaguePools[cat.id] = leaguePerGamePool(rawPool, cat.id);
+  const livePool = isGoalie ? state.ratedGoalies : state.ratedSkaters;
+  const live = livePool.find((p) => p.playerId === player.playerId);
+  if (live) points.push({ label: 'Live', value: live.overall });
 
-  const points = buckets.map((b) => {
-    let weightedSum = 0;
-    let weightTotal = 0;
-    for (const cat of categories) {
-      const raw = monthlyAggregate(b.games, cat.id, isGoalie);
-      if (raw == null) continue;
-      let pct = percentileRank(raw, leaguePools[cat.id]);
-      if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
-      const w = weights[cat.id] ?? 1;
-      weightedSum += pct * w;
-      weightTotal += w;
-    }
-    return { label: b.label, value: weightTotal ? toCardRating(weightedSum / weightTotal) : null };
-  }).filter((p) => p.value != null);
+  return points;
+}
 
+/** Renders the Rating Trend section into #trendWrap. Computed once, up
+ *  front, from snapshot history — unlike the game log below it, this
+ *  doesn't refetch when the season/type selector changes. */
+function renderSnapshotTrend(player) {
+  const trendWrap = document.getElementById('trendWrap');
+  if (!trendWrap) return;
+
+  const points = buildSnapshotTrendPoints(player);
   if (points.length < 2) {
-    return '<div class="trend-empty">Not enough data across months to chart a trend.</div>';
+    trendWrap.innerHTML = '<div class="trend-empty">Start of season — retrieve stats weekly once the season begins to build a trend here.</div>';
+    return;
   }
-  return `<div class="trend-chart-wrap">${buildTrendSvg(points)}</div>`;
+  trendWrap.innerHTML = `<div class="trend-chart-wrap">${buildTrendSvg(points)}</div>`;
 }
 
 function buildTrendSvg(points) {
@@ -747,7 +716,7 @@ function buildTrendSvg(points) {
   `).join('');
 
   return `
-    <svg class="trend-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Monthly rating trend">
+    <svg class="trend-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Rating trend">
       <path d="${areaD}" fill="var(--accent)" opacity="0.12"></path>
       <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2"></path>
       ${marks}
