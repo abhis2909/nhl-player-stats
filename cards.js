@@ -16,22 +16,18 @@
    - Each category's rating = that player's percentile rank for the
      mapped stat, within the eligibility pool, rescaled to
      RATING_FLOOR-RATING_CEIL. (Giveaways is inverted — fewer is better.)
-   - Overall (the circular badge): each player's position-weighted
-     composite percentile is re-percentiled across the pool (so it uses
-     the full 0-100 range instead of clustering around the middle the
-     way an average-of-percentiles does), then run through the inverse
-     normal CDF and rescaled to a mean/stddev — i.e. a genuine bell
-     curve, not a flat 55-99 spread: most players land near
-     OVERALL_MEAN, fewer out toward the tails. See toOverallRating().
+   - Overall (the circular badge) = the position-weighted average of the
+     category percentiles, rescaled the same way (RATING_FLOOR-RATING_CEIL).
+     Straightforward and matches "weighted average" literally, at the cost
+     of clustering more players toward the middle than a flat percentile
+     spread would (averaging several percentiles regresses toward the mean)
+     — a normal-distribution remap was tried and reverted; if ratings feel
+     too bunched again, that's the tradeoff to revisit.
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
-const RATING_FLOOR = 25;   // per-category ratings (uniform 0-100 -> floor..ceil)
+const RATING_FLOOR = 25;
 const RATING_CEIL = 99;
-const OVERALL_MEAN = 75;   // overall badge (normal distribution around this...
-const OVERALL_STDDEV = 8;  // ...with this spread)
-const OVERALL_MIN = 40;
-const OVERALL_MAX = 99;
 const BATCH_SIZE = 48;
 
 // Stats where a LOWER raw value is the better outcome (percentile gets
@@ -145,47 +141,6 @@ function toCardRating(percentile) {
   return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
 }
 
-/**
- * Inverse standard normal CDF (probit function) — Peter Acklam's rational
- * approximation, ~1.15e-9 relative error. Converts a uniform(0,1) input
- * into a standard-normal z-score; used to turn a percentile into a
- * bell-curve rating instead of a flat linear one.
- */
-function inverseNormalCDF(p) {
-  const pc = Math.min(Math.max(p, 1e-9), 1 - 1e-9); // keep finite at the extremes
-  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
-    1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
-  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
-    6.680131188771972e+01, -1.328068155288572e+01];
-  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
-    -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
-  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
-  const pLow = 0.02425;
-  const pHigh = 1 - pLow;
-
-  if (pc < pLow) {
-    const q = Math.sqrt(-2 * Math.log(pc));
-    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-  }
-  if (pc <= pHigh) {
-    const q = pc - 0.5;
-    const r = q * q;
-    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
-      (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
-  }
-  const q = Math.sqrt(-2 * Math.log(1 - pc));
-  return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-    ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-}
-
-/** Percentile (0-100) -> a normally-distributed overall rating around OVERALL_MEAN. */
-function toOverallRating(percentile) {
-  const z = inverseNormalCDF(percentile / 100);
-  const raw = OVERALL_MEAN + z * OVERALL_STDDEV;
-  return Math.max(OVERALL_MIN, Math.min(OVERALL_MAX, Math.round(raw)));
-}
-
 function showBanner(message) {
   el.statusBanner.innerHTML = '';
   const span = document.createElement('span');
@@ -233,13 +188,10 @@ function rateAllPlayers() {
     return { player, ratings, compositePct: weightTotal ? weightedSum / weightTotal : 50 };
   });
 
-  // Stage 2: re-percentile the composite score, then map through the
-  // normal-distribution curve for the final overall.
-  const compositePool = withComposite.map((w) => w.compositePct);
   state.players = withComposite.map(({ player, ratings, compositePct }) => ({
     ...player,
     ratings,
-    overall: toOverallRating(percentileRank(compositePct, compositePool)),
+    overall: toCardRating(compositePct),
   }));
 }
 
@@ -262,8 +214,8 @@ async function init() {
     el.eligibilityNote.textContent =
       `Showing the ${state.rawSkaters.length.toLocaleString()} skaters who've played at least ${minGP} games ` +
       `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for skaters — change it there ` +
-      `and these update too. Category ratings are percentile ranks scaled to ${RATING_FLOOR}–${RATING_CEIL}; ` +
-      `the overall badge is normally distributed around ${OVERALL_MEAN}.`;
+      `and these update too. Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}–${RATING_CEIL}; ` +
+      `overall is a position-weighted average of the category percentiles.`;
 
     rateAllPlayers();
     populateTeamSelect();
