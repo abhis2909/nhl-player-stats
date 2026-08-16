@@ -85,14 +85,34 @@ async function retrieveAndSaveSnapshot() {
   return { key, label, data };
 }
 
+/** Permanently removes a saved snapshot (e.g. one retrieved by mistake).
+ *  If it was the active one, falls back to Live so the caller isn't left
+ *  pointing at a snapshot that no longer exists — the caller should still
+ *  re-render after calling this. */
+function deleteSnapshot(key) {
+  const store = readSnapshotStore();
+  delete store[key];
+  writeSnapshotStore(store);
+  if (getActiveSnapshotKey() === key) setActiveSnapshotKey(LIVE_SENTINEL);
+}
+
 /** { key, label, data } for ANY saved snapshot by key (not just the active
- *  one), or null if it doesn't exist. No network call — pure localStorage
- *  read — used to build the rating-trend chart from snapshot history. */
+ *  one), or null if it doesn't exist OR fails to deserialize. No network
+ *  call — pure localStorage read — used to build the rating-trend chart
+ *  from snapshot history and by range.js's from/to pickers. The try/catch
+ *  matters here specifically: range.js calls this for every saved
+ *  snapshot to build its date pickers, and one corrupted entry (e.g. from
+ *  a manual localStorage edit) shouldn't take down every other valid
+ *  snapshot along with it. */
 function getSnapshotByKey(key) {
   const store = readSnapshotStore();
   const snap = store[key];
   if (!snap) return null;
-  return { key, label: snap.label, data: deserializeSeasonData(snap.data) };
+  try {
+    return { key, label: snap.label, data: deserializeSeasonData(snap.data) };
+  } catch {
+    return null;
+  }
 }
 
 /** { key, label, data } for the active snapshot, or null if set to Live /
@@ -100,10 +120,7 @@ function getSnapshotByKey(key) {
 function getActiveSnapshot() {
   const activeKey = getActiveSnapshotKey();
   if (activeKey === LIVE_SENTINEL) return null;
-  const store = readSnapshotStore();
-  const snap = store[activeKey];
-  if (!snap) return null;
-  return { key: activeKey, label: snap.label, data: deserializeSeasonData(snap.data) };
+  return getSnapshotByKey(activeKey);
 }
 
 /** What the Stats/Cards pages should call instead of loadSeasonData()
@@ -117,13 +134,15 @@ async function getSeasonData() {
 }
 
 /** Wires up the shared data-bar markup (#dataSourceLabel / #snapshotSelect /
- *  #retrieveBtn) on whichever page includes it. `onDataChanged` is called
- *  (and awaited) whenever the active snapshot changes — pass the page's own
- *  init/render function. `onError` gets fetch errors from Retrieve, if any. */
+ *  #retrieveBtn / optional #deleteSnapshotBtn) on whichever page includes
+ *  it. `onDataChanged` is called (and awaited) whenever the active snapshot
+ *  changes — pass the page's own init/render function. `onError` gets fetch
+ *  errors from Retrieve, if any. */
 function wireDataBar(onDataChanged, onError) {
   const label = document.getElementById('dataSourceLabel');
   const select = document.getElementById('snapshotSelect');
   const btn = document.getElementById('retrieveBtn');
+  const deleteBtn = document.getElementById('deleteSnapshotBtn');
   if (!label || !select || !btn) return;
 
   function refreshControls() {
@@ -146,6 +165,8 @@ function wireDataBar(onDataChanged, onError) {
 
     const active = snapshots.find((s) => s.key === activeKey);
     label.textContent = activeExists && active ? `Snapshot: ${active.label}` : 'Live data';
+
+    if (deleteBtn) deleteBtn.hidden = select.value === LIVE_SENTINEL;
   }
 
   select.addEventListener('change', async () => {
@@ -169,6 +190,19 @@ function wireDataBar(onDataChanged, onError) {
       btn.textContent = original;
     }
   });
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+      const key = select.value;
+      if (key === LIVE_SENTINEL) return;
+      const snap = listSnapshots().find((s) => s.key === key);
+      const snapLabel = snap ? snap.label : 'this snapshot';
+      if (!window.confirm(`Delete the "${snapLabel}" snapshot? This can't be undone.`)) return;
+      deleteSnapshot(key);
+      refreshControls();
+      await onDataChanged();
+    });
+  }
 
   refreshControls();
 }

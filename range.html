@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Player Cards — NHL Player Stats</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🃏</text></svg>">
+<title>Range Ratings — NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,9 +12,9 @@
 <header class="site-header">
   <div class="header-inner">
     <div class="brand">
-      <span class="brand-icon" aria-hidden="true">🃏</span>
+      <span class="brand-icon" aria-hidden="true">📅</span>
       <div>
-        <h1>Player Cards</h1>
+        <h1>Range Ratings</h1>
         <p class="subtitle" id="seasonLabel">Loading season…</p>
       </div>
     </div>
@@ -37,28 +37,47 @@
   </div>
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Stats</a>
-    <a href="cards.html" class="nav-tab active">🃏 Player Cards</a>
-    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Cards</a>
+    <a href="range.html" class="nav-tab active">📅 Range Ratings</a>
     <a href="admin.html" class="nav-tab">⚙ Columns</a>
   </nav>
 </header>
 
 <main>
-  <div class="data-bar">
-    <span class="data-bar-label" id="dataSourceLabel">Live data</span>
-    <label class="visually-hidden" for="snapshotSelect">Data snapshot</label>
-    <select id="snapshotSelect"></select>
-    <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
-    <button type="button" id="deleteSnapshotBtn" class="ghost-btn danger-btn" hidden>🗑 Delete Snapshot</button>
-  </div>
-
   <div id="statusBanner" class="status-banner" hidden></div>
 
-  <p class="eligibility-note" id="eligibilityNote"></p>
+  <div class="range-bar">
+    <div class="range-field">
+      <label for="rangeFrom">From</label>
+      <div class="range-field-inline">
+        <select id="rangeFrom"></select>
+        <button type="button" id="deleteFromBtn" class="ghost-btn danger-btn" title="Delete this snapshot" hidden>🗑</button>
+      </div>
+    </div>
+    <div class="range-field">
+      <label for="rangeTo">To</label>
+      <select id="rangeTo"></select>
+    </div>
+    <div class="range-quick">
+      <button type="button" id="quickWeek" class="ghost-btn">Past Week</button>
+      <button type="button" id="quickMonth" class="ghost-btn">Past Month</button>
+    </div>
+    <div class="range-actions">
+      <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
+    </div>
+  </div>
+
+  <p class="range-note" id="rangeNote"></p>
 
   <div class="cards-search-bar">
     <label class="visually-hidden" for="searchInput">Search players</label>
     <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+  </div>
+
+  <div id="rangeEmpty" class="range-empty" hidden>
+    <p>You need at least one saved snapshot to build a range. Click <strong>📥 Retrieve Latest Stats</strong>
+    now, then check back in a week (or after a month) and retrieve again — once you have two points in time,
+    pick them as "From" and "To" above to rank players on what they did in between.</p>
   </div>
 
   <div id="cardsSkeleton" class="cards-skeleton" aria-hidden="true">
@@ -86,9 +105,10 @@
 
 <footer class="site-footer">
   <p>
-    Ratings are percentile ranks within this season's qualified players (see note above); overall
-    is a weighted average of the category percentiles — not an official NHL or fantasy-provider
-    rating. Data via the unofficial
+    Ratings here are percentile ranks among players who played at least one game between the "From" and
+    "To" points you picked — a "team of the week" for a short range, or an updated ratings snapshot for a
+    longer one. Only dates you've actually retrieved a snapshot for (plus "Live") are selectable, since
+    that's the only data this static site has saved. Data via the unofficial
     <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
   </p>
 </footer>
@@ -97,6 +117,6 @@
 <script src="columns.js" defer></script>
 <script src="snapshots.js" defer></script>
 <script src="ratings.js" defer></script>
-<script src="cards.js" defer></script>
+<script src="range.js" defer></script>
 </body>
 </html>

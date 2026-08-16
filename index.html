@@ -35,6 +35,7 @@
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab active">📊 Stats</a>
     <a href="cards.html" class="nav-tab">🃏 Player Cards</a>
+    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
     <a href="admin.html" class="nav-tab">⚙ Columns</a>
   </nav>
 </header>
@@ -45,6 +46,7 @@
     <label class="visually-hidden" for="snapshotSelect">Data snapshot</label>
     <select id="snapshotSelect"></select>
     <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
+    <button type="button" id="deleteSnapshotBtn" class="ghost-btn danger-btn" hidden>🗑 Delete Snapshot</button>
   </div>
 
   <div id="statusBanner" class="status-banner" hidden></div>
