@@ -2,25 +2,30 @@
 
 /* ======================================================================
    Player cards: percentile-based fantasy ratings for every qualified
-   skater. Uses the same season data as the stats page (data.js).
+   skater. Uses the same season data as the stats page (data.js) AND the
+   same stat-column selection as the admin page (columns.js) — whichever
+   skater columns are enabled in ⚙ Columns are exactly the categories
+   shown here, so changing that selection changes the cards too (see the
+   `storage` listener at the bottom for the same-tab-open-elsewhere case).
 
    Rating methodology:
    - Eligibility pool = skaters with gamesPlayed >= MIN_GP_FRACTION of the
      season's game count (itself derived from the data, not hardcoded —
      see seasonGameCount() in data.js — so this keeps working once
-     2026-27 stats replace these). Only eligible skaters get a card at
-     all — a 3-game sample doesn't get a meaningful rating either way.
+     2026-27 stats replace these). Only eligible skaters get a card.
    - Each category's rating = that player's percentile rank for the
-     mapped stat, within the eligibility pool, linearly rescaled from a
-     0-100 percentile to a RATING_FLOOR-RATING_CEIL "card" rating.
-   - Overall (the circular badge) = the 8 category ratings, averaged with
-     position-specific weights (POSITION_WEIGHTS below).
-
-   No per-card network requests — headshots are built from the player id
-   (same asset URL pattern the stats page uses), name/team/stats all come
-   from the one bulk fetch. That's what makes rendering ~700 cards
-   feasible; a landing-page fetch per card (as the original 5-card
-   version did) would be ~700 extra requests.
+     mapped stat, within the eligibility pool, rescaled to
+     RATING_FLOOR-RATING_CEIL. (Giveaways is inverted — fewer is better.)
+   - Overall (the circular badge): a straight average-of-percentiles
+     regresses hard toward the middle (central limit theorem — averaging
+     several roughly-independent percentiles rarely lands near either
+     end), which is why ratings looked bunched in the 70s-80s for almost
+     everyone. So overall is computed in two stages instead: (1) each
+     player's position-weighted composite percentile, then (2) THAT
+     composite is itself re-percentiled across the pool before the final
+     floor/ceil rescale. Same relative ordering (it's a monotonic
+     transform), but restores real use of the full 55-99 range instead of
+     compressing everyone into a narrow band.
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
@@ -28,33 +33,37 @@ const RATING_FLOOR = 55;
 const RATING_CEIL = 99;
 const BATCH_SIZE = 48;
 
-// Card category -> underlying stat (see data.js buildSkaters for stat shape).
-// SHO/PAS/GRIT/etc are placeholders for whatever your league calls these —
-// remap the `stat` values here if a pairing doesn't match your categories.
-const CARD_CATEGORIES = [
-  { key: 'SHO', label: 'Shooting', stat: 'goals' },
-  { key: 'PAS', label: 'Passing', stat: 'assists' },
-  { key: 'PP', label: 'Power Play', stat: 'ppPoints' },
-  { key: 'PK', label: 'Penalty Kill', stat: 'shPoints' },
-  { key: 'VOL', label: 'Volume', stat: 'sog' },
-  { key: 'PHY', label: 'Physical', stat: 'hits' },
-  { key: 'DEF', label: 'Defense', stat: 'blocks' },
-  { key: 'GRIT', label: 'Grit', stat: 'pim' },
-];
+// Stats where a LOWER raw value is the better outcome (percentile gets
+// inverted before rating). Everything else: higher = better.
+const INVERT_STATS = new Set(['giveaways']);
 
-// How much each category counts toward a player's OVERALL badge, by
-// position group — the 8 category ratings themselves are always plain
-// percentiles (unweighted), this only changes how they're blended into
-// one number. Tune freely; a weight is relative, not a percentage (they
-// get normalized by their own sum, so e.g. doubling every weight for a
-// group changes nothing).
+// How much each stat counts toward a player's OVERALL badge, by position
+// group (L and R share the winger profile). Individual category ratings
+// are always plain percentiles — this only changes how they blend into
+// one number. Covers every stat in columns.js's SKATER_COLUMNS catalog;
+// anything selected there that's missing here just falls back to weight 1.
 const POSITION_WEIGHTS = {
-  // Centers: two-way, playmaking, works both special-teams units.
-  C: { SHO: 1.1, PAS: 1.4, PP: 1.2, PK: 1.3, VOL: 1.0, PHY: 0.7, DEF: 0.9, GRIT: 0.7 },
+  // Centers: two-way, playmaking, faceoffs, works both special-teams units.
+  C: {
+    goals: 1.1, assists: 1.4, points: 1.3, plusMinus: 1.0, ppGoals: 1.1, ppPoints: 1.2,
+    shGoals: 1.2, shPoints: 1.3, gameWinningGoals: 1.1, otGoals: 1.0, pim: 0.7, sog: 1.0,
+    shootingPct: 0.9, gamesPlayed: 0.8, hits: 0.7, blocks: 0.9, giveaways: 1.0, takeaways: 1.1,
+    faceoffPct: 1.5,
+  },
   // Wingers (L/R combined): finishers, PP flank shooters, board play.
-  W: { SHO: 1.4, PAS: 1.0, PP: 1.3, PK: 0.6, VOL: 1.3, PHY: 1.1, DEF: 0.6, GRIT: 0.9 },
+  W: {
+    goals: 1.4, assists: 1.0, points: 1.2, plusMinus: 1.0, ppGoals: 1.3, ppPoints: 1.3,
+    shGoals: 0.7, shPoints: 0.6, gameWinningGoals: 1.2, otGoals: 1.1, pim: 0.9, sog: 1.3,
+    shootingPct: 1.1, gamesPlayed: 0.8, hits: 1.1, blocks: 0.6, giveaways: 0.9, takeaways: 0.8,
+    faceoffPct: 0.3,
+  },
   // Defensemen: shot-blocking, physicality, PK staple, point-shot/assists over goals.
-  D: { SHO: 0.6, PAS: 1.1, PP: 1.1, PK: 1.3, VOL: 0.7, PHY: 1.3, DEF: 1.8, GRIT: 1.0 },
+  D: {
+    goals: 0.6, assists: 1.1, points: 1.0, plusMinus: 1.1, ppGoals: 0.7, ppPoints: 1.1,
+    shGoals: 1.0, shPoints: 1.3, gameWinningGoals: 0.7, otGoals: 0.6, pim: 1.0, sog: 0.7,
+    shootingPct: 0.6, gamesPlayed: 0.9, hits: 1.3, blocks: 1.8, giveaways: 1.3, takeaways: 1.3,
+    faceoffPct: 0.2,
+  },
 };
 
 /** Maps a raw position code (C/L/R/D) to a POSITION_WEIGHTS group. */
@@ -65,6 +74,15 @@ function positionGroup(pos) {
 }
 
 const POSITION_GROUP_LABEL = { C: 'center', W: 'winger', D: 'defenseman' };
+
+/** Catalog entries (from columns.js) for whichever skater stats are currently
+ *  enabled on the admin page — read fresh each call so this always reflects
+ *  the latest saved selection, not a stale snapshot. */
+function activeColumns(mode) {
+  const config = loadColumnConfig();
+  const selected = new Set(config[mode] || []);
+  return columnCatalog(mode).filter((c) => selected.has(c.id));
+}
 
 const el = {
   seasonLabel: document.getElementById('seasonLabel'),
@@ -82,7 +100,8 @@ const el = {
 
 const state = {
   teamMeta: new Map(),
-  players: [],      // eligible skaters, each with .ratings + .overall precomputed
+  rawSkaters: [],   // eligible skaters, unrated (re-rated whenever the column config changes)
+  players: [],      // rawSkaters + .ratings + .overall for the CURRENT column config
   search: '',
   team: 'ALL',
   pos: 'ALL',
@@ -103,19 +122,6 @@ function toCardRating(percentile) {
   return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
 }
 
-/** Weighted average of the category ratings, using the player's position group's weights. */
-function weightedOverall(ratings, pos) {
-  const weights = POSITION_WEIGHTS[positionGroup(pos)];
-  let weightedSum = 0;
-  let weightTotal = 0;
-  for (const r of ratings) {
-    const w = weights[r.key] ?? 1;
-    weightedSum += r.rating * w;
-    weightTotal += w;
-  }
-  return Math.round(weightedSum / weightTotal);
-}
-
 function showBanner(message) {
   el.statusBanner.innerHTML = '';
   const span = document.createElement('span');
@@ -133,6 +139,46 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+/** Recomputes ratings + overall for every skater, using whichever columns are
+ *  currently enabled on the admin page. Cheap (~tens of ms for ~700 players),
+ *  safe to call whenever the column config might have changed. */
+function rateAllPlayers() {
+  const categories = activeColumns('skaters'); // from columns.js: catalog entries filtered to the saved selection
+  const pool = state.rawSkaters;
+
+  const statPools = {};
+  for (const cat of categories) statPools[cat.id] = pool.map((p) => p[cat.id] ?? 0);
+
+  // Stage 1: per-category percentile (also this player's individually-displayed rating)
+  // and this player's position-weighted composite percentile.
+  const withComposite = pool.map((player) => {
+    const ratings = categories.map((cat) => {
+      const value = player[cat.id] ?? 0;
+      let pct = percentileRank(value, statPools[cat.id]);
+      if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
+      return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct), pct };
+    });
+    const weights = POSITION_WEIGHTS[positionGroup(player.pos)];
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const r of ratings) {
+      const w = weights[r.id] ?? 1;
+      weightedSum += r.pct * w;
+      weightTotal += w;
+    }
+    return { player, ratings, compositePct: weightTotal ? weightedSum / weightTotal : 50 };
+  });
+
+  // Stage 2: re-percentile the composite score itself so overall actually
+  // spans the full range instead of clustering around the middle.
+  const compositePool = withComposite.map((w) => w.compositePct);
+  state.players = withComposite.map(({ player, ratings, compositePct }) => ({
+    ...player,
+    ratings,
+    overall: toCardRating(percentileRank(compositePct, compositePool)),
+  }));
+}
+
 async function init() {
   el.statusBanner.hidden = true;
   el.skeleton.hidden = false;
@@ -145,27 +191,14 @@ async function init() {
 
     const maxGP = seasonGameCount(skaters);
     const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
-    const eligible = skaters.filter((p) => p.gamesPlayed >= minGP);
+    state.rawSkaters = skaters.filter((p) => p.gamesPlayed >= minGP);
 
     el.eligibilityNote.textContent =
-      `Showing the ${eligible.length.toLocaleString()} skaters who've played at least ${minGP} games ` +
-      `this season (30% of ${maxGP}). Ratings are each player's percentile rank within that group, ` +
-      `scaled to ${RATING_FLOOR}–${RATING_CEIL}, then blended into the overall badge with position-specific weights.`;
+      `Showing the ${state.rawSkaters.length.toLocaleString()} skaters who've played at least ${minGP} games ` +
+      `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for skaters — change it there ` +
+      `and these update too. Ratings are percentile ranks within this group, scaled to ${RATING_FLOOR}–${RATING_CEIL}.`;
 
-    const statPools = {};
-    for (const cat of CARD_CATEGORIES) {
-      statPools[cat.stat] = eligible.map((p) => p[cat.stat] ?? 0);
-    }
-
-    // Precompute ratings once so filtering/searching later is instant.
-    state.players = eligible.map((player) => {
-      const ratings = CARD_CATEGORIES.map((cat) => {
-        const value = player[cat.stat] ?? 0;
-        return { ...cat, value, rating: toCardRating(percentileRank(value, statPools[cat.stat])) };
-      });
-      return { ...player, ratings, overall: weightedOverall(ratings, player.pos) };
-    });
-
+    rateAllPlayers();
     populateTeamSelect();
     el.skeleton.hidden = true;
     render(true);
@@ -204,7 +237,7 @@ function getFiltered() {
     .sort((a, b) => b.overall - a.overall);
 }
 
-/** @param reset - true when a filter changed (rebuild from scratch); false for "load more". */
+/** @param reset - true when a filter (or the column config) changed; false for "load more". */
 function render(reset) {
   if (reset) state.visibleCount = BATCH_SIZE;
   const filtered = getFiltered();
@@ -242,6 +275,14 @@ el.loadMoreBtn.addEventListener('click', () => {
   render(false);
 });
 
+// If the admin page (⚙ Columns) is open in another tab and saves a change,
+// pick it up here live instead of requiring a reload.
+window.addEventListener('storage', (e) => {
+  if (e.key !== COLUMN_STORAGE_KEY) return;
+  rateAllPlayers();
+  render(true);
+});
+
 function buildCard(player) {
   const colors = teamColor(player.team);
   const headshot = `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
@@ -273,9 +314,9 @@ function buildCard(player) {
     </div>
     <div class="card-stats-grid">
       ${player.ratings.map((r) => `
-        <div class="card-stat" title="${escapeHtml(r.label)}: ${r.value}">
+        <div class="card-stat" title="${escapeHtml(r.label)}: ${escapeHtml(formatColumnValue(r, r.value))}">
           <span class="card-stat-num">${r.rating}</span>
-          <span class="card-stat-lbl">${escapeHtml(r.key)}</span>
+          <span class="card-stat-lbl">${escapeHtml(r.short)}</span>
         </div>
       `).join('')}
     </div>
