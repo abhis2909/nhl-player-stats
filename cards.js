@@ -23,11 +23,14 @@
      spread would (averaging several percentiles regresses toward the mean)
      — a normal-distribution remap was tried and reverted; if ratings feel
      too bunched again, that's the tradeoff to revisit.
+   - Every rating (category and overall) then gets a flat +4% premium
+     (RATING_PREMIUM), capped at RATING_CEIL — see toCardRating().
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
 const RATING_FLOOR = 25;
 const RATING_CEIL = 99;
+const RATING_PREMIUM = 1.04; // flat +4% applied to every rating (category and overall), capped at RATING_CEIL
 const BATCH_SIZE = 48;
 
 // Stats where a LOWER raw value is the better outcome (percentile gets
@@ -138,7 +141,7 @@ function percentileRank(value, pool) {
 
 function toCardRating(percentile) {
   const raw = RATING_FLOOR + (percentile / 100) * (RATING_CEIL - RATING_FLOOR);
-  return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
+  return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw * RATING_PREMIUM)));
 }
 
 function showBanner(message) {
