@@ -45,7 +45,7 @@
 
   .card {
     width: 300px;
-    height: 470px;
+    height: 545px;
     border-radius: 20px;
     position: relative;
     display: flex;
@@ -112,7 +112,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 34px 14px 0;
+    padding: 24px 14px 0;
   }
 
   .ovr-badge {
@@ -159,7 +159,8 @@
   .photo-wrap {
     position: relative;
     flex: 1;
-    margin-top: 6px;
+    min-height: 240px;
+    margin-top: 8px;
     overflow: hidden;
   }
 
@@ -169,20 +170,19 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: top center;
+    object-position: center 8%;
   }
 
   .photo-fade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 45%, #0c0f14 96%);
+    background: linear-gradient(180deg, transparent 70%, #0c0f14 99%);
   }
 
   .card-info {
     position: relative;
     z-index: 3;
-    padding: 0 18px 18px;
-    margin-top: -6px;
+    padding: 8px 18px 18px;
   }
 
   .player-name {
@@ -277,19 +277,19 @@ const PLAYERS = [
     name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 99,
     headshot: "https://assets.nhle.com/mugs/nhl/latest/8477960.png",
     teamLogo: "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
-    stats: [["G",98],["A",94],["PPP",89],["SHP",92],["PIM",94],["SOG",97],["HIT",92],["BLK",76]],
+    stats: [["G",97],["A",90],["PPP",82],["SHP",88],["PIM",90],["SOG",96],["HIT",87],["BLK",61]],
   },
   {
     name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 99,
     headshot: "https://assets.nhle.com/mugs/nhl/latest/8482116.png",
     teamLogo: "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
-    stats: [["G",97],["A",97],["PPP",97],["SHP",92],["PIM",86],["SOG",95],["HIT",92],["BLK",80]],
+    stats: [["G",96],["A",95],["PPP",96],["SHP",88],["PIM",77],["SOG",92],["HIT",87],["BLK",67]],
   },
   {
     name: "Matt Boldy", pos: "L", team: "MIN", teamName: "Minnesota Wild", overall: 97,
     headshot: "https://assets.nhle.com/mugs/nhl/latest/8481557.png",
     teamLogo: "https://assets.nhle.com/logos/nhl/svg/MIN_light.svg",
-    stats: [["G",98],["A",96],["PPP",98],["SHP",98],["PIM",79],["SOG",98],["HIT",78],["BLK",86]],
+    stats: [["G",98],["A",94],["PPP",97],["SHP",97],["PIM",66],["SOG",98],["HIT",63],["BLK",76]],
   },
 ];
 
