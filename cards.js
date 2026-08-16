@@ -36,6 +36,30 @@ const CARD_CATEGORIES = [
   { key: 'GRIT', label: 'Grit', stat: 'pim' },
 ];
 
+// How much each category counts toward a player's OVERALL badge, by
+// position group — the 8 category ratings themselves are always plain
+// percentiles (unweighted), this only changes how they're blended into
+// one number. Tune freely; a weight is relative, not a percentage (they
+// get normalized by their own sum, so e.g. doubling every weight for a
+// group changes nothing).
+const POSITION_WEIGHTS = {
+  // Centers: two-way, playmaking, works both special-teams units.
+  C: { SHO: 1.1, PAS: 1.4, PP: 1.2, PK: 1.3, VOL: 1.0, PHY: 0.7, DEF: 0.9, GRIT: 0.7 },
+  // Wingers (L/R combined): finishers, PP flank shooters, board play.
+  W: { SHO: 1.4, PAS: 1.0, PP: 1.3, PK: 0.6, VOL: 1.3, PHY: 1.1, DEF: 0.6, GRIT: 0.9 },
+  // Defensemen: shot-blocking, physicality, PK staple, point-shot/assists over goals.
+  D: { SHO: 0.6, PAS: 1.1, PP: 1.1, PK: 1.3, VOL: 0.7, PHY: 1.3, DEF: 1.8, GRIT: 1.0 },
+};
+
+/** Maps a raw position code (C/L/R/D) to a POSITION_WEIGHTS group. */
+function positionGroup(pos) {
+  if (pos === 'D') return 'D';
+  if (pos === 'C') return 'C';
+  return 'W'; // L, R
+}
+
+const POSITION_GROUP_LABEL = { C: 'center', W: 'winger', D: 'defenseman' };
+
 // Starting set — the "top players" from the stats page. Add/remove names
 // to change who gets a card; matched against the live dataset by name.
 const FEATURED_SKATERS = [
@@ -68,6 +92,19 @@ function percentileRank(value, pool) {
 function toCardRating(percentile) {
   const raw = RATING_FLOOR + (percentile / 100) * (RATING_CEIL - RATING_FLOOR);
   return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
+}
+
+/** Weighted average of the category ratings, using the player's position group's weights. */
+function weightedOverall(ratings, pos) {
+  const weights = POSITION_WEIGHTS[positionGroup(pos)];
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const r of ratings) {
+    const w = weights[r.key] ?? 1;
+    weightedSum += r.rating * w;
+    weightTotal += w;
+  }
+  return Math.round(weightedSum / weightTotal);
 }
 
 function showBanner(message) {
@@ -124,7 +161,7 @@ async function init() {
         const value = player[cat.stat] ?? 0;
         return { ...cat, value, rating: toCardRating(percentileRank(value, statPools[cat.stat])) };
       });
-      const overall = Math.round(ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length);
+      const overall = weightedOverall(ratings, player.pos);
       el.grid.appendChild(buildCard(player, landings[i], ratings, overall));
     });
   } catch (err) {
@@ -151,7 +188,7 @@ function buildCard(player, landing, ratings, overall) {
   card.innerHTML = `
     <div class="card-top">
       <div class="card-badge">
-        <span class="card-overall">${overall}</span>
+        <span class="card-overall" title="Overall, weighted for ${POSITION_GROUP_LABEL[positionGroup(player.pos)]}s">${overall}</span>
         <span class="card-pos">${escapeHtml(player.pos)}</span>
       </div>
       <div class="card-team-pill">
