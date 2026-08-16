@@ -25,6 +25,13 @@
      too bunched again, that's the tradeoff to revisit.
    - Every rating (category and overall) then gets a flat +4% premium
      (RATING_PREMIUM), capped at RATING_CEIL — see toCardRating().
+
+   Card visuals: overall maps to one of six gem tiers (tierFor()) — Silver
+   / Gold / Emerald / Ruby / Amethyst / Diamond — and tier drives more
+   than color: border shimmer speed, sheen-sweep strength, badge/aura
+   glow, pulse, sparkles, and stat-tile shape all scale with rarity (see
+   the .tier-* rules in style.css). No more per-team card coloring —
+   team is just the small logo+abbreviation pill now.
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
@@ -74,6 +81,19 @@ function positionGroup(pos) {
 }
 
 const POSITION_GROUP_LABEL = { C: 'center', W: 'winger', D: 'defenseman' };
+
+/** Overall rating -> card tier. Effect intensity (border shimmer speed,
+ *  sheen strength, glow, pulse, sparkles, stat-tile shape) scales with
+ *  tier via CSS in style.css (.tier-silver..diamond) — this function is
+ *  the single source of truth for the thresholds. */
+function tierFor(overall) {
+  if (overall >= 92) return 'diamond';
+  if (overall >= 87) return 'amethyst';
+  if (overall >= 82) return 'ruby';
+  if (overall >= 77) return 'emerald';
+  if (overall >= 70) return 'gold';
+  return 'silver';
+}
 
 /** Catalog entries (from columns.js) for whichever skater stats are currently
  *  enabled on the admin page — read fresh each call so this always reflects
@@ -308,41 +328,51 @@ window.addEventListener('storage', (e) => {
 wireDataBar(init, (err) => showBanner(`Couldn't retrieve latest stats (${err.message}).`));
 
 function buildCard(player) {
-  const colors = teamColor(player.team);
+  const tier = tierFor(player.overall);
   const headshot = `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
   const meta = state.teamMeta.get(player.team);
-  const teamName = meta?.name || player.team;
+  const [first, ...rest] = player.name.split(' ');
+  const last = rest.join(' ') || player.name;
 
   const card = document.createElement('div');
-  card.className = 'player-card';
-  card.style.setProperty('--card-primary', colors.primary);
-  card.style.setProperty('--card-secondary', colors.secondary);
+  card.className = `player-card tier-${tier}`;
 
   card.innerHTML = `
-    <div class="card-top">
-      <div class="card-badge">
-        <span class="card-overall" title="Overall, weighted for ${POSITION_GROUP_LABEL[positionGroup(player.pos)]}s">${player.overall}</span>
-        <span class="card-pos">${escapeHtml(player.pos)}</span>
-      </div>
-      <div class="card-team-pill">
-        ${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : ''}
-        <span>${escapeHtml(player.team)}</span>
-      </div>
-    </div>
-    <div class="card-photo-wrap">
-      <img class="card-photo" src="${headshot}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-    </div>
-    <div class="card-identity">
-      <div class="card-name">${escapeHtml(player.name)}</div>
-      <div class="card-subtitle">${escapeHtml(teamName)}</div>
-    </div>
-    <div class="card-stats-grid">
-      ${player.ratings.map((r) => `
-        <div class="card-stat" title="${escapeHtml(r.label)}: ${escapeHtml(formatColumnValue(r, r.value))}">
-          <span class="card-stat-num">${r.rating}</span>
-          <span class="card-stat-lbl">${escapeHtml(r.short)}</span>
+    <div class="pc-inner">
+      <div class="pc-tier-tag">${tier}</div>
+      <span class="pc-sparkle" style="top:18%; left:14%; animation-delay:0s;"></span>
+      <span class="pc-sparkle" style="top:34%; left:82%; animation-delay:0.9s;"></span>
+      <span class="pc-sparkle" style="top:52%; left:20%; animation-delay:1.6s;"></span>
+      <div class="pc-photo-wrap">
+        <img src="${headshot}" alt="" loading="lazy" onerror="this.style.display='none'">
+        <div class="pc-photo-fade"></div>
+        <div class="pc-top-row">
+          <div>
+            <div class="pc-ovr-badge" title="Overall, weighted for ${POSITION_GROUP_LABEL[positionGroup(player.pos)]}s">
+              <span class="val">${player.overall}</span><span class="lbl">OVR</span>
+            </div>
+            <div class="pc-pos-badge">${escapeHtml(player.pos)}</div>
+          </div>
+          <div class="pc-team-pill">
+            ${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : ''}
+            <span>${escapeHtml(player.team)}</span>
+          </div>
         </div>
-      `).join('')}
+      </div>
+      <div class="pc-info">
+        <div class="pc-player-name">
+          <span class="pc-first-name">${escapeHtml(first)}</span>
+          <span class="pc-last-name">${escapeHtml(last)}</span>
+        </div>
+        <div class="pc-stats-grid">
+          ${player.ratings.map((r) => `
+            <div class="pc-stat" title="${escapeHtml(r.label)}: ${escapeHtml(formatColumnValue(r, r.value))}">
+              <div class="pc-stat-shape"><span class="pc-stat-val">${r.rating}</span></div>
+              <span class="pc-stat-lbl">${escapeHtml(r.short)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
     </div>
   `;
   card.tabIndex = 0;

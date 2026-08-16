@@ -722,7 +722,8 @@ td.stat-num {
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 280px));
+  justify-content: center;
   gap: 20px;
 }
 
@@ -743,169 +744,351 @@ td.stat-num {
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 280px));
+  justify-content: center;
   gap: 20px;
 }
 
 .cards-skeleton[hidden] { display: none; }
 
 .card-skel {
-  height: 360px;
+  height: 440px;
   border-radius: 16px;
   background: linear-gradient(90deg, #141c28 25%, #1b2532 37%, #141c28 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease infinite;
 }
 
+/* ---------- Player card: 6-tier gem system ----------
+   Tier drives more than color — border shimmer speed, sheen-sweep
+   strength, badge/aura glow, pulse, sparkles, and stat-tile shape all
+   scale with rarity. See tierFor() in cards.js for thresholds. */
+
 .player-card {
-  --card-primary: #2c3e50;
-  --card-secondary: #4fb3ff;
+  width: 100%;
+  height: 440px;
+  border-radius: 20px;
   position: relative;
-  border-radius: 16px;
-  padding: 16px;
-  color: #fff;
-  background:
-    linear-gradient(165deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 100%),
-    var(--card-primary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: var(--shadow);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.tier-silver {
+  --t1: #94a3b8; --t2: #1e293b; --t-accent: #e2e8f0;
+  --shimmer-speed: 999s; --shimmer-opacity: 0.4;
+  --sheen-peak: 0; --glow: 0 0 0 transparent;
+}
+.tier-gold {
+  --t1: #eab308; --t2: #4a3a10; --t-accent: #fef3c7;
+  --shimmer-speed: 9s; --shimmer-opacity: 1;
+  --sheen-peak: 0.14; --glow: 0 0 10px rgba(234, 179, 8, 0.35);
+}
+.tier-emerald {
+  --t1: #10b981; --t2: #052e1c; --t-accent: #a7f3d0;
+  --shimmer-speed: 7s; --shimmer-opacity: 1;
+  --sheen-peak: 0.20; --glow: 0 0 16px rgba(16, 185, 129, 0.45);
+}
+.tier-ruby {
+  --t1: #f43f5e; --t2: #4c0519; --t-accent: #ffd1d9;
+  --shimmer-speed: 6s; --shimmer-opacity: 1;
+  --sheen-peak: 0.26; --glow: 0 0 20px rgba(244, 63, 94, 0.5);
+}
+.tier-amethyst {
+  --t1: #c084fc; --t2: #3b0764; --t-accent: #f3e8ff;
+  --shimmer-speed: 5s; --shimmer-opacity: 1;
+  --sheen-peak: 0.32; --glow: 0 0 26px rgba(192, 132, 252, 0.55);
+}
+.tier-diamond {
+  --t1: #7dd3fc; --t2: #0c2f4a; --t-accent: #e0f7ff;
+  --shimmer-speed: 4s; --shimmer-opacity: 1;
+  --sheen-peak: 0.4; --glow: 0 0 34px rgba(125, 211, 252, 0.65);
 }
 
 .player-card::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 85% -10%, var(--card-secondary) 0%, transparent 55%);
-  opacity: 0.35;
+  border-radius: 20px;
+  padding: 3px;
+  opacity: var(--shimmer-opacity);
+  background: linear-gradient(115deg, var(--t1), var(--t-accent), var(--t2), var(--t-accent), var(--t1));
+  background-size: 300% 300%;
+  animation: pc-shimmer var(--shimmer-speed) ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
   pointer-events: none;
 }
 
-.card-top,
-.card-photo-wrap,
-.card-identity,
-.card-stats-grid {
-  position: relative;
+.tier-silver::before { background: var(--t1); }
+
+@keyframes pc-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
-.card-top {
+.pc-inner {
+  position: relative;
+  flex: 1;
+  border-radius: 17px;
+  overflow: hidden;
+  background: linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%);
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+}
+
+.tier-emerald .pc-inner  { background: radial-gradient(circle at 50% 10%, var(--t1) 0%, transparent 38%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-ruby .pc-inner     { background: radial-gradient(circle at 50% 10%, var(--t1) 0%, transparent 42%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-amethyst .pc-inner { background: radial-gradient(circle at 50% 10%, var(--t1) 0%, transparent 46%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-diamond .pc-inner  { background: radial-gradient(circle at 50% 10%, var(--t1) 0%, transparent 50%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+
+.pc-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    transparent 38%,
+    rgba(255, 255, 255, calc(var(--sheen-peak) * 0.35)) 46%,
+    rgba(255, 255, 255, var(--sheen-peak)) 50%,
+    rgba(255, 255, 255, calc(var(--sheen-peak) * 0.35)) 54%,
+    transparent 62%
+  );
+  background-size: 240% 240%;
+  mix-blend-mode: overlay;
+  animation: pc-sheen-sweep var(--shimmer-speed) ease-in-out infinite;
+}
+
+@keyframes pc-sheen-sweep {
+  0%, 12%   { background-position: -70% -70%; }
+  62%, 100% { background-position: 130% 130%; }
+}
+
+.pc-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.025) 0px,
+    rgba(255, 255, 255, 0.025) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.5;
+}
+
+.pc-tier-tag {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--t2);
+  background: linear-gradient(120deg, var(--t-accent), var(--t1));
+  padding: 3px 11px;
+  border-radius: 20px;
+  z-index: 4;
+}
+
+.pc-top-row {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+}
+
+.pc-ovr-badge {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 32%),
+    conic-gradient(from 210deg, var(--t2), var(--t1), var(--t-accent), var(--t1), var(--t2));
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: var(--glow), 0 2px 6px rgba(0, 0, 0, 0.55), inset 0 -4px 6px rgba(0, 0, 0, 0.35), inset 0 2px 3px rgba(255, 255, 255, 0.65);
+  color: #0b0f14;
+}
+
+.tier-amethyst .pc-ovr-badge,
+.tier-diamond .pc-ovr-badge {
+  animation: pc-badge-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pc-badge-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+
+.pc-ovr-badge .val { font-size: 18px; font-weight: 900; line-height: 1; }
+.pc-ovr-badge .lbl { font-size: 7px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
+
+.pc-pos-badge {
+  margin-top: 5px;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--t-accent);
+  border-radius: 6px;
+  padding: 2px 7px;
+  letter-spacing: 0.5px;
+}
+
+.pc-team-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
+  padding: 5px 10px 5px 5px;
+}
+
+.pc-team-pill img { width: 20px; height: 20px; object-fit: contain; }
+.pc-team-pill span { font-size: 11px; font-weight: 800; letter-spacing: 0.3px; }
+
+.pc-photo-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 205px;
+  overflow: hidden;
+}
+
+.pc-photo-wrap > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 4%;
+  transform: scale(0.82);
+  transform-origin: 50% 92%;
+}
+
+.pc-photo-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 72%, #0c0f14 99%);
+}
+
+.pc-info {
+  position: relative;
+  z-index: 3;
+  padding: 6px 16px 16px;
+}
+
+.pc-player-name {
+  text-align: center;
   margin-bottom: 10px;
 }
 
-.card-badge {
+.pc-first-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+}
+
+.pc-last-name {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  line-height: 1.15;
+  background: linear-gradient(180deg, #fff, var(--t-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.pc-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px 5px;
+}
+
+.pc-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.card-overall {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  border: 2px solid rgba(255, 255, 255, 0.65);
+.pc-stat-shape {
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0.18) 100%),
+    linear-gradient(155deg, var(--t1) 0%, var(--t2) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.35);
+}
+
+.tier-silver   .pc-stat-shape { border-radius: 9px; }
+.tier-gold     .pc-stat-shape { border-radius: 50%; }
+.tier-emerald  .pc-stat-shape { clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0% 50%); }
+.tier-ruby     .pc-stat-shape { clip-path: polygon(50% 0%, 90% 21%, 98% 68%, 68% 100%, 32% 100%, 2% 68%, 10% 21%); }
+.tier-amethyst .pc-stat-shape { clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); }
+.tier-diamond  .pc-stat-shape { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+
+.pc-stat-val {
+  font-size: 14px;
   font-weight: 800;
+  color: var(--t-accent);
   font-variant-numeric: tabular-nums;
 }
 
-.card-pos {
-  font-size: 10.5px;
+.pc-stat-lbl {
+  font-size: 8px;
   font-weight: 700;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 2px 8px;
-  border-radius: 6px;
-  letter-spacing: 0.3px;
-}
-
-.card-team-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.card-team-pill img {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-
-.card-photo-wrap {
-  background: #eef2f6;
-  border-radius: 12px;
-  overflow: hidden;
-  aspect-ratio: 1;
-  margin-bottom: 12px;
-}
-
-.card-photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  display: block;
-}
-
-.card-identity {
-  text-align: center;
-  margin-bottom: 14px;
-}
-
-.card-name {
-  font-size: 16.5px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  line-height: 1.25;
-}
-
-.card-subtitle {
-  font-size: 11px;
-  opacity: 0.85;
-  margin-top: 3px;
-  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
   letter-spacing: 0.4px;
 }
 
-.card-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+.pc-sparkle {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  width: 9px;
+  height: 9px;
+  background: radial-gradient(circle, #fff 0%, transparent 72%);
+  clip-path: polygon(50% 0%, 61% 40%, 100% 50%, 61% 60%, 50% 100%, 39% 60%, 0% 50%, 39% 40%);
+  pointer-events: none;
+  animation: pc-twinkle 2.4s ease-in-out infinite;
 }
 
-.card-stat {
-  background: rgba(0, 0, 0, 0.32);
-  border-radius: 8px;
-  padding: 8px 4px;
-  text-align: center;
-  cursor: default;
-}
-
-.card-stat-num {
+.tier-amethyst .pc-sparkle,
+.tier-diamond .pc-sparkle {
   display: block;
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
-.card-stat-lbl {
-  display: block;
-  font-size: 9.5px;
-  opacity: 0.8;
-  margin-top: 2px;
-  letter-spacing: 0.3px;
+@keyframes pc-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.3); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 /* ---------- Player card detail modal (cards.html) ---------- */
