@@ -696,6 +696,19 @@ td.stat-num {
   gap: 20px;
 }
 
+.load-more-wrap {
+  max-width: 1200px;
+  margin: 22px auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+.load-more-wrap[hidden] { display: none; }
+
+.load-more-wrap .ghost-btn {
+  padding: 10px 26px;
+}
+
 .cards-skeleton {
   max-width: 1200px;
   margin: 0 auto;
