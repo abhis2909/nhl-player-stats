@@ -10,12 +10,17 @@
      see seasonGameCount() in data.js — so this keeps working once
      2026-27 stats replace these).
    - Each category's rating = that player's percentile rank for the
-     mapped stat, within the eligibility pool, scaled from 0-100 to a
-     1-99 "card" rating.
+     mapped stat, within the eligibility pool, linearly rescaled from a
+     0-100 percentile to a RATING_FLOOR-RATING_CEIL "card" rating (so
+     even a below-average-among-qualified-NHLers stat doesn't read as a
+     harsh near-zero — everyone in the pool already cleared the games-
+     played bar).
    - Overall (the circular badge) = average of the 8 category ratings.
    ====================================================================== */
 
 const MIN_GP_FRACTION = 0.3;
+const RATING_FLOOR = 55;
+const RATING_CEIL = 99;
 
 // Card category -> underlying stat (see data.js buildSkaters for stat shape).
 // SHO/PAS/GRIT/etc are placeholders for whatever your league calls these —
@@ -61,7 +66,8 @@ function percentileRank(value, pool) {
 }
 
 function toCardRating(percentile) {
-  return Math.max(1, Math.min(99, Math.round(percentile * 0.99)));
+  const raw = RATING_FLOOR + (percentile / 100) * (RATING_CEIL - RATING_FLOOR);
+  return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw)));
 }
 
 function showBanner(message) {
@@ -92,7 +98,7 @@ async function init() {
 
     el.eligibilityNote.textContent =
       `Ratings are percentile ranks among the ${eligible.length.toLocaleString()} skaters who've ` +
-      `played at least ${minGP} games this season (30% of ${maxGP}), scaled to 1–99.`;
+      `played at least ${minGP} games this season (30% of ${maxGP}), scaled to ${RATING_FLOOR}–${RATING_CEIL}.`;
 
     const statPools = {};
     for (const cat of CARD_CATEGORIES) {
