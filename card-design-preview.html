@@ -90,6 +90,51 @@
     flex-direction: column;
   }
 
+  /* Metallic feel, part 1: a soft diagonal light band slowly sweeping
+     across the whole card, like light catching foil/brushed metal as it
+     tilts. Sits above everything (badges included) but is faint + additive
+     enough not to hurt legibility. */
+  .card-inner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    background: linear-gradient(
+      120deg,
+      transparent 38%,
+      rgba(255,255,255,0.08) 46%,
+      rgba(255,255,255,0.32) 50%,
+      rgba(255,255,255,0.08) 54%,
+      transparent 62%
+    );
+    background-size: 240% 240%;
+    mix-blend-mode: overlay;
+    animation: sheen-sweep 6s ease-in-out infinite;
+  }
+
+  @keyframes sheen-sweep {
+    0%, 12%   { background-position: -70% -70%; }
+    62%, 100% { background-position: 130% 130%; }
+  }
+
+  /* Metallic feel, part 2: a fine brushed-metal grain across the surface. */
+  .card-inner::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      100deg,
+      rgba(255,255,255,0.025) 0px,
+      rgba(255,255,255,0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    opacity: 0.5;
+  }
+
   /* Badges float over the photo now (see .photo-wrap below) instead of
      reserving their own row, so the photo can start right at the top edge. */
   .tier-tag {
@@ -127,9 +172,14 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at 35% 30%, var(--t-accent), var(--t1) 60%, var(--t2) 100%);
+    background:
+      radial-gradient(circle at 32% 24%, rgba(255,255,255,0.95), rgba(255,255,255,0) 32%),
+      conic-gradient(from 210deg, var(--t2), var(--t1), var(--t-accent), var(--t1), var(--t2));
     border: 2px solid rgba(255,255,255,0.85);
-    box-shadow: 0 0 18px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.5);
+    box-shadow:
+      0 2px 6px rgba(0,0,0,0.55),
+      inset 0 -4px 6px rgba(0,0,0,0.35),
+      inset 0 2px 3px rgba(255,255,255,0.65);
     color: #0b0f14;
   }
 
@@ -237,8 +287,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(155deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
-    border: 1px solid rgba(255,255,255,0.2);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.02) 55%, rgba(0,0,0,0.18) 100%),
+      linear-gradient(155deg, var(--t1) 0%, var(--t2) 100%);
+    border: 1px solid rgba(255,255,255,0.25);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.4), inset 0 -3px 5px rgba(0,0,0,0.35);
   }
 
   .tier-diamond .stat-shape { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
@@ -279,41 +332,43 @@
 <div class="showcase" id="showcase"></div>
 
 <p class="notes">
-  Tier now calibrated against the real (reverted-to-weighted-average)
-  rating distribution — measured on the live 693-skater pool: min 28,
-  max 89, mean 60. So: <b>Diamond 85+</b> (~top 3%), <b>Gold 75–84</b>
-  (~next 17%), <b>Silver 50–74</b> (the big middle, ~55%), <b>Bronze
-  &lt;50</b> (~25%). Stat tiles are now shaped by tier too — diamond,
-  hexagon, circle, rounded square — with just the number inside and the
-  label underneath, unclipped. Photo now starts at the very top of the
-  card with badges floating over it, instead of pushing the photo down.
-  Not deployed anywhere yet — just this preview page.
+  Ratings now include the live site's +4% premium. Diamond raised to
+  <b>90+</b> (Gold absorbed the 75–89 band so there's no gap); <b>Gold
+  75–89</b>, <b>Silver 50–74</b> (the big middle), <b>Bronze &lt;50</b>.
+  Added a metallic feel: a soft diagonal sheen sweeps slowly across each
+  card, a fine brushed-texture grain sits under everything, and the OVR
+  badge + stat tiles use conic/directional gradients (highlight one
+  corner, shadow the opposite) instead of flat fills, so they read as
+  curved polished metal rather than solid color. Not deployed anywhere
+  yet — just this preview page.
 </p>
 
 <script>
 const PLAYERS = [
   {
-    name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 89,
-    headshot: "https://assets.nhle.com/mugs/nhl/latest/8482116.png",
-    teamLogo: "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
-    stats: [["G",96],["A",95],["PPP",96],["SHP",88],["PIM",77],["SOG",92],["HIT",87],["BLK",67]],
-  },
-  {
-    name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 88,
+    name: "Adrian Kempe", pos: "R", team: "LAK", teamName: "Los Angeles Kings", overall: 92,
     headshot: "https://assets.nhle.com/mugs/nhl/latest/8477960.png",
     teamLogo: "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
-    stats: [["G",97],["A",90],["PPP",82],["SHP",88],["PIM",90],["SOG",96],["HIT",87],["BLK",61]],
+    stats: [["G",99],["A",94],["PPP",85],["SHP",91],["PIM",94],["SOG",99],["HIT",91],["BLK",63]],
   },
   {
-    name: "Jake Guentzel", pos: "C", team: "TBL", teamName: "Tampa Bay Lightning", overall: 87,
-    headshot: "https://assets.nhle.com/mugs/nhl/latest/8477404.png",
-    teamLogo: "https://assets.nhle.com/logos/nhl/svg/TBL_light.svg",
-    stats: [["G",97],["A",96],["PPP",97],["SHP",88],["PIM",92],["SOG",95],["HIT",49],["BLK",63]],
+    name: "Tim Stützle", pos: "C", team: "OTT", teamName: "Ottawa Senators", overall: 92,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8482116.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
+    stats: [["G",99],["A",99],["PPP",99],["SHP",91],["PIM",80],["SOG",96],["HIT",90],["BLK",69]],
+  },
+  {
+    name: "Matt Boldy", pos: "L", team: "MIN", teamName: "Minnesota Wild", overall: 91,
+    headshot: "https://assets.nhle.com/mugs/nhl/latest/8481557.png",
+    teamLogo: "https://assets.nhle.com/logos/nhl/svg/MIN_light.svg",
+    stats: [["G",99],["A",97],["PPP",99],["SHP",99],["PIM",68],["SOG",99],["HIT",65],["BLK",79]],
   },
 ];
 
+// Diamond now requires 90+ (was 85+) — Gold picks up the 75-89 band so
+// there's no gap between tiers.
 function tierFor(overall) {
-  if (overall >= 85) return 'diamond';
+  if (overall >= 90) return 'diamond';
   if (overall >= 75) return 'gold';
   if (overall >= 50) return 'silver';
   return 'bronze';
