@@ -1,0 +1,163 @@
+'use strict';
+
+/* ======================================================================
+   Shared data layer: fetches + normalizes NHL stats. Used by both the
+   stats page (app.js) and the player-cards page (cards.js), so both
+   always agree on what a "skater" or "goalie" object looks like — and so
+   next season's rollover (new seasonId, new game counts) only has to be
+   handled here, not twice.
+
+   Reference: https://github.com/Zmalski/NHL-API-Reference
+   ====================================================================== */
+
+const API_WEB = '/api/web';
+const API_STATS = '/api/stats';
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error || ''; } catch { /* ignore */ }
+    throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+  }
+  return res.json();
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function lastTeam(teamAbbrevs) {
+  if (!teamAbbrevs) return '—';
+  const parts = teamAbbrevs.split(',').map((s) => s.trim()).filter(Boolean);
+  return parts[parts.length - 1] || '—';
+}
+
+function seasonLabel(seasonId) {
+  const s = String(seasonId);
+  if (s.length !== 8) return s;
+  return `${s.slice(0, 4)}–${s.slice(6, 8)}`;
+}
+
+function fallbackSeasonId() {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  // NHL seasons flip over in the fall; before ~July treat it as the season that started the previous year.
+  const startYear = now.getUTCMonth() < 6 ? y - 1 : y;
+  return startYear * 10000 + (startYear + 1);
+}
+
+function buildTeamMeta(standings) {
+  const teamMeta = new Map();
+  for (const row of standings.standings || []) {
+    const abbrev = row.teamAbbrev?.default;
+    if (!abbrev) continue;
+    teamMeta.set(abbrev, {
+      name: row.teamName?.default || abbrev,
+      common: row.teamCommonName?.default || abbrev,
+      logo: row.teamLogo,
+      conference: row.conferenceName,
+      division: row.divisionName,
+      record: `${row.wins}-${row.losses}-${row.otLosses}`,
+      points: row.points,
+    });
+  }
+  return teamMeta;
+}
+
+function buildSkaters(summaryRows, realtimeRows) {
+  const map = new Map();
+  for (const r of summaryRows) {
+    map.set(r.playerId, {
+      playerId: r.playerId,
+      name: r.skaterFullName,
+      pos: r.positionCode,
+      team: lastTeam(r.teamAbbrevs),
+      teamsRaw: r.teamAbbrevs || '',
+      goals: r.goals ?? 0,
+      assists: r.assists ?? 0,
+      points: r.points ?? 0,
+      plusMinus: r.plusMinus ?? 0,
+      ppGoals: r.ppGoals ?? 0,
+      ppPoints: r.ppPoints ?? 0,
+      shGoals: r.shGoals ?? 0,
+      shPoints: r.shPoints ?? 0,
+      gameWinningGoals: r.gameWinningGoals ?? 0,
+      otGoals: r.otGoals ?? 0,
+      pim: r.penaltyMinutes ?? 0,
+      sog: r.shots ?? 0,
+      shootingPct: r.shootingPct ?? 0,
+      gamesPlayed: r.gamesPlayed ?? 0,
+      faceoffPct: r.faceoffWinPct ?? 0,
+      hits: 0,
+      blocks: 0,
+      giveaways: 0,
+      takeaways: 0,
+    });
+  }
+  for (const r of realtimeRows) {
+    const s = map.get(r.playerId);
+    if (s) {
+      s.hits = r.hits ?? 0;
+      s.blocks = r.blockedShots ?? 0;
+      s.giveaways = r.giveaways ?? 0;
+      s.takeaways = r.takeaways ?? 0;
+    }
+  }
+  return Array.from(map.values());
+}
+
+function buildGoalies(rows) {
+  return rows.map((r) => ({
+    playerId: r.playerId,
+    name: r.goalieFullName,
+    pos: 'G',
+    team: lastTeam(r.teamAbbrevs),
+    teamsRaw: r.teamAbbrevs || '',
+    wins: r.wins ?? 0,
+    losses: r.losses ?? 0,
+    otLosses: r.otLosses ?? 0,
+    gaa: typeof r.goalsAgainstAverage === 'number' ? r.goalsAgainstAverage : 0,
+    savePct: typeof r.savePct === 'number' ? r.savePct : 0,
+    saves: r.saves ?? 0,
+    shutouts: r.shutouts ?? 0,
+    gamesPlayed: r.gamesPlayed ?? 0,
+    gamesStarted: r.gamesStarted ?? 0,
+    goalsAgainst: r.goalsAgainst ?? 0,
+    shotsAgainst: r.shotsAgainst ?? 0,
+  }));
+}
+
+/** Fetches + normalizes the current season's league-wide skater/goalie stats and team directory. */
+async function loadSeasonData() {
+  const standings = await getJSON(`${API_WEB}/v1/standings/now`);
+  const teamMeta = buildTeamMeta(standings);
+  const seasonId = standings.standings?.[0]?.seasonId || fallbackSeasonId();
+
+  const filter = `seasonId=${seasonId} and gameTypeId=2`;
+  const q = `?limit=-1&cayenneExp=${encodeURIComponent(filter)}`;
+  const [skaterSummary, skaterRealtime, goalieSummary] = await Promise.all([
+    getJSON(`${API_STATS}/en/skater/summary${q}`),
+    getJSON(`${API_STATS}/en/skater/realtime${q}`),
+    getJSON(`${API_STATS}/en/goalie/summary${q}`),
+  ]);
+
+  const skaters = buildSkaters(skaterSummary.data || [], skaterRealtime.data || []);
+  const goalies = buildGoalies(goalieSummary.data || []);
+
+  return { seasonId, teamMeta, skaters, goalies };
+}
+
+/**
+ * The number of team games played so far this season, used as the "100%"
+ * reference for games-played eligibility thresholds (e.g. "must have played
+ * at least 30% of the season"). Derived from the data itself (the most
+ * games anyone has played) rather than hardcoded to 82, so it keeps working
+ * for a shortened season and updates itself as next season's games are
+ * played, without code changes.
+ */
+function seasonGameCount(skaters) {
+  return skaters.reduce((max, p) => Math.max(max, p.gamesPlayed || 0), 0);
+}

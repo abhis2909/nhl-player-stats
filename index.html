@@ -30,9 +30,13 @@
       </select>
       <label class="visually-hidden" for="searchInput">Search players</label>
       <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
-      <a class="admin-link" href="admin.html" title="Choose which stat columns are shown">⚙ Columns</a>
     </div>
   </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab active">📊 Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Cards</a>
+    <a href="admin.html" class="nav-tab">⚙ Columns</a>
+  </nav>
 </header>
 
 <main>
@@ -88,6 +92,7 @@
   </p>
 </footer>
 
+<script src="data.js" defer></script>
 <script src="columns.js" defer></script>
 <script src="app.js" defer></script>
 </body>

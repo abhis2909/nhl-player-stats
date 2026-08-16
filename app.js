@@ -9,10 +9,9 @@
 
    Which stat columns are shown is user-configurable on admin.html and
    read here via columns.js (loadColumnConfig / SKATER_COLUMNS / etc).
+   Fetching/normalizing the underlying NHL data lives in data.js, shared
+   with cards.js so both pages agree on what a "skater" looks like.
    ====================================================================== */
-
-const API_WEB = '/api/web';
-const API_STATS = '/api/stats';
 
 const el = {
   seasonLabel: document.getElementById('seasonLabel'),
@@ -51,34 +50,8 @@ const state = {
 };
 
 /* ---------------------------- helpers ---------------------------- */
-
-async function getJSON(url) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).error || ''; } catch { /* ignore */ }
-    throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
-  }
-  return res.json();
-}
-
-function lastTeam(teamAbbrevs) {
-  if (!teamAbbrevs) return '—';
-  const parts = teamAbbrevs.split(',').map((s) => s.trim()).filter(Boolean);
-  return parts[parts.length - 1] || '—';
-}
-
-function seasonLabel(seasonId) {
-  const s = String(seasonId);
-  if (s.length !== 8) return s;
-  return `${s.slice(0, 4)}–${s.slice(6, 8)}`;
-}
-
-function escapeHtml(str) {
-  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
+/* getJSON / escapeHtml / lastTeam / seasonLabel / loadSeasonData all come
+   from data.js (loaded before this file). */
 
 function formatHeight(inches) {
   if (!inches && inches !== 0) return '—';
@@ -123,22 +96,13 @@ async function init() {
   toggleSkeleton(true);
   hideBanner();
   try {
-    const standings = await getJSON(`${API_WEB}/v1/standings/now`);
-    buildTeamMeta(standings);
-
-    state.seasonId = standings.standings?.[0]?.seasonId || fallbackSeasonId();
+    const { seasonId, teamMeta, skaters, goalies } = await loadSeasonData();
+    state.seasonId = seasonId;
+    state.teamMeta = teamMeta;
+    state.skaters = skaters;
+    state.goalies = goalies;
     el.seasonLabel.textContent = `${seasonLabel(state.seasonId)} · Regular Season stats`;
 
-    const filter = `seasonId=${state.seasonId} and gameTypeId=2`;
-    const q = `?limit=-1&cayenneExp=${encodeURIComponent(filter)}`;
-    const [skaterSummary, skaterRealtime, goalieSummary] = await Promise.all([
-      getJSON(`${API_STATS}/en/skater/summary${q}`),
-      getJSON(`${API_STATS}/en/skater/realtime${q}`),
-      getJSON(`${API_STATS}/en/goalie/summary${q}`),
-    ]);
-
-    buildSkaters(skaterSummary.data || [], skaterRealtime.data || []);
-    buildGoalies(goalieSummary.data || []);
     populateTeamSelect();
     ensureValidSort();
     renderTableHeaders();
@@ -148,94 +112,6 @@ async function init() {
     toggleSkeleton(false);
     showBanner(`Couldn't load NHL data (${err.message}). Make sure the local server is running, then retry.`);
   }
-}
-
-function fallbackSeasonId() {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  // NHL seasons flip over in the fall; before ~July treat it as the season that started the previous year.
-  const startYear = now.getUTCMonth() < 6 ? y - 1 : y;
-  return startYear * 10000 + (startYear + 1);
-}
-
-function buildTeamMeta(standings) {
-  state.teamMeta.clear();
-  for (const row of standings.standings || []) {
-    const abbrev = row.teamAbbrev?.default;
-    if (!abbrev) continue;
-    state.teamMeta.set(abbrev, {
-      name: row.teamName?.default || abbrev,
-      common: row.teamCommonName?.default || abbrev,
-      logo: row.teamLogo,
-      conference: row.conferenceName,
-      division: row.divisionName,
-      record: `${row.wins}-${row.losses}-${row.otLosses}`,
-      points: row.points,
-    });
-  }
-}
-
-function buildSkaters(summaryRows, realtimeRows) {
-  const map = new Map();
-  for (const r of summaryRows) {
-    map.set(r.playerId, {
-      playerId: r.playerId,
-      name: r.skaterFullName,
-      pos: r.positionCode,
-      team: lastTeam(r.teamAbbrevs),
-      teamsRaw: r.teamAbbrevs || '',
-      goals: r.goals ?? 0,
-      assists: r.assists ?? 0,
-      points: r.points ?? 0,
-      plusMinus: r.plusMinus ?? 0,
-      ppGoals: r.ppGoals ?? 0,
-      ppPoints: r.ppPoints ?? 0,
-      shGoals: r.shGoals ?? 0,
-      shPoints: r.shPoints ?? 0,
-      gameWinningGoals: r.gameWinningGoals ?? 0,
-      otGoals: r.otGoals ?? 0,
-      pim: r.penaltyMinutes ?? 0,
-      sog: r.shots ?? 0,
-      shootingPct: r.shootingPct ?? 0,
-      gamesPlayed: r.gamesPlayed ?? 0,
-      faceoffPct: r.faceoffWinPct ?? 0,
-      hits: 0,
-      blocks: 0,
-      giveaways: 0,
-      takeaways: 0,
-    });
-  }
-  for (const r of realtimeRows) {
-    const s = map.get(r.playerId);
-    if (s) {
-      s.hits = r.hits ?? 0;
-      s.blocks = r.blockedShots ?? 0;
-      s.giveaways = r.giveaways ?? 0;
-      s.takeaways = r.takeaways ?? 0;
-    }
-  }
-  state.skaters = Array.from(map.values());
-}
-
-function buildGoalies(rows) {
-  state.goalies = rows.map((r) => ({
-    playerId: r.playerId,
-    name: r.goalieFullName,
-    pos: 'G',
-    team: lastTeam(r.teamAbbrevs),
-    teamsRaw: r.teamAbbrevs || '',
-    wins: r.wins ?? 0,
-    losses: r.losses ?? 0,
-    otLosses: r.otLosses ?? 0,
-    gaa: typeof r.goalsAgainstAverage === 'number' ? r.goalsAgainstAverage : 0,
-    savePct: typeof r.savePct === 'number' ? r.savePct : 0,
-    saves: r.saves ?? 0,
-    shutouts: r.shutouts ?? 0,
-    gamesPlayed: r.gamesPlayed ?? 0,
-    gamesStarted: r.gamesStarted ?? 0,
-    goalsAgainst: r.goalsAgainst ?? 0,
-    shotsAgainst: r.shotsAgainst ?? 0,
-  }));
 }
 
 function populateTeamSelect() {

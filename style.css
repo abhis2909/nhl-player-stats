@@ -647,6 +647,224 @@ td.stat-num {
   border-color: var(--accent-dim);
 }
 
+/* ---------- Site nav (tabs) ---------- */
+.site-nav {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.nav-tab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.nav-tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.nav-tab.active {
+  color: var(--accent);
+  background: rgba(79, 179, 255, 0.1);
+  border-color: rgba(79, 179, 255, 0.3);
+}
+
+/* ---------- Player cards ---------- */
+.eligibility-note {
+  max-width: 1200px;
+  margin: 0 auto 18px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.cards-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+.cards-skeleton {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+.cards-skeleton[hidden] { display: none; }
+
+.card-skel {
+  height: 360px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #141c28 25%, #1b2532 37%, #141c28 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.player-card {
+  --card-primary: #2c3e50;
+  --card-secondary: #4fb3ff;
+  position: relative;
+  border-radius: 16px;
+  padding: 16px;
+  color: #fff;
+  background:
+    linear-gradient(165deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 100%),
+    var(--card-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.player-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 85% -10%, var(--card-secondary) 0%, transparent 55%);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.card-top,
+.card-photo-wrap,
+.card-identity,
+.card-stats-grid {
+  position: relative;
+}
+
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.card-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-overall {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-pos {
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+}
+
+.card-team-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.card-team-pill img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.card-photo-wrap {
+  background: #eef2f6;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  margin-bottom: 12px;
+}
+
+.card-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.card-identity {
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.card-name {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+
+.card-subtitle {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.card-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.card-stat {
+  background: rgba(0, 0, 0, 0.32);
+  border-radius: 8px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: default;
+}
+
+.card-stat-num {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-stat-lbl {
+  display: block;
+  font-size: 9.5px;
+  opacity: 0.8;
+  margin-top: 2px;
+  letter-spacing: 0.3px;
+}
+
 /* ---------- Admin page ---------- */
 .admin-main {
   max-width: 760px;
