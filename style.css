@@ -866,6 +866,23 @@ td.stat-num {
 .legend-swatch.opp-tough { background: rgba(255, 176, 32, 0.3); }
 .legend-swatch.opp-brutal { background: rgba(255, 77, 94, 0.35); }
 
+/* Legend-only stand-ins for .sched-b2b/.sched-offnight, which are
+   position:absolute (meant to sit in a corner of a schedule cell) — used
+   bare like that in the legend they'd escape to the viewport corner
+   instead of sitting next to their label, so the legend gets its own
+   statically-positioned lookalike instead. */
+.legend-tag {
+  display: inline-block;
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.legend-tag.b2b { background: var(--gold); color: #2a1c00; }
+.legend-tag.offnight { background: var(--accent); color: #051520; }
+
 /* ---------- Team filter (schedule.html) ---------- */
 .team-filter {
   position: relative;
@@ -996,6 +1013,19 @@ td.stat-num {
   right: -4px;
   background: var(--gold);
   color: #2a1c00;
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 1px 3px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.sched-offnight {
+  position: absolute;
+  top: -6px;
+  left: -4px;
+  background: var(--accent);
+  color: #051520;
   font-size: 8.5px;
   font-weight: 800;
   padding: 1px 3px;

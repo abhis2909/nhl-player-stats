@@ -3,9 +3,12 @@
 /* ======================================================================
    Weekly Schedule: a team x day grid, similar to Daily Faceoff's
    schedule grid — who each team plays, home or away, each day in a
-   chosen date range, plus a games-in-range count (handy for streaming
-   decisions in weekly fantasy leagues), a back-to-back flag, and a
-   matchup-strength color per cell (see computeTeamStrength() below).
+   chosen date range, plus a games-in-range count and an off-nights
+   count (both handy for streaming decisions in weekly fantasy leagues),
+   a back-to-back flag, and a matchup-strength color per cell (see
+   computeTeamStrength() below). An "off night" is a day with fewer than
+   LIGHT_SLATE_THRESHOLD games happening leaguewide — less competition
+   for waiver claims, more individual attention on those games.
 
    Data comes from /v1/schedule/{date} — one call per 7-day window,
    already grouped by day and covering every team, so a multi-week range
@@ -24,6 +27,7 @@
    ====================================================================== */
 
 const MAX_RANGE_DAYS = 31; // caps both the grid width and the number of chained week-fetches
+const LIGHT_SLATE_THRESHOLD = 8; // a day with FEWER than this many games leaguewide counts as an "off night"
 
 const el = {
   weekLabel: document.getElementById('weekLabel'),
@@ -53,6 +57,7 @@ const state = {
   teamStrength: new Map(), // abbrev -> { score, rank, gfPerGame, gaPerGame } | null
   selectedTeams: null, // Set of abbrevs, or null until populated (= all)
   days: [], // [{ date, dayAbbrev, games: [...] }] across the selected range
+  lightDays: new Set(), // dates (within `days`) with < LIGHT_SLATE_THRESHOLD games leaguewide
   fromDate: null,
   toDate: null,
   grid: new Map(), // teamAbbrev -> Map(date -> cellInfo)
@@ -132,6 +137,18 @@ function buildGrid(days) {
     }
   }
   return grid;
+}
+
+/** Dates (within `days`) where fewer than LIGHT_SLATE_THRESHOLD games are
+ *  happening leaguewide — an "off night" / light slate, worth knowing
+ *  for streaming since there's less competition for waiver claims and
+ *  those games get more individual attention. */
+function findLightDays(days) {
+  const light = new Set();
+  for (const day of days) {
+    if ((day.games?.length ?? 0) < LIGHT_SLATE_THRESHOLD) light.add(day.date);
+  }
+  return light;
 }
 
 // ---------------------------------------------------------------------
@@ -254,12 +271,14 @@ function teamRows() {
     const teamGrid = state.grid.get(abbrev);
     const days = state.days.map((day) => teamGrid?.get(day.date) || null);
     const gp = days.filter(Boolean).length;
-    rows.push({ abbrev, name: meta.name, logo: meta.logo, days, gp });
+    const offNights = days.filter((info, i) => info && state.lightDays.has(state.days[i].date)).length;
+    rows.push({ abbrev, name: meta.name, logo: meta.logo, days, gp, offNights });
   }
   const { key, dir } = state.sort;
   const mul = dir === 'asc' ? 1 : -1;
   rows.sort((a, b) => {
     if (key === 'gp') return (a.gp - b.gp) * mul;
+    if (key === 'offNights') return (a.offNights - b.offNights) * mul;
     return a.name.localeCompare(b.name) * mul;
   });
   return rows;
@@ -301,6 +320,16 @@ function renderHead() {
   gpTh.addEventListener('click', () => onSortClick('gp', 'number'));
   el.headRow.appendChild(gpTh);
 
+  const offTh = document.createElement('th');
+  offTh.scope = 'col';
+  offTh.className = 'sortable is-numeric';
+  offTh.dataset.key = 'offNights';
+  offTh.dataset.type = 'number';
+  offTh.title = `Games on an off night — a day with fewer than ${LIGHT_SLATE_THRESHOLD} games leaguewide`;
+  offTh.textContent = 'Off';
+  offTh.addEventListener('click', () => onSortClick('offNights', 'number'));
+  el.headRow.appendChild(offTh);
+
   updateSortHeaders();
 }
 
@@ -325,9 +354,11 @@ function updateSortHeaders() {
  *  opponent's matchup-strength tier, plus either a final score
  *  (color-coded win/loss, once the game's official), a scheduled start
  *  time, or "LIVE" — falls back to a plain "–" for a bye day. A B2B tag
- *  shows when this game and the previous displayed day's game are both
- *  present (only within the selected range — see footer note). */
-function cellHtml(info, isB2B) {
+ *  (top-right) shows when this game and the previous displayed day's
+ *  game are both present (only within the selected range — see footer
+ *  note); an off-night tag (top-left) shows when fewer than
+ *  LIGHT_SLATE_THRESHOLD games are happening leaguewide that day. */
+function cellHtml(info, isB2B, isOffNight) {
   if (!info) return '<span class="sched-bye">–</span>';
 
   const prefix = info.isHome ? 'vs' : '@';
@@ -347,11 +378,14 @@ function cellHtml(info, isB2B) {
   }
 
   const b2bTag = isB2B ? '<span class="sched-b2b" title="Back-to-back">B2B</span>' : '';
+  const offTag = isOffNight
+    ? `<span class="sched-offnight" title="Off night — fewer than ${LIGHT_SLATE_THRESHOLD} games leaguewide">OFF</span>`
+    : '';
   const title = strength
     ? `${info.opp} — rank #${strength.rank}, ${strength.gfPerGame.toFixed(2)} GF/G, ${strength.gaPerGame.toFixed(2)} GA/G — ${TIER_LABEL[tier]} matchup (${strength.score}/100)`
     : `${info.opp} — no rating available`;
 
-  return `<span class="sched-cell ${tierClass}" title="${escapeHtml(title)}">${b2bTag}<span class="sched-opp">${prefix} ${escapeHtml(info.opp)}</span>${extra}</span>`;
+  return `<span class="sched-cell ${tierClass}" title="${escapeHtml(title)}">${b2bTag}${offTag}<span class="sched-opp">${prefix} ${escapeHtml(info.opp)}</span>${extra}</span>`;
 }
 
 function buildRow(row) {
@@ -379,7 +413,8 @@ function buildRow(row) {
     td.className = 'sched-day-cell';
     const prev = row.days[i - 1];
     const isB2B = Boolean(info && prev);
-    td.innerHTML = cellHtml(info, isB2B);
+    const isOffNight = Boolean(info) && state.lightDays.has(state.days[i].date);
+    td.innerHTML = cellHtml(info, isB2B, isOffNight);
     tr.appendChild(td);
   });
 
@@ -387,6 +422,11 @@ function buildRow(row) {
   gpTd.className = 'is-numeric stat-num';
   gpTd.textContent = row.gp;
   tr.appendChild(gpTd);
+
+  const offTd = document.createElement('td');
+  offTd.className = 'is-numeric stat-num';
+  offTd.textContent = row.offNights;
+  tr.appendChild(offTd);
 
   return tr;
 }
@@ -417,6 +457,7 @@ async function loadRange(fromDate, toDate, clamped = false) {
   try {
     state.days = await fetchRange(fromDate, toDate);
     state.grid = buildGrid(state.days);
+    state.lightDays = findLightDays(state.days);
 
     const isCurrentWeek = Boolean(state.currentWeekMonday) &&
       fromDate === state.currentWeekMonday && toDate === addDays(state.currentWeekMonday, 6);
