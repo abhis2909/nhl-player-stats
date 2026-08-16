@@ -66,29 +66,10 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(dateStr, n) {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-/** The Monday (ISO date string) of the week containing `dateStr`. NHL's
- *  /v1/schedule/{date} returns whatever 7-day window starts at the date
- *  you give it — not necessarily Monday-aligned (confirmed: its "now"
- *  alias can jump to a Tuesday) — so every week-fetch anchors to a
- *  Monday first. */
-function mondayOf(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  const day = d.getUTCDay(); // 0=Sun .. 6=Sat
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().slice(0, 10);
-}
+// todayISO() / addDays() / mondayOf() / formatDateRange() all come from
+// data.js (loaded before this file) — shared with snapshots.js so a
+// weekly "retrieve latest stats" snapshot is labeled with the exact same
+// Monday-Sunday week text this page shows.
 
 function showBanner(message) {
   el.statusBanner.innerHTML = '';
@@ -422,15 +403,6 @@ function render() {
   updateSortHeaders();
 }
 
-function formatRangeLabel(fromDate, toDate) {
-  const first = new Date(fromDate + 'T00:00:00Z');
-  const last = new Date(toDate + 'T00:00:00Z');
-  const opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  const yearOpts = { ...opts, year: 'numeric' };
-  if (fromDate === toDate) return first.toLocaleDateString(undefined, yearOpts);
-  return `${first.toLocaleDateString(undefined, opts)} – ${last.toLocaleDateString(undefined, yearOpts)}`;
-}
-
 // ---------------------------------------------------------------------
 // Loading a range
 // ---------------------------------------------------------------------
@@ -448,7 +420,7 @@ async function loadRange(fromDate, toDate, clamped = false) {
 
     const isCurrentWeek = Boolean(state.currentWeekMonday) &&
       fromDate === state.currentWeekMonday && toDate === addDays(state.currentWeekMonday, 6);
-    el.weekLabel.innerHTML = escapeHtml(formatRangeLabel(fromDate, toDate)) +
+    el.weekLabel.innerHTML = escapeHtml(formatDateRange(fromDate, toDate)) +
       (isCurrentWeek ? ' <span class="current-week-badge">Current Week</span>' : '');
 
     el.scheduleNote.textContent = clamped

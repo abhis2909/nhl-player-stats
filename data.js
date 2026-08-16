@@ -67,6 +67,50 @@ function formatDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
+/* ---- Shared week/date math — used by schedule.js (the weekly grid) and
+   snapshots.js (so "retrieve latest stats" keys/labels snapshots by the
+   SAME Monday-Sunday week the Schedule page shows, since the intended
+   workflow is retrieving once a week to build a Range Ratings "team of
+   the week" that lines up with that week). ---- */
+
+/** Today's date as YYYY-MM-DD, in the browser's local time. */
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The Monday (ISO date string) of the week containing `dateStr`. NHL's
+ *  /v1/schedule/{date} returns whatever 7-day window starts at the date
+ *  you give it — not necessarily Monday-aligned (confirmed: its "now"
+ *  alias can jump to a Tuesday) — so schedule.js anchors every week-fetch
+ *  to a Monday first via this. */
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay(); // 0=Sun .. 6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/** "Sep 28 – Oct 4, 2026" (or just the one date if from === to). Same
+ *  format schedule.js uses for its week/range label, reused by
+ *  snapshots.js so a snapshot's label visibly matches the Schedule
+ *  page's label for that same week. */
+function formatDateRange(fromDateStr, toDateStr) {
+  const first = new Date(fromDateStr + 'T00:00:00Z');
+  const last = new Date(toDateStr + 'T00:00:00Z');
+  const opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
+  const yearOpts = { ...opts, year: 'numeric' };
+  if (fromDateStr === toDateStr) return first.toLocaleDateString(undefined, yearOpts);
+  return `${first.toLocaleDateString(undefined, opts)} – ${last.toLocaleDateString(undefined, yearOpts)}`;
+}
+
 function fallbackSeasonId() {
   const now = new Date();
   const y = now.getUTCFullYear();

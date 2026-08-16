@@ -14,14 +14,19 @@
 
    Model: "Live" is always available (fetches straight from the NHL API,
    nothing saved). Clicking Retrieve Latest Stats fetches live data once
-   and freezes it as a new dated snapshot, which becomes the active view.
-   Switching the dropdown just changes which already-fetched data the
-   Stats/Cards pages compute from — no network call.
+   and freezes it as a snapshot for THAT CALENDAR WEEK (Monday-Sunday,
+   same week boundary the Schedule page uses — see retrieveAndSaveSnapshot()),
+   which becomes the active view. Switching the dropdown just changes
+   which already-fetched data the Stats/Cards/Range pages compute from —
+   no network call. Retrieving again later in the same week updates that
+   week's snapshot rather than adding a new one, so one retrieval a week
+   is exactly enough — matches the intended workflow of building a Range
+   Ratings "team of the week" week over week.
    ====================================================================== */
 
 const SNAPSHOT_STORAGE_KEY = 'nhlStats.snapshots.v1';
 const ACTIVE_SNAPSHOT_KEY = 'nhlStats.activeSnapshot.v1';
-const MAX_SNAPSHOTS = 30; // ~a season of weekly snapshots before oldest get pruned
+const MAX_SNAPSHOTS = 30; // ~30 weeks (more than a full season) before the oldest get pruned
 const LIVE_SENTINEL = 'live';
 
 function readSnapshotStore() {
@@ -67,15 +72,27 @@ function deserializeSeasonData(raw) {
 
 /** Fetches fresh live data (network call), saves it as a new snapshot, and
  *  makes it the active one. This is the only place that ever hits the API
- *  on your behalf for a snapshot — switching the dropdown never re-fetches. */
+ *  on your behalf for a snapshot — switching the dropdown never re-fetches.
+ *
+ *  Keyed and labeled by the Monday-Sunday week it falls in (via
+ *  mondayOf()/formatDateRange() from data.js) — the SAME week boundary
+ *  the Schedule page uses — rather than the exact moment you clicked
+ *  Retrieve. Two effects, both intentional for a "retrieve once a week
+ *  to build a Range Ratings team-of-the-week" workflow: the label reads
+ *  like "Sep 28 – Oct 4, 2026", visibly matching what the Schedule page
+ *  shows for that same week; and retrieving again later in the same
+ *  week updates that week's snapshot in place instead of piling up a
+ *  second near-duplicate entry, so a week you retrieved twice still
+ *  counts as one snapshot for that week. */
 async function retrieveAndSaveSnapshot() {
   const data = await loadSeasonData(); // data.js — always a real fetch
   const now = new Date();
-  const key = now.toISOString();
-  const label = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const weekMonday = mondayOf(todayISO());
+  const key = weekMonday;
+  const label = formatDateRange(weekMonday, addDays(weekMonday, 6));
 
   const store = readSnapshotStore();
-  store[key] = { savedAt: key, label, data: serializeSeasonData(data) };
+  store[key] = { savedAt: now.toISOString(), label, data: serializeSeasonData(data) };
 
   const keys = Object.keys(store).sort();
   while (keys.length > MAX_SNAPSHOTS) delete store[keys.shift()];
