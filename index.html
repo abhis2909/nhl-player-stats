@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏒</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🏒</span>
+      <div>
+        <h1>NHL Player Stats</h1>
+        <p class="subtitle" id="seasonLabel">Loading season…</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="toggle-group" role="tablist" aria-label="Player type">
+        <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+        <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+      </div>
+      <label class="visually-hidden" for="teamSelect">Filter by team</label>
+      <select id="teamSelect" aria-label="Filter by team">
+        <option value="ALL">All Teams</option>
+      </select>
+      <label class="visually-hidden" for="searchInput">Search players</label>
+      <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+      <a class="admin-link" href="admin.html" title="Choose which stat columns are shown">⚙ Columns</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="statusBanner" class="status-banner" hidden></div>
+
+  <div class="table-wrap">
+    <table id="skatersTable" class="stats-table">
+      <caption class="visually-hidden">Skater statistics</caption>
+      <thead>
+        <tr id="skatersHeadRow">
+          <th scope="col" class="col-rank">#</th>
+          <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
+          <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
+        </tr>
+      </thead>
+      <tbody id="skatersBody"></tbody>
+    </table>
+
+    <table id="goaliesTable" class="stats-table" hidden>
+      <caption class="visually-hidden">Goalie statistics</caption>
+      <thead>
+        <tr id="goaliesHeadRow">
+          <th scope="col" class="col-rank">#</th>
+          <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
+          <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
+        </tr>
+      </thead>
+      <tbody id="goaliesBody"></tbody>
+    </table>
+
+    <div id="skeleton" class="skeleton" aria-hidden="true"></div>
+    <p id="emptyState" class="empty-state" hidden>No players match your filters.</p>
+  </div>
+
+  <p id="resultCount" class="result-count"></p>
+</main>
+
+<div id="modalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="modalOverlay"></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
+    <button class="modal-close" id="modalClose" aria-label="Close player details">✕</button>
+    <div id="modalContent"><div class="modal-spinner">Loading…</div></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <p>
+    Data via the unofficial
+    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>,
+    mapped from
+    <a href="https://github.com/Zmalski/NHL-API-Reference" target="_blank" rel="noopener">Zmalski/NHL-API-Reference</a>.
+    Not affiliated with or endorsed by the NHL. For personal / educational use.
+  </p>
+</footer>
+
+<script src="columns.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

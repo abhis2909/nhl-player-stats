@@ -1,0 +1,10 @@
+{
+  "name": "nhl-player-stats",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NHL player stats site (unofficial NHL API) with a proxy for local dev and Vercel deployment.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}
