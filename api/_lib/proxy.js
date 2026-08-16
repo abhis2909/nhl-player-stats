@@ -1,22 +1,29 @@
-// Shared proxy logic for the Vercel API routes in ../web and ../stats.
-// Anything under api/_lib is *not* deployed as a route by Vercel (folders
-// and files starting with "_" are treated as private/importable code, not
-// endpoints) — it's just shared code the two route handlers both call.
+// Shared proxy logic for the Vercel API routes in ../web-proxy.js and
+// ../stats-proxy.js. Not deployed as a route itself (Vercel skips
+// files/folders starting with "_") — just shared code both handlers call.
 //
 // Why this exists at all: api-web.nhle.com and api.nhle.com/stats/rest
 // don't send CORS headers, so the browser can't call them directly. This
 // runs server-side (no CORS involved) and hands the JSON back same-origin.
+//
+// vercel.json rewrites /api/web/:path* (and /api/stats/:path*) to this
+// function with the matched sub-path passed as an `upstreamPath` query
+// param, merging in the request's real query string (limit, cayenneExp,
+// etc). We reconstruct from req.query rather than parsing req.url
+// ourselves, since req.query is what Vercel's Node runtime guarantees is
+// correctly parsed post-rewrite.
 
 async function proxyRequest(req, res, upstreamBase) {
-  const { path } = req.query;
-  const upstreamPath = Array.isArray(path) ? path.join('/') : (path || '');
+  const { upstreamPath, ...rest } = req.query || {};
+  const path = Array.isArray(upstreamPath) ? upstreamPath.join('/') : (upstreamPath || '');
 
-  // Reuse the exact incoming query string (everything after the first "?")
-  // rather than rebuilding it from req.query, so values like cayenneExp
-  // that contain spaces/quotes/"=" round-trip byte-for-byte.
-  const qIndex = req.url.indexOf('?');
-  const qs = qIndex >= 0 ? req.url.slice(qIndex) : '';
-  const upstreamUrl = `${upstreamBase}${upstreamPath}${qs}`;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(rest)) {
+    if (Array.isArray(value)) value.forEach((v) => params.append(key, v));
+    else if (value != null) params.append(key, value);
+  }
+  const qs = params.toString();
+  const upstreamUrl = `${upstreamBase}${path}${qs ? '?' + qs : ''}`;
 
   try {
     const upstreamRes = await fetch(upstreamUrl, {

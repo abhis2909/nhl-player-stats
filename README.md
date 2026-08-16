@@ -60,10 +60,16 @@ season and by regular season / playoffs.
 
 `api-web.nhle.com` doesn't send CORS headers, so a browser can't call it
 directly from a page (confirmed — it fails with a CORS error). Both
-`server.js` (local) and `api/web/[...path].js` + `api/stats/[...path].js`
-(Vercel) exist purely to work around that: they forward `/api/web/*` to
-`https://api-web.nhle.com/*` and `/api/stats/*` to
-`https://api.nhle.com/stats/rest/*` server-side, where CORS doesn't apply.
+`server.js` (local) and `api/web-proxy.js` + `api/stats-proxy.js` (Vercel,
+reached via the rewrites in `vercel.json`) exist purely to work around
+that: they forward `/api/web/*` to `https://api-web.nhle.com/*` and
+`/api/stats/*` to `https://api.nhle.com/stats/rest/*` server-side, where
+CORS doesn't apply.
+
+(An earlier version used Vercel's filesystem-based catch-all routes —
+`api/web/[...path].js` — but Vercel wasn't building those into functions
+for this non-framework project, so it's an explicit `vercel.json` rewrite
+to fixed-name function files instead, which is unambiguous.)
 
 ## Files
 
@@ -74,7 +80,8 @@ directly from a page (confirmed — it fails with a CORS error). Both
 | `columns.js` | Shared stat catalog + localStorage read/write — used by both pages |
 | `style.css` | Styling for both pages |
 | `server.js` | Local static file server + API proxy |
-| `api/web/[...path].js`, `api/stats/[...path].js`, `api/_lib/proxy.js` | Same proxy, as Vercel serverless functions |
+| `api/web-proxy.js`, `api/stats-proxy.js`, `api/_lib/proxy.js` | Same proxy, as Vercel serverless functions |
+| `vercel.json` | Rewrites `/api/web/*` and `/api/stats/*` to the functions above |
 | `package.json` | No dependencies — just lets Vercel/npm recognize the project |
 
 ## Notes
