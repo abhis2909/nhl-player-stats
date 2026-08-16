@@ -39,11 +39,31 @@ const state = {
   grid: new Map(), // teamAbbrev -> Map(date -> cellInfo)
   search: '',
   sort: { key: 'name', dir: 'asc' },
+  currentWeekMonday: null, // the Monday that "This Week" / the initial load should land on
 };
 
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** The Monday (ISO date string) of the week containing `dateStr`. NHL's
+ *  /v1/schedule/{date} returns whatever 7-day window starts at the date
+ *  you give it — not necessarily Monday-aligned — so every fetch in this
+ *  file anchors to a Monday first. Confirmed by testing: once you DO
+ *  anchor to a Monday, the API's own nextStartDate/previousStartDate
+ *  stay Monday-aligned on every subsequent page too. */
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay(); // 0=Sun .. 6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
 }
 
 function showBanner(message) {
@@ -53,7 +73,7 @@ function showBanner(message) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.textContent = 'Retry';
-  btn.addEventListener('click', () => loadWeek('now'));
+  btn.addEventListener('click', init);
   el.statusBanner.append(span, btn);
   el.statusBanner.hidden = false;
 }
@@ -246,13 +266,17 @@ async function loadWeek(date) {
   el.body.innerHTML = '';
 
   try {
-    const data = await getJSON(`${API_WEB}/v1/schedule/${date}`);
+    // Always anchor to that date's Monday — see mondayOf()'s comment.
+    const anchored = mondayOf(date);
+    const data = await getJSON(`${API_WEB}/v1/schedule/${anchored}`);
     state.gameWeek = data.gameWeek || [];
     state.nextStartDate = data.nextStartDate || null;
     state.previousStartDate = data.previousStartDate || null;
     state.grid = buildGrid(state.gameWeek);
 
-    el.weekLabel.textContent = formatWeekLabel(state.gameWeek);
+    const isCurrent = state.gameWeek[0]?.date === state.currentWeekMonday;
+    el.weekLabel.innerHTML = escapeHtml(formatWeekLabel(state.gameWeek)) +
+      (isCurrent ? ' <span class="current-week-badge">Current Week</span>' : '');
     el.nextWeekBtn.disabled = !state.nextStartDate;
     el.prevWeekBtn.disabled = !state.previousStartDate;
 
@@ -273,7 +297,22 @@ async function init() {
     showBanner(`Couldn't load team info (${err.message}). Make sure the local server is running, then retry.`);
     return;
   }
-  await loadWeek('now');
+
+  // "now" is the NHL API's own idea of "the relevant week" — during the
+  // season that's just today's week; off-season it jumps forward to the
+  // next week with real games (e.g. the season opener) instead of
+  // showing an empty current calendar week. Either way, anchor it to a
+  // Monday and remember that Monday as "current" for the badge above,
+  // decoupled from whatever week gets navigated to afterward.
+  try {
+    const nowData = await getJSON(`${API_WEB}/v1/schedule/now`);
+    const anchorDate = nowData.gameWeek?.[0]?.date || todayISO();
+    state.currentWeekMonday = mondayOf(anchorDate);
+  } catch {
+    state.currentWeekMonday = mondayOf(todayISO());
+  }
+
+  await loadWeek(state.currentWeekMonday);
 }
 
 el.searchInput.addEventListener('input', debounce(() => {
@@ -287,6 +326,6 @@ el.prevWeekBtn.addEventListener('click', () => {
 el.nextWeekBtn.addEventListener('click', () => {
   if (state.nextStartDate) loadWeek(state.nextStartDate);
 });
-el.thisWeekBtn.addEventListener('click', () => loadWeek('now'));
+el.thisWeekBtn.addEventListener('click', () => loadWeek(state.currentWeekMonday || todayISO()));
 
 init();
