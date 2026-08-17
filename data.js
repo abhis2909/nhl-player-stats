@@ -255,3 +255,43 @@ async function loadSeasonData() {
 function seasonGameCount(skaters) {
   return skaters.reduce((max, p) => Math.max(max, p.gamesPlayed || 0), 0);
 }
+
+/** Fetches every team's current roster — bio info (height, weight, birth
+ *  date/country, shoots/catches hand), not season stats — and flattens it
+ *  into one array. Used by pages that need player BIOGRAPHY rather than
+ *  performance (the Mini-Games hub's daily guessing game). One request per
+ *  team (`/v1/roster/{abbrev}/current`), run in parallel; a team whose
+ *  roster fails to load is skipped rather than failing the whole pool.
+ *  `teamMeta` supplies which abbrevs to fetch — reuse the Map already
+ *  built by `buildTeamMeta()` so this always covers exactly the teams
+ *  currently in the league. */
+async function loadPlayerBioPool(teamMeta) {
+  const abbrevs = Array.from(teamMeta.keys());
+  const rosters = await Promise.all(
+    abbrevs.map((abbrev) => getJSON(`${API_WEB}/v1/roster/${abbrev}/current`).catch(() => null)),
+  );
+
+  const out = [];
+  rosters.forEach((roster, i) => {
+    if (!roster) return;
+    const abbrev = abbrevs[i];
+    const players = [...(roster.forwards || []), ...(roster.defensemen || []), ...(roster.goalies || [])];
+    for (const p of players) {
+      const first = p.firstName?.default || '';
+      const last = p.lastName?.default || '';
+      out.push({
+        playerId: p.id,
+        name: `${first} ${last}`.trim(),
+        team: abbrev,
+        pos: p.positionCode,
+        shootsCatches: p.shootsCatches || null,
+        heightInInches: typeof p.heightInInches === 'number' ? p.heightInInches : null,
+        weightInPounds: typeof p.weightInPounds === 'number' ? p.weightInPounds : null,
+        birthDate: p.birthDate || null,
+        birthCountry: p.birthCountry || null,
+        headshot: p.headshot || `https://assets.nhle.com/mugs/nhl/latest/${p.id}.png`,
+      });
+    }
+  });
+  return out;
+}

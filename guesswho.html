@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess the Player — Mini-Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕵️</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🕵️</span>
+      <div>
+        <h1>Guess the Player</h1>
+        <p class="subtitle" id="gwSubtitle">Loading today's puzzle…</p>
+      </div>
+    </div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
+    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
+    <a href="schedule.html" class="nav-tab">🗓 Schedule</a>
+    <a href="totw.html" class="nav-tab">🏆 Team of the Week</a>
+    <a href="minigames.html" class="nav-tab active">🎮 Mini-Games</a>
+    <a href="admin.html" class="nav-tab">⚙ Columns</a>
+  </nav>
+</header>
+
+<main class="gw-page">
+  <p class="gw-back"><a href="minigames.html">← Mini-Games</a></p>
+
+  <div id="statusBanner" class="status-banner" hidden></div>
+
+  <p class="gw-intro">
+    A mystery NHL player is chosen every day. Guess who it is in <strong>8 tries</strong>. After each guess,
+    every category lights up <span class="gw-legend-swatch gw-tier-green">green</span> for an exact match,
+    <span class="gw-legend-swatch gw-tier-yellow">yellow</span> for close, or stays
+    <span class="gw-legend-swatch gw-tier-black">dark</span> otherwise. Age and Height also show an arrow
+    toward the answer.
+  </p>
+
+  <div id="gwSkeleton" class="gw-loading" aria-hidden="true">Loading today's player pool…</div>
+
+  <div id="gwGame" hidden>
+    <div class="gw-guess-bar">
+      <div class="gw-autocomplete">
+        <label class="visually-hidden" for="gwGuessInput">Guess a player</label>
+        <input id="gwGuessInput" type="text" placeholder="Type a player name…" autocomplete="off">
+        <div id="gwSuggestions" class="gw-suggestions" hidden></div>
+      </div>
+      <button type="button" id="gwGuessBtn" class="primary-btn" disabled>Guess</button>
+      <div class="gw-silhouette-wrap">
+        <img id="gwSilhouetteImg" class="gw-silhouette" alt="Mystery player" loading="lazy">
+        <button type="button" id="gwRevealBtn" class="ghost-btn">👁 Reveal Photo</button>
+      </div>
+    </div>
+    <p id="gwTriesLeft" class="gw-tries-left"></p>
+
+    <div class="gw-table-wrap">
+      <table class="gw-table" id="gwTable">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Team</th>
+            <th>Division</th>
+            <th>Position</th>
+            <th>Age</th>
+            <th>Height</th>
+            <th>Nationality</th>
+          </tr>
+        </thead>
+        <tbody id="gwTableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="gwEndBanner" class="gw-end-banner" hidden></div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Data via the unofficial
+    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>,
+    mapped from
+    <a href="https://github.com/Zmalski/NHL-API-Reference" target="_blank" rel="noopener">Zmalski/NHL-API-Reference</a>.
+    Not affiliated with or endorsed by the NHL. For personal / educational use.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="guesswho.js" defer></script>
+</body>
+</html>
