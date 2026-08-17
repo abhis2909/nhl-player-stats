@@ -25,6 +25,13 @@ const TOTW_STORAGE_KEY = 'nhlStats.totw.v1';
 // weekly snapshots exist, so the page always has something to reveal.
 const SEASON_PLACEHOLDER_KEY = 'season-placeholder';
 
+// Which slot starts a new row of the diamond formation (goalie alone at
+// bottom, D pair in the middle, forward trio up top) — the reveal
+// scrolls to follow along at each of these, since the full 3-row lineup
+// is taller than most viewports. D2/LW/RW share a row with the slot
+// just before them, so they don't need their own scroll.
+const ROW_START_SLOTS = new Set(['G', 'D1', 'C']);
+
 // Reveal order: goalie first, then defense, then forwards — mirrors how
 // a broadcast might announce a starting lineup.
 const ROSTER_SLOTS = [
@@ -414,13 +421,6 @@ async function playReveal(roster, ratedSkaters, ratedGoalies) {
     return cardEl;
   });
 
-  // Scroll toward the goalie card specifically (first to reveal, bottom
-  // row of the diamond formation) rather than the whole stage — the full
-  // 3-row lineup is taller than most viewports, so centering the whole
-  // stage can still leave the goalie below the fold.
-  cardEls[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-  await sleep(500);
-
   const finish = () => {
     el.announce.textContent = 'TEAM OF THE WEEK';
     el.revealBtn.hidden = false;
@@ -444,6 +444,16 @@ async function playReveal(roster, ratedSkaters, ratedGoalies) {
 
     const entry = roster[i];
     const cardEl = cardEls[i];
+
+    // Follow the reveal up through the diamond formation — scroll to
+    // this card whenever it starts a new row (goalie, then defense,
+    // then forwards), so the row about to reveal is actually in view.
+    if (ROW_START_SLOTS.has(entry.slot)) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await sleep(500);
+      if (state.skipRequested) { cardEls.forEach(revealAllInstant); finish(); return; }
+    }
+
     announceSlot(entry);
     await sleep(500);
     if (state.skipRequested) { cardEls.forEach(revealAllInstant); finish(); return; }
