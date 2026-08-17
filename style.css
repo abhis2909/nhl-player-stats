@@ -1077,6 +1077,51 @@ td.stat-num {
 
 .cards-skeleton[hidden] { display: none; }
 
+/* Player Ratings grid (cards.html only — Range Ratings shares the same
+   #cardsGrid id/markup shape on its own page, so this is scoped to the
+   pr-grid/pr-skeleton classes cards.html adds, not #cardsGrid itself).
+   214px columns fit exactly 5 across #cardsGrid's real content width
+   (main's 1200px max-width minus its 20px side padding = 1160px; 5*214 +
+   4*18 gap = 1142, comfortably under that). Each .player-card renders at
+   its normal fixed-pixel design size (280x440 — same as everywhere else)
+   inside a smaller cropped box and is visually scaled down as a whole
+   unit via transform, rather than re-tuning every pc-* rule's
+   font-size/padding/badge-size by hand. */
+.pr-grid {
+  grid-template-columns: repeat(auto-fill, 214px);
+  gap: 18px;
+}
+
+.pr-card-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.pr-card-scale {
+  width: 100%;
+  height: 336px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 20px;
+}
+
+.pr-card-scale .player-card {
+  width: 280px;
+  height: 440px;
+  transform: scale(0.76429); /* 214/280 */
+  transform-origin: top left;
+}
+
+.pr-skeleton {
+  grid-template-columns: repeat(auto-fill, 214px);
+  gap: 18px;
+}
+
+.pr-skeleton .card-skel {
+  height: 336px;
+  border-radius: 20px;
+}
+
 .card-skel {
   height: 440px;
   border-radius: 16px;

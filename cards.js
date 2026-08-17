@@ -295,11 +295,20 @@ function render(reset) {
   el.loadMoreWrap.hidden = slice.length >= filtered.length;
 }
 
-/** buildCard() (ratings.js) plus a "Compare" checkbox strip appended
- *  below it — kept out of the shared buildCard() itself since Range
- *  Ratings/Team of the Week reuse that function and don't want this. */
+/** buildCard() (ratings.js) wrapped for the smaller Player Ratings grid
+ *  (.pr-card-scale crops+visually shrinks the card, which still renders
+ *  at its normal fixed-pixel design size internally — see the .pr-grid
+ *  comment in style.css) plus a "Compare" checkbox strip UNDER that
+ *  scaled box, at normal size (not shrunk/cropped with the card, or
+ *  it'd be nearly unclickable). Kept out of the shared buildCard()
+ *  itself since Range Ratings/Team of the Week reuse that function and
+ *  don't want any of this. */
 function buildCardWithCompare(player) {
   const card = buildCard(player, state.teamMeta, openPlayerModal);
+
+  const scaleBox = document.createElement('div');
+  scaleBox.className = 'pr-card-scale';
+  scaleBox.appendChild(card);
 
   const bar = document.createElement('label');
   bar.className = 'pc-compare-bar';
@@ -313,9 +322,11 @@ function buildCardWithCompare(player) {
   const text = document.createElement('span');
   text.textContent = 'Compare';
   bar.append(checkbox, text);
-  card.appendChild(bar);
 
-  return card;
+  const wrap = document.createElement('div');
+  wrap.className = 'pr-card-wrap';
+  wrap.append(scaleBox, bar);
+  return wrap;
 }
 
 // ---------------------------------------------------------------------
@@ -639,7 +650,7 @@ function openPlayerModal(player) {
   getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`)
     .then((landing) => {
       renderModalShell(player, landing);
-      renderSnapshotTrend(player);
+      wireRatingTrend(player);
       wireStatsWindow(player);
       wireModalGameLog(player, landing);
     })
@@ -685,7 +696,13 @@ function renderModalShell(player, landing) {
       </div>
       <div class="pcard-modal-right">
         <div class="pcard-section">
-          <h3 id="modalPlayerName">${escapeHtml(player.name)} — Rating Trend</h3>
+          <div class="gamelog-head">
+            <h3 id="modalPlayerName">${escapeHtml(player.name)} — Rating Trend</h3>
+            <div class="gamelog-controls">
+              <button type="button" id="trendCurrentBtn" class="active">Current Season</button>
+              <button type="button" id="trendHistoricalBtn">Historical</button>
+            </div>
+          </div>
           <div id="trendWrap"><div class="trend-empty">Start of season.</div></div>
         </div>
         <div class="pcard-section">
@@ -959,9 +976,7 @@ function buildSnapshotTrendPoints(player) {
   return points;
 }
 
-/** Renders the Rating Trend section into #trendWrap. Computed once, up
- *  front, from snapshot history — unlike the game log below it, this
- *  doesn't refetch when the season/type selector changes. */
+/** Renders the CURRENT-season weekly-snapshot trend into #trendWrap. */
 function renderSnapshotTrend(player) {
   const trendWrap = document.getElementById('trendWrap');
   if (!trendWrap) return;
@@ -972,6 +987,74 @@ function renderSnapshotTrend(player) {
     return;
   }
   trendWrap.innerHTML = `<div class="trend-chart-wrap">${buildTrendSvg(points)}</div>`;
+}
+
+/** One point per season, current back to MIN_SEASON_ID (same range as
+ *  the season selector) — this player's overall rating within THAT
+ *  season's own pool, so it's a career trajectory rather than a
+ *  within-season progression. Reuses state.seasonDataCache (a season
+ *  already browsed via the season selector needs no extra fetch);
+ *  anything not yet cached is fetched here, in parallel. Skips a season
+ *  entirely if the player didn't play (or wasn't rated as) in it. */
+async function buildHistoricalTrendPoints(player) {
+  const isGoalie = player.pos === 'G';
+  const mode = isGoalie ? 'goalies' : 'skaters';
+  const seasons = availableSeasonIds().slice().reverse(); // oldest to newest
+
+  await Promise.all(seasons.map(async (id) => {
+    if (state.seasonDataCache.has(id)) return;
+    const data = await loadSeasonStatsFor(id, state.teamMeta);
+    state.seasonDataCache.set(id, { skaters: data.skaters, goalies: data.goalies });
+  }));
+
+  const points = [];
+  for (const id of seasons) {
+    const raw = state.seasonDataCache.get(id);
+    if (!raw) continue;
+    const pool = isGoalie ? raw.goalies : raw.skaters;
+    const maxGP = seasonGameCount(pool);
+    const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
+    const eligible = pool.filter((p) => p.gamesPlayed >= minGP);
+    const rated = ratePool(eligible, mode);
+    const found = rated.find((p) => p.playerId === player.playerId);
+    if (found) points.push({ label: seasonLabel(id), value: found.overall });
+  }
+  return points;
+}
+
+/** Renders the cross-season (career) trend into #trendWrap. */
+async function renderHistoricalTrend(player) {
+  const trendWrap = document.getElementById('trendWrap');
+  if (!trendWrap) return;
+  trendWrap.innerHTML = '<div class="trend-empty">Loading…</div>';
+
+  const points = await buildHistoricalTrendPoints(player);
+  if (points.length < 2) {
+    trendWrap.innerHTML = '<div class="trend-empty">Not enough seasons of data for this player.</div>';
+    return;
+  }
+  trendWrap.innerHTML = `<div class="trend-chart-wrap">${buildTrendSvg(points)}</div>`;
+}
+
+/** Wires the Current Season / Historical toggle above the Rating Trend
+ *  chart and renders the default (Current Season) view. */
+function wireRatingTrend(player) {
+  const btnCurrent = document.getElementById('trendCurrentBtn');
+  const btnHistorical = document.getElementById('trendHistoricalBtn');
+  if (!btnCurrent || !btnHistorical) return;
+
+  btnCurrent.addEventListener('click', () => {
+    btnCurrent.classList.add('active');
+    btnHistorical.classList.remove('active');
+    renderSnapshotTrend(player);
+  });
+  btnHistorical.addEventListener('click', () => {
+    btnHistorical.classList.add('active');
+    btnCurrent.classList.remove('active');
+    renderHistoricalTrend(player);
+  });
+
+  renderSnapshotTrend(player);
 }
 
 function buildTrendSvg(points) {
