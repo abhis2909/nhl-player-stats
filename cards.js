@@ -57,7 +57,6 @@ const el = {
   modalContent: document.getElementById('modalContent'),
   compareBar: document.getElementById('compareBar'),
   compareBarText: document.getElementById('compareBarText'),
-  compareBtn: document.getElementById('compareBtn'),
   compareClearBtn: document.getElementById('compareClearBtn'),
   compareModalRoot: document.getElementById('compareModalRoot'),
   compareModalOverlay: document.getElementById('compareModalOverlay'),
@@ -75,7 +74,7 @@ const state = {
   team: 'ALL',
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
-  compareSelections: new Map(), // playerId -> rated player, max 2, same mode only
+  comparePending: null, // the rated player picked first, waiting on a second Compare click
 };
 
 // Per-game data sources for the game log + monthly trend. Regular-season
@@ -202,74 +201,65 @@ function render(reset) {
   el.loadMoreWrap.hidden = slice.length >= filtered.length;
 }
 
-/** buildCard() (ratings.js) plus a "Compare" checkbox strip appended
- *  below it — kept out of the shared buildCard() itself since Range
- *  Ratings/Team of the Week reuse that function and don't want this. */
+/** buildCard() (ratings.js) plus a "Compare" button appended below it —
+ *  kept out of the shared buildCard() itself since Range Ratings/Team of
+ *  the Week reuse that function and don't want this. */
 function buildCardWithCompare(player) {
   const card = buildCard(player, state.teamMeta, openPlayerModal);
+  const isPending = state.comparePending?.playerId === player.playerId;
+  if (isPending) card.classList.add('pc-comparing');
 
-  const bar = document.createElement('label');
-  bar.className = 'pc-compare-bar';
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = state.compareSelections.has(player.playerId);
-  checkbox.addEventListener('click', (e) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pc-compare-btn';
+  btn.textContent = isPending ? '✓ Comparing — pick another' : '⚖ Compare';
+  btn.addEventListener('click', (e) => {
     e.stopPropagation(); // don't also trigger the card's own click-to-open-modal
-    toggleCompare(player);
+    onCompareClick(player);
   });
-  const text = document.createElement('span');
-  text.textContent = 'Compare';
-  bar.append(checkbox, text);
-  card.appendChild(bar);
+  card.appendChild(btn);
 
   return card;
 }
 
 // ---------------------------------------------------------------------
-// Compare two players
+// Compare two players — click Compare on one card, then another. Two
+// same-mode picks open the comparison immediately; no separate "Compare"
+// button/step needed.
 // ---------------------------------------------------------------------
 
-function toggleCompare(player) {
-  if (state.compareSelections.has(player.playerId)) {
-    state.compareSelections.delete(player.playerId);
-  } else {
-    const existing = Array.from(state.compareSelections.values());
-    const isGoalie = player.pos === 'G';
+function onCompareClick(player) {
+  if (!state.comparePending) {
+    state.comparePending = player;
+  } else if (state.comparePending.playerId === player.playerId) {
+    state.comparePending = null; // clicked the pending card again — cancel
+  } else if ((state.comparePending.pos === 'G') !== (player.pos === 'G')) {
     // Comparing a skater against a goalie wouldn't mean anything (totally
-    // different stat categories) — starting a new pick in the other mode
-    // just replaces whatever was selected instead of erroring.
-    if (existing.length && (existing[0].pos === 'G') !== isGoalie) {
-      state.compareSelections.clear();
-    } else if (state.compareSelections.size >= 2) {
-      // Already have 2 — bump the oldest pick (Maps preserve insertion order).
-      state.compareSelections.delete(state.compareSelections.keys().next().value);
-    }
-    state.compareSelections.set(player.playerId, player);
+    // different stat categories) — start over with the new pick instead.
+    state.comparePending = player;
+  } else {
+    const a = state.comparePending;
+    state.comparePending = null;
+    updateCompareIndicator();
+    render(false);
+    openCompareModal(a, player);
+    return;
   }
-  updateCompareBar();
+  updateCompareIndicator();
   render(false);
 }
 
-function updateCompareBar() {
-  const n = state.compareSelections.size;
-  el.compareBar.hidden = n === 0;
-  if (n === 0) return;
-  const names = Array.from(state.compareSelections.values()).map((p) => p.name);
-  el.compareBarText.textContent = n === 1
-    ? `${names[0]} — pick one more player to compare`
-    : `${names[0]} vs ${names[1]}`;
-  el.compareBtn.disabled = n !== 2;
+function updateCompareIndicator() {
+  el.compareBar.hidden = !state.comparePending;
+  if (state.comparePending) {
+    el.compareBarText.textContent = `Comparing ${state.comparePending.name} — click "Compare" on another card`;
+  }
 }
 
 el.compareClearBtn.addEventListener('click', () => {
-  state.compareSelections.clear();
-  updateCompareBar();
+  state.comparePending = null;
+  updateCompareIndicator();
   render(false);
-});
-
-el.compareBtn.addEventListener('click', () => {
-  const [a, b] = Array.from(state.compareSelections.values());
-  if (a && b) openCompareModal(a, b);
 });
 
 function closeCompareModal() {
@@ -458,6 +448,7 @@ function renderModalShell(player, landing) {
               <button type="button" id="gtPlayoffs">Playoffs</button>
             </div>
           </div>
+          <div id="seasonTotalsWrap"></div>
           <div id="gameLogWrap"><div class="gamelog-loading">Loading…</div></div>
         </div>
       </div>
@@ -480,7 +471,10 @@ function wireModalGameLog(player, landing) {
   const btnPo = document.getElementById('gtPlayoffs');
   let gameType = 2;
 
-  const load = () => loadGameLog(player, seasonSelect.value, gameType);
+  const load = () => {
+    renderSeasonTotals(player, landing, seasonSelect.value, gameType);
+    loadGameLog(player, seasonSelect.value, gameType);
+  };
 
   seasonSelect.addEventListener('change', load);
   btnReg.addEventListener('click', () => {
@@ -497,6 +491,75 @@ function wireModalGameLog(player, landing) {
   });
 
   load();
+}
+
+// Maps our SKATER_COLUMNS ids to the field names the landing endpoint's
+// seasonTotals entries actually use (different naming from the stats-rest
+// summary endpoint data.js pulls from). Hits/blocks/giveaways/takeaways
+// aren't in seasonTotals at all (realtime-only stats) — shown as "—".
+const SEASON_TOTAL_FIELD_MAP = {
+  goals: 'goals', assists: 'assists', points: 'points', plusMinus: 'plusMinus',
+  ppGoals: 'powerPlayGoals', ppPoints: 'powerPlayPoints', shGoals: 'shorthandedGoals',
+  shPoints: 'shorthandedPoints', gameWinningGoals: 'gameWinningGoals', otGoals: 'otGoals',
+  pim: 'pim', sog: 'shots', shootingPct: 'shootingPctg', faceoffPct: 'faceoffWinningPctg',
+  gamesPlayed: 'gamesPlayed',
+};
+
+/** One category's value from a landing seasonTotals entry. Goalies get a
+ *  small direct mapping (field names differ enough from our catalog ids
+ *  to be clearer spelled out); skaters go through SEASON_TOTAL_FIELD_MAP.
+ *  Returns null for anything not present in this endpoint at all. */
+function seasonTotalValue(totals, catId, isGoalie) {
+  if (isGoalie) {
+    switch (catId) {
+      case 'wins': return totals.wins ?? 0;
+      case 'losses': return totals.losses ?? 0;
+      case 'otLosses': return totals.otLosses ?? 0;
+      case 'gaa': return totals.goalsAgainstAvg ?? null;
+      case 'savePct': return totals.savePctg ?? null;
+      case 'saves':
+        return typeof totals.shotsAgainst === 'number' && typeof totals.goalsAgainst === 'number'
+          ? totals.shotsAgainst - totals.goalsAgainst : null;
+      case 'shutouts': return totals.shutouts ?? 0;
+      case 'gamesPlayed': return totals.gamesPlayed ?? 0;
+      case 'gamesStarted': return totals.gamesStarted ?? 0;
+      case 'goalsAgainst': return totals.goalsAgainst ?? 0;
+      case 'shotsAgainst': return totals.shotsAgainst ?? 0;
+      default: return null;
+    }
+  }
+  const key = SEASON_TOTAL_FIELD_MAP[catId];
+  return key ? (totals[key] ?? null) : null;
+}
+
+/** Season/playoff cumulative totals for whichever season+type is
+ *  selected in the game log controls above it — from the already-
+ *  fetched landing.seasonTotals, no extra network call. */
+function renderSeasonTotals(player, landing, season, gameType) {
+  const wrap = document.getElementById('seasonTotalsWrap');
+  if (!wrap) return;
+
+  const isGoalie = player.pos === 'G';
+  const totals = (landing?.seasonTotals || []).find(
+    (s) => s.leagueAbbrev === 'NHL' && s.season === Number(season) && s.gameTypeId === gameType,
+  );
+  if (!totals) {
+    const label = gameType === 3 ? 'playoff' : 'regular season';
+    wrap.innerHTML = `<div class="gamelog-empty">No ${label} totals for ${seasonLabel(season)}.</div>`;
+    return;
+  }
+
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  wrap.innerHTML = `
+    <h4 class="season-totals-heading">${seasonLabel(season)} ${gameType === 3 ? 'Playoff' : 'Season'} Totals</h4>
+    <div class="ph-stats">
+      ${categories.map((c) => {
+        const raw = seasonTotalValue(totals, c.id, isGoalie);
+        const display = raw == null ? '—' : escapeHtml(formatColumnValue(c, raw));
+        return `<div class="stat-chip" title="${escapeHtml(c.label)}"><span class="num">${display}</span><span class="lbl">${escapeHtml(c.short)}</span></div>`;
+      }).join('')}
+    </div>
+  `;
 }
 
 async function loadGameLog(player, season, gameType) {
