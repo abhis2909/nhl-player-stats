@@ -55,6 +55,14 @@ const el = {
   modalOverlay: document.getElementById('modalOverlay'),
   modalClose: document.getElementById('modalClose'),
   modalContent: document.getElementById('modalContent'),
+  compareBar: document.getElementById('compareBar'),
+  compareBarText: document.getElementById('compareBarText'),
+  compareBtn: document.getElementById('compareBtn'),
+  compareClearBtn: document.getElementById('compareClearBtn'),
+  compareModalRoot: document.getElementById('compareModalRoot'),
+  compareModalOverlay: document.getElementById('compareModalOverlay'),
+  compareModalClose: document.getElementById('compareModalClose'),
+  compareModalContent: document.getElementById('compareModalContent'),
 };
 
 const state = {
@@ -67,6 +75,7 @@ const state = {
   team: 'ALL',
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
+  compareSelections: new Map(), // playerId -> rated player, max 2, same mode only
 };
 
 // Per-game data sources for the game log + monthly trend. Regular-season
@@ -186,11 +195,138 @@ function render(reset) {
 
   el.grid.innerHTML = '';
   const frag = document.createDocumentFragment();
-  slice.forEach((p) => frag.appendChild(buildCard(p, state.teamMeta, openPlayerModal)));
+  slice.forEach((p) => frag.appendChild(buildCardWithCompare(p)));
   el.grid.appendChild(frag);
 
   el.resultCount.textContent = `Showing ${slice.length.toLocaleString()} of ${filtered.length.toLocaleString()} ${state.mode}`;
   el.loadMoreWrap.hidden = slice.length >= filtered.length;
+}
+
+/** buildCard() (ratings.js) plus a "Compare" checkbox strip appended
+ *  below it — kept out of the shared buildCard() itself since Range
+ *  Ratings/Team of the Week reuse that function and don't want this. */
+function buildCardWithCompare(player) {
+  const card = buildCard(player, state.teamMeta, openPlayerModal);
+
+  const bar = document.createElement('label');
+  bar.className = 'pc-compare-bar';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = state.compareSelections.has(player.playerId);
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't also trigger the card's own click-to-open-modal
+    toggleCompare(player);
+  });
+  const text = document.createElement('span');
+  text.textContent = 'Compare';
+  bar.append(checkbox, text);
+  card.appendChild(bar);
+
+  return card;
+}
+
+// ---------------------------------------------------------------------
+// Compare two players
+// ---------------------------------------------------------------------
+
+function toggleCompare(player) {
+  if (state.compareSelections.has(player.playerId)) {
+    state.compareSelections.delete(player.playerId);
+  } else {
+    const existing = Array.from(state.compareSelections.values());
+    const isGoalie = player.pos === 'G';
+    // Comparing a skater against a goalie wouldn't mean anything (totally
+    // different stat categories) — starting a new pick in the other mode
+    // just replaces whatever was selected instead of erroring.
+    if (existing.length && (existing[0].pos === 'G') !== isGoalie) {
+      state.compareSelections.clear();
+    } else if (state.compareSelections.size >= 2) {
+      // Already have 2 — bump the oldest pick (Maps preserve insertion order).
+      state.compareSelections.delete(state.compareSelections.keys().next().value);
+    }
+    state.compareSelections.set(player.playerId, player);
+  }
+  updateCompareBar();
+  render(false);
+}
+
+function updateCompareBar() {
+  const n = state.compareSelections.size;
+  el.compareBar.hidden = n === 0;
+  if (n === 0) return;
+  const names = Array.from(state.compareSelections.values()).map((p) => p.name);
+  el.compareBarText.textContent = n === 1
+    ? `${names[0]} — pick one more player to compare`
+    : `${names[0]} vs ${names[1]}`;
+  el.compareBtn.disabled = n !== 2;
+}
+
+el.compareClearBtn.addEventListener('click', () => {
+  state.compareSelections.clear();
+  updateCompareBar();
+  render(false);
+});
+
+el.compareBtn.addEventListener('click', () => {
+  const [a, b] = Array.from(state.compareSelections.values());
+  if (a && b) openCompareModal(a, b);
+});
+
+function closeCompareModal() {
+  el.compareModalRoot.hidden = true;
+  document.body.style.overflow = '';
+  el.compareModalContent.innerHTML = '';
+}
+
+el.compareModalClose.addEventListener('click', closeCompareModal);
+el.compareModalOverlay.addEventListener('click', closeCompareModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el.compareModalRoot.hidden) closeCompareModal();
+});
+
+function openCompareModal(a, b) {
+  el.compareModalRoot.hidden = false;
+  document.body.style.overflow = 'hidden';
+
+  const isGoalie = a.pos === 'G';
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+
+  const overallRow = `
+    <tr class="cmp-overall-row">
+      <td class="cmp-val ${a.overall > b.overall ? 'cmp-win' : ''}">${a.overall}</td>
+      <td class="cmp-label">OVR</td>
+      <td class="cmp-val ${b.overall > a.overall ? 'cmp-win' : ''}">${b.overall}</td>
+    </tr>`;
+
+  const rows = categories.map((cat) => {
+    const av = a.ratings.find((r) => r.id === cat.id);
+    const bv = b.ratings.find((r) => r.id === cat.id);
+    if (!av || !bv) return '';
+    const inverted = INVERT_STATS.has(cat.id);
+    let aWin = false;
+    let bWin = false;
+    if (av.value !== bv.value) {
+      aWin = inverted ? av.value < bv.value : av.value > bv.value;
+      bWin = !aWin;
+    }
+    return `
+      <tr>
+        <td class="cmp-val ${aWin ? 'cmp-win' : ''}">${escapeHtml(formatColumnValue(cat, av.value))}</td>
+        <td class="cmp-label" title="${escapeHtml(cat.label)}">${escapeHtml(cat.short)}</td>
+        <td class="cmp-val ${bWin ? 'cmp-win' : ''}">${escapeHtml(formatColumnValue(cat, bv.value))}</td>
+      </tr>`;
+  }).join('');
+
+  el.compareModalContent.innerHTML = `
+    <div class="compare-heads">
+      <div class="compare-head">${buildCard(a, state.teamMeta).outerHTML}</div>
+      <div class="compare-vs">VS</div>
+      <div class="compare-head">${buildCard(b, state.teamMeta).outerHTML}</div>
+    </div>
+    <table class="compare-table">
+      <tbody>${overallRow}${rows}</tbody>
+    </table>
+  `;
 }
 
 el.modeButtons.forEach((btn) => {

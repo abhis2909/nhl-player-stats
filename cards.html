@@ -86,6 +86,20 @@
   </div>
 </div>
 
+<div class="compare-bar" id="compareBar" hidden>
+  <span id="compareBarText"></span>
+  <button type="button" id="compareBtn" class="primary-btn" disabled>⚖ Compare</button>
+  <button type="button" id="compareClearBtn" class="ghost-btn">Clear</button>
+</div>
+
+<div id="compareModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="compareModalOverlay"></div>
+  <div class="modal-panel pcard-modal-panel compare-modal-panel" role="dialog" aria-modal="true" aria-label="Player comparison">
+    <button class="modal-close" id="compareModalClose" aria-label="Close comparison">✕</button>
+    <div id="compareModalContent"></div>
+  </div>
+</div>
+
 <footer class="site-footer">
   <p>
     Ratings are percentile ranks within this season's qualified players (see note above); overall
