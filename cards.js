@@ -57,6 +57,7 @@ const el = {
   modalContent: document.getElementById('modalContent'),
   compareBar: document.getElementById('compareBar'),
   compareBarText: document.getElementById('compareBarText'),
+  compareBtn: document.getElementById('compareBtn'),
   compareClearBtn: document.getElementById('compareClearBtn'),
   compareModalRoot: document.getElementById('compareModalRoot'),
   compareModalOverlay: document.getElementById('compareModalOverlay'),
@@ -74,7 +75,7 @@ const state = {
   team: 'ALL',
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
-  comparePending: null, // the rated player picked first, waiting on a second Compare click
+  compareSelections: new Map(), // playerId -> rated player, max 2, same mode only
 };
 
 // Per-game data sources for the game log + monthly trend. Regular-season
@@ -201,65 +202,74 @@ function render(reset) {
   el.loadMoreWrap.hidden = slice.length >= filtered.length;
 }
 
-/** buildCard() (ratings.js) plus a "Compare" button appended below it —
- *  kept out of the shared buildCard() itself since Range Ratings/Team of
- *  the Week reuse that function and don't want this. */
+/** buildCard() (ratings.js) plus a "Compare" checkbox strip appended
+ *  below it — kept out of the shared buildCard() itself since Range
+ *  Ratings/Team of the Week reuse that function and don't want this. */
 function buildCardWithCompare(player) {
   const card = buildCard(player, state.teamMeta, openPlayerModal);
-  const isPending = state.comparePending?.playerId === player.playerId;
-  if (isPending) card.classList.add('pc-comparing');
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'pc-compare-btn';
-  btn.textContent = isPending ? '✓ Comparing — pick another' : '⚖ Compare';
-  btn.addEventListener('click', (e) => {
+  const bar = document.createElement('label');
+  bar.className = 'pc-compare-bar';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = state.compareSelections.has(player.playerId);
+  checkbox.addEventListener('click', (e) => {
     e.stopPropagation(); // don't also trigger the card's own click-to-open-modal
-    onCompareClick(player);
+    toggleCompare(player);
   });
-  card.appendChild(btn);
+  const text = document.createElement('span');
+  text.textContent = 'Compare';
+  bar.append(checkbox, text);
+  card.appendChild(bar);
 
   return card;
 }
 
 // ---------------------------------------------------------------------
-// Compare two players — click Compare on one card, then another. Two
-// same-mode picks open the comparison immediately; no separate "Compare"
-// button/step needed.
+// Compare two players
 // ---------------------------------------------------------------------
 
-function onCompareClick(player) {
-  if (!state.comparePending) {
-    state.comparePending = player;
-  } else if (state.comparePending.playerId === player.playerId) {
-    state.comparePending = null; // clicked the pending card again — cancel
-  } else if ((state.comparePending.pos === 'G') !== (player.pos === 'G')) {
-    // Comparing a skater against a goalie wouldn't mean anything (totally
-    // different stat categories) — start over with the new pick instead.
-    state.comparePending = player;
+function toggleCompare(player) {
+  if (state.compareSelections.has(player.playerId)) {
+    state.compareSelections.delete(player.playerId);
   } else {
-    const a = state.comparePending;
-    state.comparePending = null;
-    updateCompareIndicator();
-    render(false);
-    openCompareModal(a, player);
-    return;
+    const existing = Array.from(state.compareSelections.values());
+    const isGoalie = player.pos === 'G';
+    // Comparing a skater against a goalie wouldn't mean anything (totally
+    // different stat categories) — starting a new pick in the other mode
+    // just replaces whatever was selected instead of erroring.
+    if (existing.length && (existing[0].pos === 'G') !== isGoalie) {
+      state.compareSelections.clear();
+    } else if (state.compareSelections.size >= 2) {
+      // Already have 2 — bump the oldest pick (Maps preserve insertion order).
+      state.compareSelections.delete(state.compareSelections.keys().next().value);
+    }
+    state.compareSelections.set(player.playerId, player);
   }
-  updateCompareIndicator();
+  updateCompareBar();
   render(false);
 }
 
-function updateCompareIndicator() {
-  el.compareBar.hidden = !state.comparePending;
-  if (state.comparePending) {
-    el.compareBarText.textContent = `Comparing ${state.comparePending.name} — click "Compare" on another card`;
-  }
+function updateCompareBar() {
+  const n = state.compareSelections.size;
+  el.compareBar.hidden = n === 0;
+  if (n === 0) return;
+  const names = Array.from(state.compareSelections.values()).map((p) => p.name);
+  el.compareBarText.textContent = n === 1
+    ? `${names[0]} — pick one more player to compare`
+    : `${names[0]} vs ${names[1]}`;
+  el.compareBtn.disabled = n !== 2;
 }
 
 el.compareClearBtn.addEventListener('click', () => {
-  state.comparePending = null;
-  updateCompareIndicator();
+  state.compareSelections.clear();
+  updateCompareBar();
   render(false);
+});
+
+el.compareBtn.addEventListener('click', () => {
+  const [a, b] = Array.from(state.compareSelections.values());
+  if (a && b) openCompareModal(a, b);
 });
 
 function closeCompareModal() {
@@ -274,9 +284,141 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !el.compareModalRoot.hidden) closeCompareModal();
 });
 
-function openCompareModal(a, b) {
-  el.compareModalRoot.hidden = false;
-  document.body.style.overflow = 'hidden';
+// ---------------------------------------------------------------------
+// Stats windows — shared by the compare modal and the single-player
+// modal's Season Totals section. Six views: previous/current season
+// totals + per-game, and last week totals + per-game.
+// ---------------------------------------------------------------------
+
+const PREV_SEASON_OFFSET = 10001; // NHL season ids are YYYYYYYY+1; subtract this to step back one season
+const PER_GAME_EXEMPT = new Set(['shootingPct', 'faceoffPct', 'gaa', 'savePct']); // already rates — per-game toggle leaves these as-is
+
+const STATS_WINDOW_OPTIONS = [
+  { key: 'prevTotal', label: () => `${seasonLabel(state.seasonId - PREV_SEASON_OFFSET)} Season (Total)` },
+  { key: 'prevPerGame', label: () => `${seasonLabel(state.seasonId - PREV_SEASON_OFFSET)} Season (Per Game)` },
+  { key: 'currentTotal', label: () => `${seasonLabel(state.seasonId)} Season (Total)` },
+  { key: 'currentPerGame', label: () => `${seasonLabel(state.seasonId)} Season (Per Game)` },
+  { key: 'lastWeekTotal', label: () => 'Last Week (Total)' },
+  { key: 'lastWeekPerGame', label: () => 'Last Week (Per Game)' },
+];
+
+function statsWindowOptionsHtml() {
+  return STATS_WINDOW_OPTIONS.map((o) => `<option value="${o.key}">${escapeHtml(o.label())}</option>`).join('');
+}
+
+/** { raw, gamesPlayed, perGame } for `player` in one of the 6 windows
+ *  above, or null if that window isn't available right now (no
+ *  previous-season data, or missing weekly snapshots for "last week").
+ *  `raw` always carries every catalog stat id it can resolve, including
+ *  hits/blocks/giveaways/takeaways where possible:
+ *   - current season: the already-loaded rated `player` object itself
+ *     (built from data.js's buildSkaters/buildGoalies, which already
+ *     merges in realtime stats) — no fetch needed.
+ *   - previous season: landing.seasonTotals (doesn't have realtime
+ *     stats) PLUS a supplemental stats-rest realtime query for that
+ *     specific season, merged in.
+ *   - last week: raw snapshot skater/goalie records, which already
+ *     include realtime stats (every snapshot is a full buildSkaters()
+ *     capture) — subtracted via the shared deltaValue() (ratings.js). */
+async function statsWindowFor(player, viewKey) {
+  const isGoalie = player.pos === 'G';
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  const perGame = viewKey.endsWith('PerGame');
+
+  if (viewKey === 'currentTotal' || viewKey === 'currentPerGame') {
+    const gp = player.gamesPlayed ?? 0;
+    if (!gp) return null;
+    return { raw: player, gamesPlayed: gp, perGame };
+  }
+
+  if (viewKey === 'prevTotal' || viewKey === 'prevPerGame') {
+    const prevSeasonId = state.seasonId - PREV_SEASON_OFFSET;
+    let landing;
+    try {
+      landing = await getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`);
+    } catch {
+      return null;
+    }
+    const totals = (landing.seasonTotals || []).find(
+      (s) => s.leagueAbbrev === 'NHL' && s.season === prevSeasonId && s.gameTypeId === 2,
+    );
+    if (!totals) return null;
+
+    const raw = { gamesPlayed: totals.gamesPlayed ?? 0 };
+    for (const cat of categories) {
+      if (cat.id === 'gamesPlayed') continue;
+      raw[cat.id] = seasonTotalValue(totals, cat.id, isGoalie);
+    }
+    if (!isGoalie && categories.some((c) => REALTIME_FIELD_MAP[c.id])) {
+      try {
+        const filter = `seasonId=${prevSeasonId} and gameTypeId=2 and playerId=${player.playerId}`;
+        const rt = await getJSON(`${API_STATS}/en/skater/realtime?cayenneExp=${encodeURIComponent(filter)}`);
+        const row = rt.data?.[0];
+        if (row) {
+          raw.hits = row.hits ?? 0;
+          raw.blocks = row.blockedShots ?? 0;
+          raw.giveaways = row.giveaways ?? 0;
+          raw.takeaways = row.takeaways ?? 0;
+        }
+      } catch {
+        // Non-fatal — those columns just show "—" for this player/season.
+      }
+    }
+    return { raw, gamesPlayed: raw.gamesPlayed, perGame };
+  }
+
+  if (viewKey === 'lastWeekTotal' || viewKey === 'lastWeekPerGame') {
+    const thisMonday = mondayOf(todayISO());
+    const lastMonday = addDays(thisMonday, -7);
+    const fromFull = getSnapshotByKey(lastMonday);
+    const toFull = getSnapshotByKey(thisMonday);
+    if (!fromFull || !toFull) return null;
+
+    const fromList = isGoalie ? fromFull.data.goalies : fromFull.data.skaters;
+    const toList = isGoalie ? toFull.data.goalies : toFull.data.skaters;
+    const fromP = fromList.find((p) => p.playerId === player.playerId) || {};
+    const toP = toList.find((p) => p.playerId === player.playerId);
+    if (!toP) return null;
+
+    const gpDelta = (toP.gamesPlayed ?? 0) - (fromP.gamesPlayed ?? 0);
+    if (gpDelta <= 0) return null;
+    const raw = { gamesPlayed: gpDelta };
+    for (const cat of categories) {
+      if (cat.id === 'gamesPlayed') continue;
+      raw[cat.id] = deltaValue(cat.id, fromP, toP, isGoalie);
+    }
+    return { raw, gamesPlayed: gpDelta, perGame };
+  }
+
+  return null;
+}
+
+function statsWindowValue(win, catId) {
+  if (!win) return null;
+  const raw = win.raw[catId];
+  if (raw == null) return null;
+  if (win.perGame && !PER_GAME_EXEMPT.has(catId) && win.gamesPlayed > 0) return raw / win.gamesPlayed;
+  return raw;
+}
+
+function formatWindowValue(col, win) {
+  const value = statsWindowValue(win, col.id);
+  if (value == null) return '—';
+  if (win.perGame && !PER_GAME_EXEMPT.has(col.id)) return value.toFixed(2);
+  return formatColumnValue(col, value);
+}
+
+async function renderCompareTable(a, b, viewKey) {
+  const wrap = document.getElementById('compareTableWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
+
+  const [winA, winB] = await Promise.all([statsWindowFor(a, viewKey), statsWindowFor(b, viewKey)]);
+  if (!winA || !winB) {
+    const missing = !winA ? a.name : b.name;
+    wrap.innerHTML = `<div class="gamelog-empty">Not enough data for this view for ${escapeHtml(missing)}.</div>`;
+    return;
+  }
 
   const isGoalie = a.pos === 'G';
   const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
@@ -284,28 +426,34 @@ function openCompareModal(a, b) {
   const overallRow = `
     <tr class="cmp-overall-row">
       <td class="cmp-val ${a.overall > b.overall ? 'cmp-win' : ''}">${a.overall}</td>
-      <td class="cmp-label">OVR</td>
+      <td class="cmp-label" title="Season-long overall rating">OVR</td>
       <td class="cmp-val ${b.overall > a.overall ? 'cmp-win' : ''}">${b.overall}</td>
     </tr>`;
 
   const rows = categories.map((cat) => {
-    const av = a.ratings.find((r) => r.id === cat.id);
-    const bv = b.ratings.find((r) => r.id === cat.id);
-    if (!av || !bv) return '';
+    const av = statsWindowValue(winA, cat.id);
+    const bv = statsWindowValue(winB, cat.id);
     const inverted = INVERT_STATS.has(cat.id);
     let aWin = false;
     let bWin = false;
-    if (av.value !== bv.value) {
-      aWin = inverted ? av.value < bv.value : av.value > bv.value;
+    if (av != null && bv != null && av !== bv) {
+      aWin = inverted ? av < bv : av > bv;
       bWin = !aWin;
     }
     return `
       <tr>
-        <td class="cmp-val ${aWin ? 'cmp-win' : ''}">${escapeHtml(formatColumnValue(cat, av.value))}</td>
+        <td class="cmp-val ${aWin ? 'cmp-win' : ''}">${escapeHtml(formatWindowValue(cat, winA))}</td>
         <td class="cmp-label" title="${escapeHtml(cat.label)}">${escapeHtml(cat.short)}</td>
-        <td class="cmp-val ${bWin ? 'cmp-win' : ''}">${escapeHtml(formatColumnValue(cat, bv.value))}</td>
+        <td class="cmp-val ${bWin ? 'cmp-win' : ''}">${escapeHtml(formatWindowValue(cat, winB))}</td>
       </tr>`;
   }).join('');
+
+  wrap.innerHTML = `<table class="compare-table"><tbody>${overallRow}${rows}</tbody></table>`;
+}
+
+async function openCompareModal(a, b) {
+  el.compareModalRoot.hidden = false;
+  document.body.style.overflow = 'hidden';
 
   el.compareModalContent.innerHTML = `
     <div class="compare-heads">
@@ -313,10 +461,17 @@ function openCompareModal(a, b) {
       <div class="compare-vs">VS</div>
       <div class="compare-head">${buildCard(b, state.teamMeta).outerHTML}</div>
     </div>
-    <table class="compare-table">
-      <tbody>${overallRow}${rows}</tbody>
-    </table>
+    <div class="stats-window-bar">
+      <label for="compareViewSelect">Stats</label>
+      <select id="compareViewSelect">${statsWindowOptionsHtml()}</select>
+    </div>
+    <div id="compareTableWrap"><div class="gamelog-loading">Loading…</div></div>
   `;
+
+  const select = document.getElementById('compareViewSelect');
+  select.value = 'currentTotal';
+  select.addEventListener('change', () => renderCompareTable(a, b, select.value));
+  await renderCompareTable(a, b, 'currentTotal');
 }
 
 el.modeButtons.forEach((btn) => {
@@ -392,6 +547,7 @@ function openPlayerModal(player) {
     .then((landing) => {
       renderModalShell(player, landing);
       renderSnapshotTrend(player);
+      wireStatsWindow(player);
       wireModalGameLog(player, landing);
     })
     .catch((err) => {
@@ -441,6 +597,15 @@ function renderModalShell(player, landing) {
         </div>
         <div class="pcard-section">
           <div class="gamelog-head">
+            <h3>Stats</h3>
+            <div class="gamelog-controls">
+              <select id="statsWindowSelect">${statsWindowOptionsHtml()}</select>
+            </div>
+          </div>
+          <div id="seasonTotalsWrap"><div class="gamelog-loading">Loading…</div></div>
+        </div>
+        <div class="pcard-section">
+          <div class="gamelog-head">
             <h3>Game Log</h3>
             <div class="gamelog-controls">
               <select id="gameLogSeason" aria-label="Season"></select>
@@ -448,10 +613,45 @@ function renderModalShell(player, landing) {
               <button type="button" id="gtPlayoffs">Playoffs</button>
             </div>
           </div>
-          <div id="seasonTotalsWrap"></div>
           <div id="gameLogWrap"><div class="gamelog-loading">Loading…</div></div>
         </div>
       </div>
+    </div>
+  `;
+}
+
+/** Wires the standalone "Stats" window selector (6 options — same as the
+ *  compare modal's) that drives #seasonTotalsWrap, independent of the
+ *  Game Log section's own season/type selector below it. */
+function wireStatsWindow(player) {
+  const select = document.getElementById('statsWindowSelect');
+  if (!select) return;
+  select.value = 'currentTotal';
+  const load = () => renderPlayerStatsWindow(player, select.value);
+  select.addEventListener('change', load);
+  load();
+}
+
+async function renderPlayerStatsWindow(player, viewKey) {
+  const wrap = document.getElementById('seasonTotalsWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
+
+  const win = await statsWindowFor(player, viewKey);
+  if (!win) {
+    wrap.innerHTML = '<div class="gamelog-empty">Not enough data for this view.</div>';
+    return;
+  }
+
+  const isGoalie = player.pos === 'G';
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  wrap.innerHTML = `
+    <div class="ph-stats">
+      ${categories.map((c) => `
+        <div class="stat-chip" title="${escapeHtml(c.label)}">
+          <span class="num">${escapeHtml(formatWindowValue(c, win))}</span>
+          <span class="lbl">${escapeHtml(c.short)}</span>
+        </div>`).join('')}
     </div>
   `;
 }
@@ -471,10 +671,7 @@ function wireModalGameLog(player, landing) {
   const btnPo = document.getElementById('gtPlayoffs');
   let gameType = 2;
 
-  const load = () => {
-    renderSeasonTotals(player, landing, seasonSelect.value, gameType);
-    loadGameLog(player, seasonSelect.value, gameType);
-  };
+  const load = () => loadGameLog(player, seasonSelect.value, gameType);
 
   seasonSelect.addEventListener('change', load);
   btnReg.addEventListener('click', () => {
@@ -530,36 +727,6 @@ function seasonTotalValue(totals, catId, isGoalie) {
   }
   const key = SEASON_TOTAL_FIELD_MAP[catId];
   return key ? (totals[key] ?? null) : null;
-}
-
-/** Season/playoff cumulative totals for whichever season+type is
- *  selected in the game log controls above it — from the already-
- *  fetched landing.seasonTotals, no extra network call. */
-function renderSeasonTotals(player, landing, season, gameType) {
-  const wrap = document.getElementById('seasonTotalsWrap');
-  if (!wrap) return;
-
-  const isGoalie = player.pos === 'G';
-  const totals = (landing?.seasonTotals || []).find(
-    (s) => s.leagueAbbrev === 'NHL' && s.season === Number(season) && s.gameTypeId === gameType,
-  );
-  if (!totals) {
-    const label = gameType === 3 ? 'playoff' : 'regular season';
-    wrap.innerHTML = `<div class="gamelog-empty">No ${label} totals for ${seasonLabel(season)}.</div>`;
-    return;
-  }
-
-  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
-  wrap.innerHTML = `
-    <h4 class="season-totals-heading">${seasonLabel(season)} ${gameType === 3 ? 'Playoff' : 'Season'} Totals</h4>
-    <div class="ph-stats">
-      ${categories.map((c) => {
-        const raw = seasonTotalValue(totals, c.id, isGoalie);
-        const display = raw == null ? '—' : escapeHtml(formatColumnValue(c, raw));
-        return `<div class="stat-chip" title="${escapeHtml(c.label)}"><span class="num">${display}</span><span class="lbl">${escapeHtml(c.short)}</span></div>`;
-      }).join('')}
-    </div>
-  `;
 }
 
 async function loadGameLog(player, season, gameType) {
