@@ -118,20 +118,47 @@ function toCardRating(percentile) {
  *  ~700 players), safe to call whenever the column config might change.
  *  Works equally well on a season-to-date pool or a delta pool built from
  *  two snapshots (range.js) — it only ever compares players within the
- *  pool it's given. */
+ *  pool it's given.
+ *
+ *  Percentiles are POSITION-RELATIVE for skaters (2026-08-16, user
+ *  feedback: fantasy rosters draft/start by position slot, so a
+ *  defenseman's rating should reflect how they stack up against other
+ *  defensemen, not against wingers' shot/goal totals — league-wide
+ *  percentiles previously buried every D's SHO/VOL categories near the
+ *  floor regardless of how good they were for the position). Each
+ *  player's percentile for a stat is computed within their own
+ *  `positionGroup()` (C / W [L+R combined] / D) — same three groups
+ *  `POSITION_WEIGHTS` already uses — rather than the full skater pool.
+ *  Goalies are already a single homogeneous group, so this is a no-op
+ *  for them (one group either way). */
 function ratePool(pool, mode) {
   const categories = activeColumns(mode);
-  const statPools = {};
-  for (const cat of categories) statPools[cat.id] = pool.map((p) => p[cat.id] ?? 0);
+  const isGoalie = mode === 'goalies';
+  const groupKey = (player) => (isGoalie ? 'G' : positionGroup(player.pos));
+
+  const groups = new Map(); // groupKey -> players in that group
+  for (const player of pool) {
+    const key = groupKey(player);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(player);
+  }
+
+  const statPoolsByGroup = new Map();
+  for (const [key, groupPlayers] of groups) {
+    const statPools = {};
+    for (const cat of categories) statPools[cat.id] = groupPlayers.map((p) => p[cat.id] ?? 0);
+    statPoolsByGroup.set(key, statPools);
+  }
 
   return pool.map((player) => {
+    const statPools = statPoolsByGroup.get(groupKey(player));
     const ratings = categories.map((cat) => {
       const value = player[cat.id] ?? 0;
       let pct = percentileRank(value, statPools[cat.id]);
       if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
       return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct), pct };
     });
-    const weights = mode === 'goalies' ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
+    const weights = isGoalie ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
     let weightedSum = 0;
     let weightTotal = 0;
     for (const r of ratings) {
