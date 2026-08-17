@@ -212,12 +212,15 @@ function buildGoalies(rows) {
   }));
 }
 
-/** Fetches + normalizes the current season's league-wide skater/goalie stats and team directory. */
-async function loadSeasonData() {
-  const standings = await getJSON(`${API_WEB}/v1/standings/now`);
-  const teamMeta = buildTeamMeta(standings);
-  const seasonId = standings.standings?.[0]?.seasonId || fallbackSeasonId();
-
+/** Fetches + normalizes league-wide skater/goalie stats (regular season
+ *  only) for an explicit seasonId — current or historical, any season
+ *  the stats-rest API has data for. `teamMeta` is passed in rather than
+ *  re-fetched since team rosters/logos are a present-day concept, not
+ *  something that varies by which season's STATS you're looking at (a
+ *  team that's since relocated/rebranded just won't have a current-day
+ *  logo to show — same graceful fallback already used everywhere a
+ *  team's logo might be missing). */
+async function loadSeasonStatsFor(seasonId, teamMeta) {
   const filter = `seasonId=${seasonId} and gameTypeId=2`;
   const q = `?limit=-1&cayenneExp=${encodeURIComponent(filter)}`;
   const [skaterSummary, skaterRealtime, goalieSummary] = await Promise.all([
@@ -230,6 +233,15 @@ async function loadSeasonData() {
   const goalies = buildGoalies(goalieSummary.data || []);
 
   return { seasonId, teamMeta, skaters, goalies };
+}
+
+/** Fetches + normalizes the CURRENT season's league-wide skater/goalie
+ *  stats and team directory (standings/now determines both). */
+async function loadSeasonData() {
+  const standings = await getJSON(`${API_WEB}/v1/standings/now`);
+  const teamMeta = buildTeamMeta(standings);
+  const seasonId = standings.standings?.[0]?.seasonId || fallbackSeasonId();
+  return loadSeasonStatsFor(seasonId, teamMeta);
 }
 
 /**

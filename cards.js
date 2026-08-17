@@ -48,6 +48,7 @@ const el = {
   loadMoreBtn: document.getElementById('loadMoreBtn'),
   searchInput: document.getElementById('searchInput'),
   teamSelect: document.getElementById('teamSelect'),
+  seasonSelect: document.getElementById('seasonSelect'),
   modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
   posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
@@ -67,7 +68,9 @@ const el = {
 
 const state = {
   teamMeta: new Map(),
-  seasonId: null,
+  seasonId: null, // the CURRENT (live/active-snapshot) season — always fetched, regardless of which season is selected below
+  selectedSeasonId: null, // whichever season the grid is actually showing ratings for
+  seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw unfiltered — avoids refetching a season already looked at
   mode: 'skaters', // 'skaters' | 'goalies'
   rawSkaters: [], ratedSkaters: [], skaterMinGP: 0, skaterMaxGP: 0,
   rawGoalies: [], ratedGoalies: [], goalieMinGP: 0, goalieMaxGP: 0,
@@ -77,6 +80,11 @@ const state = {
   visibleCount: BATCH_SIZE,
   compareSelections: new Map(), // playerId -> rated player, max 2, same mode only
 };
+
+// How far back the season selector goes — 2021-22 is the earliest
+// "normal" 82-game season after the COVID-shortened 2019-20/2020-21
+// ones, per explicit request to stop there.
+const MIN_SEASON_ID = 20212022;
 
 // Per-game data sources for the game log + monthly trend. Regular-season
 // box score fields (goals, assists, PPP, etc.) come straight from the
@@ -120,22 +128,27 @@ async function init() {
   el.grid.innerHTML = '';
 
   try {
+    // Always fetch the CURRENT season (live, or the active local snapshot)
+    // — it's the default season shown, and every OTHER season in the
+    // dropdown is counted back from it (see availableSeasonIds()).
     const { seasonId, teamMeta, skaters, goalies, source, snapshotLabel } = await getSeasonData();
     state.teamMeta = teamMeta;
     state.seasonId = seasonId;
     el.seasonLabel.textContent = `${seasonLabel(seasonId)} · Ratings` +
       (source === 'snapshot' ? ` · ${snapshotLabel}` : '');
 
-    state.skaterMaxGP = seasonGameCount(skaters);
-    state.skaterMinGP = Math.ceil(state.skaterMaxGP * MIN_GP_FRACTION);
-    state.rawSkaters = skaters.filter((p) => p.gamesPlayed >= state.skaterMinGP);
+    state.seasonDataCache.set(seasonId, { skaters, goalies });
 
-    state.goalieMaxGP = seasonGameCount(goalies);
-    state.goalieMinGP = Math.ceil(state.goalieMaxGP * MIN_GP_FRACTION);
-    state.rawGoalies = goalies.filter((p) => p.gamesPlayed >= state.goalieMinGP);
-
-    rateAllPlayers();
+    populateSeasonSelect();
     populateTeamSelect();
+
+    // A data-bar action (switching snapshots, Retrieve Latest Stats) re-runs
+    // init() — keep whatever season the user had selected rather than
+    // silently jumping back to current, unless this is the first load.
+    const validSeasons = new Set(availableSeasonIds());
+    const targetSeason = validSeasons.has(state.selectedSeasonId) ? state.selectedSeasonId : seasonId;
+    await loadAndRateSeason(targetSeason);
+
     updateEligibilityNote();
     el.skeleton.hidden = true;
     render(true);
@@ -145,6 +158,64 @@ async function init() {
   }
 }
 
+/** Season ids selectable in the season dropdown — current season down
+ *  to MIN_SEASON_ID, newest first. NHL season ids follow a YYYYYYYY+1
+ *  pattern, so stepping back one season is always -10001. */
+function availableSeasonIds() {
+  const ids = [];
+  for (let id = state.seasonId; id >= MIN_SEASON_ID; id -= 10001) ids.push(id);
+  return ids;
+}
+
+function populateSeasonSelect() {
+  const ids = availableSeasonIds();
+  el.seasonSelect.innerHTML = ids
+    .map((id) => `<option value="${id}">${seasonLabel(id)}${id === state.seasonId ? ' (Current)' : ''}</option>`)
+    .join('');
+  el.seasonSelect.value = String(state.selectedSeasonId ?? state.seasonId);
+}
+
+/** Fetches (or reuses a cached copy of) `seasonId`'s stats, rates them,
+ *  and stores the result in state.ratedSkaters/ratedGoalies — same
+ *  eligibility rule as always (MIN_GP_FRACTION of THAT season's own
+ *  game count). Keeps everyone who played that season, retired or not —
+ *  a past season's ratings reflect who was good THAT year. */
+async function loadAndRateSeason(seasonId) {
+  let raw = state.seasonDataCache.get(seasonId);
+  if (!raw) {
+    const data = await loadSeasonStatsFor(seasonId, state.teamMeta);
+    raw = { skaters: data.skaters, goalies: data.goalies };
+    state.seasonDataCache.set(seasonId, raw);
+  }
+
+  state.skaterMaxGP = seasonGameCount(raw.skaters);
+  state.skaterMinGP = Math.ceil(state.skaterMaxGP * MIN_GP_FRACTION);
+  state.rawSkaters = raw.skaters.filter((p) => p.gamesPlayed >= state.skaterMinGP);
+
+  state.goalieMaxGP = seasonGameCount(raw.goalies);
+  state.goalieMinGP = Math.ceil(state.goalieMaxGP * MIN_GP_FRACTION);
+  state.rawGoalies = raw.goalies.filter((p) => p.gamesPlayed >= state.goalieMinGP);
+
+  rateAllPlayers();
+  state.selectedSeasonId = seasonId;
+}
+
+el.seasonSelect.addEventListener('change', async () => {
+  const seasonId = Number(el.seasonSelect.value);
+  el.seasonSelect.disabled = true;
+  el.skeleton.hidden = false;
+  try {
+    await loadAndRateSeason(seasonId);
+    updateEligibilityNote();
+    render(true);
+  } catch (err) {
+    showBanner(`Couldn't load ${seasonLabel(seasonId)} stats (${err.message}).`);
+  } finally {
+    el.seasonSelect.disabled = false;
+    el.skeleton.hidden = true;
+  }
+});
+
 function updateEligibilityNote() {
   const isGoalie = state.mode === 'goalies';
   const pool = isGoalie ? state.rawGoalies : state.rawSkaters;
@@ -152,8 +223,9 @@ function updateEligibilityNote() {
   const maxGP = isGoalie ? state.goalieMaxGP : state.skaterMaxGP;
   el.eligibilityNote.textContent =
     `Showing the ${pool.length.toLocaleString()} ${state.mode} who've played at least ${minGP} games ` +
-    `this season (30% of ${maxGP}). Categories match your ⚙ Columns selection for ${state.mode} — change it ` +
-    `there and these update too. Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}` +
+    `in ${seasonLabel(state.selectedSeasonId)} (30% of ${maxGP}). ` +
+    `Categories match your ⚙ Columns selection for ${state.mode} — change it there and these update too. ` +
+    `Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}` +
     `–${RATING_CEIL}; overall is a weighted average of the category percentiles.`;
 }
 
