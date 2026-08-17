@@ -701,9 +701,17 @@ td.stat-num {
   padding: 0 20px 12px;
   display: flex;
   gap: 6px;
+  /* Seven tabs (as of the Mini-Games addition) no longer fit every
+     viewport width — scroll the nav itself rather than letting it push
+     the whole page wider than the viewport (a real bug this surfaced:
+     scrollWidth > innerWidth on the <body> at in-between widths). */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .nav-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-dim);
