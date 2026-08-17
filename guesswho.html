@@ -53,10 +53,6 @@
         <div id="gwSuggestions" class="gw-suggestions" hidden></div>
       </div>
       <button type="button" id="gwGuessBtn" class="primary-btn" disabled>Guess</button>
-      <div class="gw-silhouette-wrap">
-        <img id="gwSilhouetteImg" class="gw-silhouette" alt="Mystery player" loading="lazy">
-        <button type="button" id="gwRevealBtn" class="ghost-btn">👁 Reveal Photo</button>
-      </div>
     </div>
     <p id="gwTriesLeft" class="gw-tries-left"></p>
 
@@ -80,6 +76,22 @@
     <div id="gwEndBanner" class="gw-end-banner" hidden></div>
   </div>
 </main>
+
+<div id="gwConfettiLayer" class="gw-confetti-layer" aria-hidden="true"></div>
+
+<div id="gwWinModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="gwWinModalOverlay"></div>
+  <div class="modal-panel gw-win-modal-panel" role="dialog" aria-modal="true" aria-label="You guessed correctly">
+    <button class="modal-close" id="gwWinModalClose" aria-label="Close">✕</button>
+    <div class="gw-win-headline">🎉 Congrats!</div>
+    <img id="gwWinModalImg" class="gw-win-modal-img" alt="">
+    <div id="gwWinModalName" class="gw-win-modal-name"></div>
+    <p class="gw-win-modal-sub">…you guessed correctly!</p>
+    <p id="gwWinModalTries" class="gw-win-modal-tries"></p>
+    <button type="button" id="gwWinShareBtn" class="ghost-btn">📋 Copy Results</button>
+    <span id="gwWinShareMsg" class="gw-share-msg"></span>
+  </div>
+</div>
 
 <footer class="site-footer">
   <p>

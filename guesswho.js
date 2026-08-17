@@ -49,11 +49,18 @@ const el = {
   guessInput: document.getElementById('gwGuessInput'),
   suggestions: document.getElementById('gwSuggestions'),
   guessBtn: document.getElementById('gwGuessBtn'),
-  silhouetteImg: document.getElementById('gwSilhouetteImg'),
-  revealBtn: document.getElementById('gwRevealBtn'),
   triesLeft: document.getElementById('gwTriesLeft'),
   tableBody: document.getElementById('gwTableBody'),
   endBanner: document.getElementById('gwEndBanner'),
+  confettiLayer: document.getElementById('gwConfettiLayer'),
+  winModalRoot: document.getElementById('gwWinModalRoot'),
+  winModalOverlay: document.getElementById('gwWinModalOverlay'),
+  winModalClose: document.getElementById('gwWinModalClose'),
+  winModalImg: document.getElementById('gwWinModalImg'),
+  winModalName: document.getElementById('gwWinModalName'),
+  winModalTries: document.getElementById('gwWinModalTries'),
+  winShareBtn: document.getElementById('gwWinShareBtn'),
+  winShareMsg: document.getElementById('gwWinShareMsg'),
 };
 
 const state = {
@@ -64,7 +71,6 @@ const state = {
   guesses: [], // array of full player bio objects, in guess order
   gameOver: false,
   won: false,
-  revealed: false, // has the "Reveal Photo" silhouette hint been used?
   dateKey: null,
   selectedGuess: null, // pending player selected from the suggestion list
 };
@@ -111,7 +117,6 @@ function saveState() {
       guesses: state.guesses,
       gameOver: state.gameOver,
       won: state.won,
-      revealed: state.revealed,
     }));
   } catch {
     // Non-fatal — worst case, a reload mid-game loses progress.
@@ -226,20 +231,6 @@ function renderBoard() {
   }
   renderEndBanner();
   renderInputLock();
-  renderSilhouette();
-}
-
-/** The silhouette hint next to the Guess button: the mystery player's own
- *  headshot rendered solid black via a CSS filter (their cutout PNGs have
- *  a transparent background, so brightness(0) leaves just the silhouette
- *  shape) until "Reveal Photo" is clicked. Purely optional — doesn't
- *  affect scoring, just a visual assist — and stays revealed across a
- *  reload via the same per-day localStorage state as guesses. */
-function renderSilhouette() {
-  el.silhouetteImg.src = state.mystery.headshot;
-  el.silhouetteImg.classList.toggle('gw-revealed', state.revealed);
-  el.revealBtn.textContent = state.revealed ? '👁 Photo Revealed' : '👁 Reveal Photo';
-  el.revealBtn.disabled = state.revealed;
 }
 
 function renderInputLock() {
@@ -295,6 +286,60 @@ function renderEndBanner() {
 }
 
 // ---------------------------------------------------------------------
+// Win celebration — confetti + popup. Fired ONLY at the moment a winning
+// guess is submitted (see submitGuess()), never when an already-finished
+// game is restored from localStorage on a later visit — replaying the
+// celebration every reload would get old fast.
+// ---------------------------------------------------------------------
+
+const CONFETTI_COLORS = ['#59d97c', '#ffb020', '#4fb3ff', '#ff4d5e', '#c99aff', '#ffffff'];
+const CONFETTI_COUNT = 140;
+
+function spawnConfetti() {
+  el.confettiLayer.innerHTML = '';
+  const pieces = [];
+  for (let i = 0; i < CONFETTI_COUNT; i++) {
+    const piece = document.createElement('span');
+    piece.className = 'gw-confetti-piece';
+    const size = 6 + Math.random() * 7;
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    piece.style.width = `${size}px`;
+    piece.style.height = `${size * (0.4 + Math.random() * 0.6)}px`;
+    piece.style.animationDuration = `${2.4 + Math.random() * 1.8}s`;
+    piece.style.animationDelay = `${Math.random() * 0.5}s`;
+    pieces.push(piece);
+  }
+  pieces.forEach((p) => el.confettiLayer.appendChild(p));
+  setTimeout(() => { el.confettiLayer.innerHTML = ''; }, 4500);
+}
+
+function openWinModal(guess) {
+  el.winModalImg.src = guess.headshot;
+  el.winModalName.textContent = guess.name;
+  el.winModalTries.textContent = `Solved in ${state.guesses.length} of ${MAX_GUESSES} guesses!`;
+  el.winShareMsg.textContent = '';
+  el.winModalRoot.hidden = false;
+}
+
+function closeWinModal() {
+  el.winModalRoot.hidden = true;
+}
+
+function wireWinModal() {
+  el.winModalClose.addEventListener('click', closeWinModal);
+  el.winModalOverlay.addEventListener('click', closeWinModal);
+  el.winShareBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(shareText());
+      el.winShareMsg.textContent = 'Copied!';
+    } catch {
+      el.winShareMsg.textContent = 'Could not copy — clipboard unavailable.';
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
 // Autocomplete + guess submission
 // ---------------------------------------------------------------------
 
@@ -323,11 +368,15 @@ function renderSuggestions(query) {
     </div>
   `).join('');
   el.suggestions.hidden = false;
+  // Clicking a suggestion guesses it immediately — no separate "Guess"
+  // click needed for the mouse flow (the button/Enter path below still
+  // covers keyboard-typed exact matches).
   Array.from(el.suggestions.querySelectorAll('.gw-suggestion')).forEach((node) => {
     node.addEventListener('click', () => {
       const id = Number(node.getAttribute('data-player-id'));
       const player = state.poolById.get(id);
       selectGuess(player);
+      submitGuess();
     });
   });
 }
@@ -343,9 +392,11 @@ function submitGuess() {
   if (state.gameOver || !state.selectedGuess) return;
   const guess = state.selectedGuess;
   state.guesses.push(guess);
+  let justWon = false;
   if (guess.playerId === state.mystery.playerId) {
     state.gameOver = true;
     state.won = true;
+    justWon = true;
   } else if (state.guesses.length >= MAX_GUESSES) {
     state.gameOver = true;
     state.won = false;
@@ -354,6 +405,10 @@ function submitGuess() {
   el.guessInput.value = '';
   saveState();
   renderBoard();
+  if (justWon) {
+    spawnConfetti();
+    openWinModal(guess);
+  }
 }
 
 function wireGuessBar() {
@@ -376,12 +431,6 @@ function wireGuessBar() {
     }
   });
   el.guessBtn.addEventListener('click', submitGuess);
-  el.revealBtn.addEventListener('click', () => {
-    if (state.revealed) return;
-    state.revealed = true;
-    saveState();
-    renderSilhouette();
-  });
 }
 
 // ---------------------------------------------------------------------
@@ -406,7 +455,6 @@ async function init() {
       state.guesses = saved.guesses || [];
       state.gameOver = !!saved.gameOver;
       state.won = !!saved.won;
-      state.revealed = !!saved.revealed;
     } else {
       state.mystery = pickMysteryPlayer(state.pool, state.dateKey);
       state.guesses = [];
@@ -419,6 +467,7 @@ async function init() {
     el.skeleton.hidden = true;
     el.game.hidden = false;
     wireGuessBar();
+    wireWinModal();
     renderBoard();
   } catch (err) {
     el.skeleton.hidden = true;
