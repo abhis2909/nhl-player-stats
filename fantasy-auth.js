@@ -53,8 +53,8 @@
       <div class="modal-overlay" id="fhAuthModalOverlay"></div>
       <div class="modal-panel fh-auth-modal-panel" role="dialog" aria-modal="true" aria-label="Log in">
         <button class="modal-close" id="fhAuthModalClose" aria-label="Close">✕</button>
-        <h2>Log in</h2>
-        <p class="fh-login-sub">Use the username your commissioner gave you.</p>
+        <h2 id="fhModalHeading">Log in</h2>
+        <p class="fh-login-sub" id="fhModalSub">Use the username your commissioner gave you.</p>
         <div class="fh-field">
           <label for="fhUsername">Username</label>
           <input id="fhUsername" type="text" autocomplete="username">
@@ -69,6 +69,7 @@
         </div>
         <p class="fh-login-error" id="fhLoginError" hidden></p>
         <button type="button" id="fhLoginSubmit" class="primary-btn">Log in</button>
+        <button type="button" id="fhModalSwitchLink" class="link-btn fh-modal-switch">First time? Sign up instead</button>
       </div>
     `;
     document.body.appendChild(root);
@@ -77,6 +78,9 @@
     root.querySelector('#fhAuthModalClose').addEventListener('click', closeModal);
     root.querySelector('#fhAuthModalOverlay').addEventListener('click', closeModal);
     root.querySelector('#fhLoginSubmit').addEventListener('click', submitLogin);
+    root.querySelector('#fhModalSwitchLink').addEventListener('click', () => {
+      setModalMode(modalMode === 'signup' ? 'login' : 'signup');
+    });
     root.querySelectorAll('input').forEach((input) => {
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); submitLogin(); }
@@ -86,8 +90,34 @@
     return root;
   }
 
-  function openModal() {
+  let modalMode = 'login';
+
+  /** Switches the modal between "Log in" and "Sign up" presentation.
+   *  Both submit to the exact same /api/fantasy/login endpoint — it
+   *  already handles either case correctly based on whether the account
+   *  is unclaimed and whether a name was sent (a name sent for an
+   *  already-claimed account is just ignored server-side). This is
+   *  purely about which fields/copy show up FIRST, so a first-time
+   *  visitor doesn't have to fail a login attempt before seeing the
+   *  name field — same underlying flow either way. */
+  function setModalMode(mode) {
+    modalMode = mode;
+    const isSignup = mode === 'signup';
+    document.getElementById('fhModalHeading').textContent = isSignup ? 'Sign Up' : 'Log in';
+    document.getElementById('fhModalSub').textContent = isSignup
+      ? "First time here? Enter the username your commissioner gave you, choose a password, and tell us your name."
+      : 'Use the username your commissioner gave you.';
+    document.getElementById('fhNameField').hidden = !isSignup;
+    document.getElementById('fhLoginSubmit').textContent = isSignup ? 'Sign up' : 'Log in';
+    document.getElementById('fhModalSwitchLink').textContent = isSignup
+      ? 'Already set up? Log in instead'
+      : 'First time? Sign up instead';
+    document.getElementById('fhLoginError').hidden = true;
+  }
+
+  function openModal(mode) {
     ensureModal().hidden = false;
+    setModalMode(mode || 'login');
     document.getElementById('fhUsername').focus();
   }
 
@@ -95,10 +125,10 @@
     if (!modalEl) return;
     modalEl.hidden = true;
     document.getElementById('fhLoginError').hidden = true;
-    document.getElementById('fhNameField').hidden = true;
     document.getElementById('fhUsername').value = '';
     document.getElementById('fhPassword').value = '';
     document.getElementById('fhDisplayName').value = '';
+    setModalMode('login');
   }
 
   function showError(message) {
@@ -164,8 +194,12 @@
       `;
       slot.querySelector('#fhLogoutBtn').addEventListener('click', logout);
     } else {
-      slot.innerHTML = `<button type="button" class="ghost-btn" id="fhLoginBtn">Log in</button>`;
-      slot.querySelector('#fhLoginBtn').addEventListener('click', openModal);
+      slot.innerHTML = `
+        <button type="button" class="ghost-btn" id="fhLoginBtn">Log in</button>
+        <button type="button" class="ghost-btn" id="fhSignupBtn">Sign up</button>
+      `;
+      slot.querySelector('#fhLoginBtn').addEventListener('click', () => openModal('login'));
+      slot.querySelector('#fhSignupBtn').addEventListener('click', () => openModal('signup'));
     }
   }
 

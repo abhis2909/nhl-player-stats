@@ -2750,6 +2750,13 @@ a.mg-game-card:hover {
   width: 100%;
 }
 
+.fh-modal-switch {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 12px;
+}
+
 @media (max-width: 720px) {
   .fh-auth-slot { order: 3; width: 100%; justify-content: flex-end; }
 }
