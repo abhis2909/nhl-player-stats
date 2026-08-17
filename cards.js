@@ -244,7 +244,7 @@ function updateEligibilityNote() {
   const maxGP = isGoalie ? state.goalieMaxGP : state.skaterMaxGP;
   el.eligibilityNote.textContent =
     `Showing the ${pool.length.toLocaleString()} ${state.mode} who've played at least ${minGP} games ` +
-    `in ${seasonLabel(state.selectedSeasonId)} (30% of ${maxGP}). ` +
+    `in ${seasonLabel(state.selectedSeasonId)} (${Math.round(MIN_GP_FRACTION * 100)}% of ${maxGP}). ` +
     `Categories match your ⚙ Columns selection for ${state.mode} — change it there and these update too. ` +
     `Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}` +
     `–${RATING_CEIL}; overall is a weighted average of the category percentiles.`;
