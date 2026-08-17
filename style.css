@@ -2314,6 +2314,10 @@ a.mg-game-card:hover {
   margin: 0 0 18px;
 }
 
+.gw-divisions-btn {
+  margin-bottom: 18px;
+}
+
 .gw-legend-swatch {
   display: inline-block;
   padding: 1px 8px;
@@ -2584,6 +2588,71 @@ a.mg-game-card:hover {
   margin: 0 0 10px;
   color: var(--text-faint);
   font-size: 12.5px;
+}
+
+/* ---------- View NHL Divisions popup ---------- */
+.gw-divisions-modal-panel {
+  max-width: 760px;
+}
+
+.gw-divisions-modal-panel h2 {
+  margin: 0 0 16px;
+  font-size: 19px;
+}
+
+.gw-divisions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.gw-division-card {
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+
+.gw-division-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.gw-division-conference {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin: 2px 0 10px;
+}
+
+.gw-division-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gw-division-card li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.gw-division-team-abbr {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-hover);
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 30px;
+  text-align: center;
 }
 
 @media (max-width: 720px) {

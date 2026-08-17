@@ -43,6 +43,8 @@
     toward the answer.
   </p>
 
+  <button type="button" id="gwDivisionsBtn" class="ghost-btn gw-divisions-btn" hidden>🗺 View NHL Divisions</button>
+
   <div id="gwSkeleton" class="gw-loading" aria-hidden="true">Loading today's player pool…</div>
 
   <div id="gwGame" hidden>
@@ -90,6 +92,15 @@
     <p id="gwWinModalTries" class="gw-win-modal-tries"></p>
     <button type="button" id="gwWinShareBtn" class="ghost-btn">📋 Copy Results</button>
     <span id="gwWinShareMsg" class="gw-share-msg"></span>
+  </div>
+</div>
+
+<div id="gwDivisionsModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="gwDivisionsModalOverlay"></div>
+  <div class="modal-panel gw-divisions-modal-panel" role="dialog" aria-modal="true" aria-label="NHL Divisions">
+    <button class="modal-close" id="gwDivisionsModalClose" aria-label="Close">✕</button>
+    <h2>NHL Divisions</h2>
+    <div id="gwDivisionsGrid" class="gw-divisions-grid"></div>
   </div>
 </div>
 

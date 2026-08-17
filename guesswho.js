@@ -61,6 +61,11 @@ const el = {
   winModalTries: document.getElementById('gwWinModalTries'),
   winShareBtn: document.getElementById('gwWinShareBtn'),
   winShareMsg: document.getElementById('gwWinShareMsg'),
+  divisionsBtn: document.getElementById('gwDivisionsBtn'),
+  divisionsModalRoot: document.getElementById('gwDivisionsModalRoot'),
+  divisionsModalOverlay: document.getElementById('gwDivisionsModalOverlay'),
+  divisionsModalClose: document.getElementById('gwDivisionsModalClose'),
+  divisionsGrid: document.getElementById('gwDivisionsGrid'),
 };
 
 const state = {
@@ -340,6 +345,65 @@ function wireWinModal() {
 }
 
 // ---------------------------------------------------------------------
+// "View NHL Divisions" reference popup — a closeable lookup of every
+// team and which division it's in, since Division is one of the 6
+// guess categories. Built from state.teamMeta (already loaded for the
+// Division comparison itself), not a separate fetch.
+// ---------------------------------------------------------------------
+
+// Standard NHL presentation order (two per conference); anything
+// unrecognized (a future realignment) is appended after these, rather
+// than silently dropped.
+const DIVISION_ORDER = ['Atlantic', 'Metropolitan', 'Central', 'Pacific'];
+const DIVISION_CONFERENCE = {
+  Atlantic: 'Eastern', Metropolitan: 'Eastern', Central: 'Western', Pacific: 'Western',
+};
+
+function buildDivisionsGridHtml() {
+  const byDivision = new Map();
+  for (const [abbrev, meta] of state.teamMeta) {
+    const division = meta.division || 'Other';
+    if (!byDivision.has(division)) byDivision.set(division, []);
+    byDivision.get(division).push({ abbrev, name: meta.name });
+  }
+
+  const divisions = [...byDivision.keys()].sort((a, b) => {
+    const ai = DIVISION_ORDER.indexOf(a);
+    const bi = DIVISION_ORDER.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  return divisions.map((division) => {
+    const teams = byDivision.get(division).sort((a, b) => a.name.localeCompare(b.name));
+    const conference = DIVISION_CONFERENCE[division];
+    return `
+      <div class="gw-division-card">
+        <h3>${escapeHtml(division)}</h3>
+        ${conference ? `<div class="gw-division-conference">${escapeHtml(conference)} Conference</div>` : ''}
+        <ul>
+          ${teams.map((t) => `<li><span class="gw-division-team-abbr">${escapeHtml(t.abbrev)}</span>${escapeHtml(t.name)}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }).join('');
+}
+
+function openDivisionsModal() {
+  el.divisionsGrid.innerHTML = buildDivisionsGridHtml();
+  el.divisionsModalRoot.hidden = false;
+}
+
+function closeDivisionsModal() {
+  el.divisionsModalRoot.hidden = true;
+}
+
+function wireDivisionsModal() {
+  el.divisionsBtn.addEventListener('click', openDivisionsModal);
+  el.divisionsModalClose.addEventListener('click', closeDivisionsModal);
+  el.divisionsModalOverlay.addEventListener('click', closeDivisionsModal);
+}
+
+// ---------------------------------------------------------------------
 // Autocomplete + guess submission
 // ---------------------------------------------------------------------
 
@@ -477,6 +541,7 @@ function loadPuzzleForToday() {
 function checkForNewDay() {
   if (todayISO() === state.dateKey) return;
   closeWinModal();
+  closeDivisionsModal();
   el.confettiLayer.innerHTML = '';
   el.guessInput.value = '';
   el.suggestions.hidden = true;
@@ -499,8 +564,10 @@ async function init() {
     el.subtitle.textContent = `A new player every day · ${state.pool.length.toLocaleString()} players in the pool`;
     el.skeleton.hidden = true;
     el.game.hidden = false;
+    el.divisionsBtn.hidden = false;
     wireGuessBar();
     wireWinModal();
+    wireDivisionsModal();
     renderBoard();
 
     // Catch a midnight rollover while this tab stays open: a light
