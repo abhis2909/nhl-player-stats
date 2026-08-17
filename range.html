@@ -4,124 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Range Ratings — NHL Player Stats</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+<!-- Range Ratings moved into the Admin page as a sub-tab (now behind
+     the admin login, alongside Columns and Users) — see
+     fantasy-hub/README.md. This page just forwards old bookmarks/links
+     there instead of 404ing. -->
+<meta http-equiv="refresh" content="0; url=admin.html?tab=range">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<header class="site-header">
-  <div class="header-inner">
-    <div class="brand">
-      <span class="brand-icon" aria-hidden="true">📅</span>
-      <div>
-        <h1>Range Ratings</h1>
-        <p class="subtitle" id="seasonLabel">Loading season…</p>
-      </div>
-    </div>
-    <div class="controls">
-      <div class="toggle-group" role="tablist" aria-label="Player type">
-        <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
-        <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
-      </div>
-      <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
-        <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
-        <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
-        <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
-        <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
-      </div>
-      <label class="visually-hidden" for="teamSelect">Filter by team</label>
-      <select id="teamSelect" aria-label="Filter by team">
-        <option value="ALL">All Teams</option>
-      </select>
-    </div>
-    <div id="fhAuthSlot" class="fh-auth-slot"></div>
-  </div>
-  <nav class="site-nav" aria-label="Site">
-    <a href="index.html" class="nav-tab">📊 Stats</a>
-    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
-    <a href="range.html" class="nav-tab active">📅 Range Ratings</a>
-    <a href="schedule.html" class="nav-tab">🗓 Schedule</a>
-    <a href="totw.html" class="nav-tab">🏆 Team of the Week</a>
-    <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
-    <a href="admin.html" class="nav-tab">⚙ Columns</a>
-  </nav>
-</header>
-
 <main>
-  <div id="statusBanner" class="status-banner" hidden></div>
-
-  <div class="range-bar">
-    <div class="range-field">
-      <label for="rangeFrom">From</label>
-      <div class="range-field-inline">
-        <select id="rangeFrom"></select>
-        <button type="button" id="deleteFromBtn" class="ghost-btn danger-btn" title="Delete this snapshot" hidden>🗑</button>
-      </div>
-    </div>
-    <div class="range-field">
-      <label for="rangeTo">To</label>
-      <select id="rangeTo"></select>
-    </div>
-    <div class="range-quick">
-      <button type="button" id="quickWeek" class="ghost-btn">Past Week</button>
-      <button type="button" id="quickMonth" class="ghost-btn">Past Month</button>
-    </div>
-    <div class="range-actions">
-      <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
-    </div>
-  </div>
-
-  <p class="range-note" id="rangeNote"></p>
-
-  <div class="cards-search-bar">
-    <label class="visually-hidden" for="searchInput">Search players</label>
-    <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
-  </div>
-
-  <div id="rangeEmpty" class="range-empty" hidden>
-    <p>You need at least one saved snapshot to build a range. Click <strong>📥 Retrieve Latest Stats</strong>
-    now, then check back in a week (or after a month) and retrieve again — once you have two points in time,
-    pick them as "From" and "To" above to rank players on what they did in between.</p>
-  </div>
-
-  <div id="cardsSkeleton" class="cards-skeleton" aria-hidden="true">
-    <div class="card-skel"></div>
-    <div class="card-skel"></div>
-    <div class="card-skel"></div>
-  </div>
-
-  <div class="cards-grid" id="cardsGrid"></div>
-
-  <div class="load-more-wrap" id="loadMoreWrap" hidden>
-    <button type="button" id="loadMoreBtn" class="ghost-btn">Load more</button>
-  </div>
-
-  <p id="resultCount" class="result-count"></p>
+  <p class="admin-hint">Range Ratings has moved — redirecting to
+    <a href="admin.html?tab=range">Admin → Range Ratings</a>…</p>
 </main>
-
-<div id="modalRoot" class="modal-root" hidden>
-  <div class="modal-overlay" id="modalOverlay"></div>
-  <div class="modal-panel pcard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
-    <button class="modal-close" id="modalClose" aria-label="Close player details">✕</button>
-    <div id="modalContent"><div class="modal-spinner">Loading…</div></div>
-  </div>
-</div>
-
-<footer class="site-footer">
-  <p>
-    Ratings here are percentile ranks among players who played at least one game between the "From" and
-    "To" points you picked — a "team of the week" for a short range, or an updated ratings snapshot for a
-    longer one. Only dates you've actually retrieved a snapshot for (plus "Live") are selectable, since
-    that's the only data this static site has saved. Data via the unofficial
-    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
-  </p>
-</footer>
-
-<script src="data.js" defer></script>
-<script src="columns.js" defer></script>
-<script src="snapshots.js" defer></script>
-<script src="ratings.js" defer></script>
-<script src="fantasy-auth.js" defer></script>
-<script src="range.js" defer></script>
+<script>location.replace('admin.html?tab=range');</script>
 </body>
 </html>

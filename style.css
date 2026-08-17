@@ -1537,10 +1537,14 @@ td.stat-num {
 }
 
 /* ---------- Admin page ---------- */
+/* Width constraint for the narrower admin sub-tabs (Columns, Users) —
+   nested inside <main>, which already supplies the page's own padding,
+   so this only sets max-width/centering, not padding. Range Ratings
+   (also a sub-tab of #adminGatedContent) deliberately skips this class
+   to use the full <main> width for its cards grid. */
 .admin-main {
   max-width: 760px;
   margin: 0 auto;
-  padding: 22px 20px 60px;
 }
 
 .admin-section {
@@ -1661,6 +1665,16 @@ td.stat-num {
   margin: 0 4px 18px;
   color: var(--text-dim);
   font-size: 13px;
+}
+
+.admin-subtabs {
+  margin: 0 0 20px;
+}
+
+/* Users sub-tab reuses .stats-table's look, but rows aren't clickable
+   (no per-row modal here), so drop the pointer cursor that implies. */
+.admin-users-table tbody tr {
+  cursor: default;
 }
 
 .primary-btn,

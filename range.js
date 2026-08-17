@@ -28,6 +28,12 @@
    approximation.
    ====================================================================== */
 
+/* Wrapped in an IIFE so its top-level `const el`/`state` don't collide
+   with admin.js's own top-level `const el` — this now loads alongside
+   admin.js on admin.html's Range Ratings sub-tab (moved here from its
+   own range.html; see fantasy-hub/README.md history). */
+(function () {
+
 const BATCH_SIZE = 48;
 // MIN_RANGE_GP, deltaValue(), buildDeltaPool() all come from ratings.js
 // (loaded before this file) — shared with totw.js's Team of the Week.
@@ -333,15 +339,27 @@ el.loadMoreBtn.addEventListener('click', () => {
   render(false);
 });
 
-// If the admin page (⚙ Columns) is open in another tab and saves a change,
-// re-rate the already-built delta pools (no need to recompute the deltas).
-window.addEventListener('storage', (e) => {
-  if (e.key !== COLUMN_STORAGE_KEY) return;
+// Re-rate the already-built delta pools in place (no need to recompute
+// the deltas) when the column config changes — no need to re-fetch
+// anything, just re-run the rating pass with the new category set.
+function refreshAfterColumnsChange() {
   if (!state.fromKey) return;
   rerate();
   updateRangeNote();
   render(true);
+}
+
+// Columns and Range Ratings are sub-tabs of the same page now, so a
+// same-tab Save calls window.__rangeTab.refresh() directly (see
+// admin.js). This 'storage' listener is a leftover safety net for the
+// cross-tab case (e.g. two admin.html tabs open at once).
+window.addEventListener('storage', (e) => {
+  if (e.key !== COLUMN_STORAGE_KEY) return;
+  refreshAfterColumnsChange();
 });
+
+// Exposed for admin.js to call after a Columns Save/Reset.
+window.__rangeTab = { refresh: refreshAfterColumnsChange };
 
 // ---------------------------------------------------------------------
 // Detail modal — lightweight, no network calls (everything's already
@@ -419,3 +437,5 @@ async function init() {
 }
 
 init();
+
+})();

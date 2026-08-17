@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Column Settings — NHL Player Stats</title>
+<title>Admin — NHL Player Stats</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚙️</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -14,8 +14,8 @@
     <div class="brand">
       <span class="brand-icon" aria-hidden="true">⚙️</span>
       <div>
-        <h1>Column Settings</h1>
-        <p class="subtitle">Choose which stats show up on the Stats table — skater columns also become the Player Ratings categories</p>
+        <h1>Admin</h1>
+        <p class="subtitle">Stat columns, range ratings, and league accounts</p>
       </div>
     </div>
     <div id="fhAuthSlot" class="fh-auth-slot"></div>
@@ -23,15 +23,14 @@
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Stats</a>
     <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
-    <a href="range.html" class="nav-tab">📅 Range Ratings</a>
     <a href="schedule.html" class="nav-tab">🗓 Schedule</a>
     <a href="totw.html" class="nav-tab">🏆 Team of the Week</a>
     <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
-    <a href="admin.html" class="nav-tab active">⚙ Columns</a>
+    <a href="admin.html" class="nav-tab active">⚙ Admin</a>
   </nav>
 </header>
 
-<main class="admin-main">
+<main>
   <div id="statusBanner" class="status-banner" hidden></div>
 
   <div id="adminLoginGate" class="fh-admin-gate">
@@ -55,60 +54,188 @@
       <button type="button" id="adminLogoutBtn" class="ghost-btn">Log out</button>
     </div>
 
-    <section class="admin-section">
-      <div class="admin-section-head">
-        <h2>Skater Columns <span class="section-sub">(forwards &amp; defensemen)</span></h2>
-        <div class="admin-section-actions">
-          <button type="button" class="link-btn" data-select-all="skaters">Select all</button>
-          <button type="button" class="link-btn" data-select-none="skaters">Clear</button>
-        </div>
-      </div>
-      <div class="checkbox-grid" id="skaterChecks"></div>
-      <p class="warn-text" id="skaterWarn" hidden>Select at least one stat.</p>
-    </section>
-
-    <section class="admin-section">
-      <div class="admin-section-head">
-        <h2>Goalie Columns</h2>
-        <div class="admin-section-actions">
-          <button type="button" class="link-btn" data-select-all="goalies">Select all</button>
-          <button type="button" class="link-btn" data-select-none="goalies">Clear</button>
-        </div>
-      </div>
-      <div class="checkbox-grid" id="goalieChecks"></div>
-      <p class="warn-text" id="goalieWarn" hidden>Select at least one stat.</p>
-    </section>
-
-    <div class="admin-buttons">
-      <button type="button" id="saveBtn" class="primary-btn">Save changes</button>
-      <button type="button" id="resetBtn" class="ghost-btn">Reset to defaults</button>
-      <span id="saveStatus" class="save-status" aria-live="polite"></span>
+    <div class="toggle-group admin-subtabs" role="tablist" aria-label="Admin section">
+      <button class="toggle-btn active" data-subtab="columns" role="tab" aria-selected="true">🔧 Columns</button>
+      <button class="toggle-btn" data-subtab="range" role="tab" aria-selected="false">📅 Range Ratings</button>
+      <button class="toggle-btn" data-subtab="users" role="tab" aria-selected="false">👥 Users</button>
     </div>
 
-    <section class="admin-section">
-      <div class="admin-section-head">
-        <h2>Config JSON</h2>
-        <div class="admin-section-actions">
-          <button type="button" id="copyJsonBtn" class="link-btn">Copy</button>
-          <button type="button" id="applyJsonBtn" class="link-btn">Apply JSON below</button>
+    <!-- ---------------- Columns ---------------- -->
+    <div id="subtabColumns" class="admin-subtab admin-main">
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Skater Columns <span class="section-sub">(forwards &amp; defensemen)</span></h2>
+          <div class="admin-section-actions">
+            <button type="button" class="link-btn" data-select-all="skaters">Select all</button>
+            <button type="button" class="link-btn" data-select-none="skaters">Clear</button>
+          </div>
+        </div>
+        <div class="checkbox-grid" id="skaterChecks"></div>
+        <p class="warn-text" id="skaterWarn" hidden>Select at least one stat.</p>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Goalie Columns</h2>
+          <div class="admin-section-actions">
+            <button type="button" class="link-btn" data-select-all="goalies">Select all</button>
+            <button type="button" class="link-btn" data-select-none="goalies">Clear</button>
+          </div>
+        </div>
+        <div class="checkbox-grid" id="goalieChecks"></div>
+        <p class="warn-text" id="goalieWarn" hidden>Select at least one stat.</p>
+      </section>
+
+      <div class="admin-buttons">
+        <button type="button" id="saveBtn" class="primary-btn">Save changes</button>
+        <button type="button" id="resetBtn" class="ghost-btn">Reset to defaults</button>
+        <span id="saveStatus" class="save-status" aria-live="polite"></span>
+      </div>
+
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Config JSON</h2>
+          <div class="admin-section-actions">
+            <button type="button" id="copyJsonBtn" class="link-btn">Copy</button>
+            <button type="button" id="applyJsonBtn" class="link-btn">Apply JSON below</button>
+          </div>
+        </div>
+        <p class="admin-hint">
+          For reuse elsewhere (other pages, sharing a preset, etc.) — this mirrors the
+          checkboxes above. Edit it and hit "Apply JSON below" to load a config back in.
+        </p>
+        <textarea id="jsonBox" class="json-box" spellcheck="false" rows="6"></textarea>
+      </section>
+
+      <p class="admin-hint">Saved to this browser only (localStorage) — takes effect next time the Stats page loads.</p>
+    </div>
+
+    <!-- ---------------- Range Ratings ---------------- -->
+    <div id="subtabRange" class="admin-subtab" hidden>
+      <p class="subtitle" id="seasonLabel">Loading season…</p>
+
+      <div class="range-bar">
+        <div class="range-field">
+          <label for="rangeFrom">From</label>
+          <div class="range-field-inline">
+            <select id="rangeFrom"></select>
+            <button type="button" id="deleteFromBtn" class="ghost-btn danger-btn" title="Delete this snapshot" hidden>🗑</button>
+          </div>
+        </div>
+        <div class="range-field">
+          <label for="rangeTo">To</label>
+          <select id="rangeTo"></select>
+        </div>
+        <div class="range-quick">
+          <button type="button" id="quickWeek" class="ghost-btn">Past Week</button>
+          <button type="button" id="quickMonth" class="ghost-btn">Past Month</button>
+        </div>
+        <div class="range-actions">
+          <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
         </div>
       </div>
+
+      <p class="range-note" id="rangeNote"></p>
+
+      <div class="cards-search-bar">
+        <label class="visually-hidden" for="searchInput">Search players</label>
+        <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+      </div>
+
+      <div class="controls filter-bar">
+        <div class="toggle-group" role="tablist" aria-label="Player type">
+          <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+          <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+        </div>
+        <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
+          <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
+          <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
+          <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
+          <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
+        </div>
+        <label class="visually-hidden" for="teamSelect">Filter by team</label>
+        <select id="teamSelect" aria-label="Filter by team">
+          <option value="ALL">All Teams</option>
+        </select>
+      </div>
+
+      <div id="rangeEmpty" class="range-empty" hidden>
+        <p>You need at least one saved snapshot to build a range. Click <strong>📥 Retrieve Latest Stats</strong>
+        now, then check back in a week (or after a month) and retrieve again — once you have two points in time,
+        pick them as "From" and "To" above to rank players on what they did in between.</p>
+      </div>
+
+      <div id="cardsSkeleton" class="cards-skeleton" aria-hidden="true">
+        <div class="card-skel"></div>
+        <div class="card-skel"></div>
+        <div class="card-skel"></div>
+      </div>
+
+      <div class="cards-grid" id="cardsGrid"></div>
+
+      <div class="load-more-wrap" id="loadMoreWrap" hidden>
+        <button type="button" id="loadMoreBtn" class="ghost-btn">Load more</button>
+      </div>
+
+      <p id="resultCount" class="result-count"></p>
+
       <p class="admin-hint">
-        For reuse elsewhere (other pages, sharing a preset, etc.) — this mirrors the
-        checkboxes above. Edit it and hit "Apply JSON below" to load a config back in.
+        Ratings here are percentile ranks among players who played at least one game between the "From" and
+        "To" points you picked. Only dates you've actually retrieved a snapshot for (plus "Live") are
+        selectable, since that's the only data this site has saved.
       </p>
-      <textarea id="jsonBox" class="json-box" spellcheck="false" rows="6"></textarea>
-    </section>
+    </div>
+
+    <!-- ---------------- Users ---------------- -->
+    <div id="subtabUsers" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>League Accounts</h2>
+          <div class="admin-section-actions">
+            <button type="button" class="link-btn" id="refreshUsersBtn">Refresh</button>
+          </div>
+        </div>
+        <p class="admin-hint">
+          Everyone who's been given a username for the games. New accounts aren't self-serve — create one
+          from your terminal with <code>npm run create-user -- &lt;username&gt;</code>, then hand that
+          username to the person out-of-band. They pick their own password and name the first time they log in.
+        </p>
+        <div id="usersLoading" class="save-status">Loading…</div>
+        <p id="usersError" class="warn-text" hidden></p>
+        <p id="usersEmpty" class="admin-hint" hidden>No accounts yet — create one with the command above.</p>
+        <div class="table-wrap" id="usersTableWrap" hidden>
+          <table class="stats-table admin-users-table">
+            <thead>
+              <tr><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th></tr>
+            </thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div>
 </main>
 
+<div id="modalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="modalOverlay"></div>
+  <div class="modal-panel pcard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
+    <button class="modal-close" id="modalClose" aria-label="Close player details">✕</button>
+    <div id="modalContent"><div class="modal-spinner">Loading…</div></div>
+  </div>
+</div>
+
 <footer class="site-footer">
-  <p>Saved to this browser only (localStorage) — takes effect next time the stats page loads.</p>
+  <p>Data via the unofficial <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.</p>
 </footer>
 
+<script src="data.js" defer></script>
 <script src="columns.js" defer></script>
+<script src="snapshots.js" defer></script>
+<script src="ratings.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
 <script src="admin-auth.js" defer></script>
 <script src="admin.js" defer></script>
+<script src="range.js" defer></script>
+<script src="admin-users.js" defer></script>
 </body>
 </html>
