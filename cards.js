@@ -71,6 +71,12 @@ const state = {
   seasonId: null, // the CURRENT (live/active-snapshot) season — always fetched, regardless of which season is selected below
   selectedSeasonId: null, // whichever season the grid is actually showing ratings for
   seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw unfiltered — avoids refetching a season already looked at
+  // Always the CURRENT season's ratings, independent of whichever season
+  // is displayed below — used only by the Rating Trend chart's "Live"
+  // point (see buildSnapshotTrendPoints()), so switching the season
+  // selector to a past year can't leak into and mislabel that chart.
+  currentSeasonRatedSkaters: [],
+  currentSeasonRatedGoalies: [],
   mode: 'skaters', // 'skaters' | 'goalies'
   rawSkaters: [], ratedSkaters: [], skaterMinGP: 0, skaterMaxGP: 0,
   rawGoalies: [], ratedGoalies: [], goalieMinGP: 0, goalieMaxGP: 0,
@@ -142,12 +148,18 @@ async function init() {
     populateSeasonSelect();
     populateTeamSelect();
 
+    // Always rate the current season first — populates
+    // state.currentSeasonRated* for the Rating Trend chart's "Live"
+    // point even when a past season ends up displayed below (cheap: the
+    // raw data was just cached above, this only redoes the rate pass).
+    await loadAndRateSeason(seasonId);
+
     // A data-bar action (switching snapshots, Retrieve Latest Stats) re-runs
     // init() — keep whatever season the user had selected rather than
     // silently jumping back to current, unless this is the first load.
     const validSeasons = new Set(availableSeasonIds());
     const targetSeason = validSeasons.has(state.selectedSeasonId) ? state.selectedSeasonId : seasonId;
-    await loadAndRateSeason(targetSeason);
+    if (targetSeason !== seasonId) await loadAndRateSeason(targetSeason);
 
     updateEligibilityNote();
     el.skeleton.hidden = true;
@@ -198,6 +210,15 @@ async function loadAndRateSeason(seasonId) {
 
   rateAllPlayers();
   state.selectedSeasonId = seasonId;
+
+  // The Rating Trend chart's "Live" point means the CURRENT season
+  // specifically, regardless of which season the grid itself is
+  // displaying — cache that separately so picking a past season here
+  // doesn't leak into (and mislabel) the trend chart's final point.
+  if (seasonId === state.seasonId) {
+    state.currentSeasonRatedSkaters = state.ratedSkaters;
+    state.currentSeasonRatedGoalies = state.ratedGoalies;
+  }
 }
 
 el.seasonSelect.addEventListener('change', async () => {
@@ -905,8 +926,12 @@ function buildGameLogTable(games, categories, isGoalie) {
  *  rule as the live pool) so the comparison is always fair for that
  *  point in time. Only snapshots from the CURRENT season are included, so
  *  this naturally resets once the 2026-27 season's snapshots replace
- *  today's — no manual season rollover needed here. A final "Live" point
- *  is appended from the already-rated in-memory pool (no recomputation). */
+ *  today's — no manual season rollover needed here. The final "Live"
+ *  point always comes from state.currentSeasonRated* (NOT
+ *  state.ratedSkaters/ratedGoalies, which track whichever season the
+ *  season selector has picked for the grid) — otherwise picking a past
+ *  season there would leak into this chart and mislabel an old season's
+ *  rating as "Live". */
 function buildSnapshotTrendPoints(player) {
   const isGoalie = player.pos === 'G';
   const mode = isGoalie ? 'goalies' : 'skaters';
@@ -927,7 +952,7 @@ function buildSnapshotTrendPoints(player) {
     if (found) points.push({ label: snap.label, value: found.overall });
   }
 
-  const livePool = isGoalie ? state.ratedGoalies : state.ratedSkaters;
+  const livePool = isGoalie ? state.currentSeasonRatedGoalies : state.currentSeasonRatedSkaters;
   const live = livePool.find((p) => p.playerId === player.playerId);
   if (live) points.push({ label: 'Live', value: live.overall });
 
