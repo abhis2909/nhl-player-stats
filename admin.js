@@ -172,17 +172,21 @@
   renderChecks();
 
   /* ---------------------------------------------------------------
-     Sub-tabs: Columns / Range Ratings / Users all live on this one
-     admin-gated page (Range Ratings moved here from its own
-     range.html; see fantasy-hub/README.md history). Users' data load
-     is lazy (admin-users.js); Range Ratings' own init() runs eagerly
-     same as it always did on range.html.
+     Sub-tabs: Columns / Range Ratings / Users / Deployment /
+     Methodology all live on this one admin-gated page (Range Ratings
+     moved here from its own range.html; see fantasy-hub/README.md
+     history). Users/Deployment/Methodology's data loads are lazy
+     (admin-users.js / admin-deployment.js / admin-projection.js, each
+     exposing a window.__adminXTab.ensureLoaded()); Range Ratings' own
+     init() runs eagerly same as it always did on range.html.
      --------------------------------------------------------------- */
   const subtabButtons = Array.from(document.querySelectorAll('.admin-subtabs [data-subtab]'));
   const subtabPanels = {
     columns: document.getElementById('subtabColumns'),
     range: document.getElementById('subtabRange'),
     users: document.getElementById('subtabUsers'),
+    deployment: document.getElementById('subtabDeployment'),
+    projection: document.getElementById('subtabProjection'),
   };
 
   function showSubtab(name) {
@@ -196,6 +200,8 @@
       btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     if (name === 'users' && window.__adminUsersTab) window.__adminUsersTab.ensureLoaded();
+    if (name === 'deployment' && window.__adminDeploymentTab) window.__adminDeploymentTab.ensureLoaded();
+    if (name === 'projection' && window.__adminProjectionTab) window.__adminProjectionTab.ensureLoaded();
   }
 
   subtabButtons.forEach((btn) => {

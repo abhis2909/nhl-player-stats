@@ -58,6 +58,8 @@
       <button class="toggle-btn active" data-subtab="columns" role="tab" aria-selected="true">🔧 Columns</button>
       <button class="toggle-btn" data-subtab="range" role="tab" aria-selected="false">📅 Range Ratings</button>
       <button class="toggle-btn" data-subtab="users" role="tab" aria-selected="false">👥 Users</button>
+      <button class="toggle-btn" data-subtab="deployment" role="tab" aria-selected="false">🎯 Deployment</button>
+      <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Methodology</button>
     </div>
 
     <!-- ---------------- Columns ---------------- -->
@@ -196,20 +198,123 @@
           </div>
         </div>
         <p class="admin-hint">
-          Everyone who's been given a username for the games. New accounts aren't self-serve — create one
-          from your terminal with <code>npm run create-user -- &lt;username&gt;</code>, then hand that
-          username to the person out-of-band. They pick their own password and name the first time they log in.
+          Usernames aren't self-serve — issue one below, then hand it to the person out-of-band (text,
+          Discord, etc). They pick their own password and name the first time they log in. The same terminal
+          command still works too: <code>npm run create-user -- &lt;username&gt;</code>.
         </p>
+
+        <div class="fh-field" style="max-width: 320px;">
+          <label for="issueUsernameInput">Issue a new username</label>
+          <div class="range-field-inline">
+            <input id="issueUsernameInput" type="text" autocomplete="off" placeholder="e.g. ssmith">
+            <button type="button" id="issueUsernameBtn" class="primary-btn">Issue</button>
+          </div>
+          <p id="issueUsernameStatus" class="save-status" aria-live="polite"></p>
+        </div>
+
         <div id="usersLoading" class="save-status">Loading…</div>
         <p id="usersError" class="warn-text" hidden></p>
-        <p id="usersEmpty" class="admin-hint" hidden>No accounts yet — create one with the command above.</p>
+        <p id="usersEmpty" class="admin-hint" hidden>No accounts yet — issue one above.</p>
         <div class="table-wrap" id="usersTableWrap" hidden>
           <table class="stats-table admin-users-table">
             <thead>
-              <tr><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th></tr>
+              <tr><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th><th></th></tr>
             </thead>
             <tbody id="usersTbody"></tbody>
           </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------------- Deployment ---------------- -->
+    <div id="subtabDeployment" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Expected Deployment <span class="section-sub" id="deploySeasonLabel"></span></h2>
+        </div>
+        <p class="admin-hint">
+          Optional, per player — this only matters for anyone whose role you specifically expect to
+          change (call-ups, depth-chart moves, injury recoveries). Anyone without an override just
+          projects off their own recent-seasons role. Leave a field blank to fall back to their
+          historical average for that metric.
+        </p>
+        <div class="cards-search-bar">
+          <label class="visually-hidden" for="deploySearchInput">Search players</label>
+          <input id="deploySearchInput" type="search" placeholder="Search a player to set or edit their deployment…" aria-label="Search players" autocomplete="off">
+        </div>
+        <div id="deployLoading" class="save-status">Loading…</div>
+        <p id="deployError" class="warn-text" hidden></p>
+        <p id="deployEmpty" class="admin-hint" hidden>No overrides set yet — search above to add one.</p>
+        <div class="table-wrap" id="deployTableWrap" hidden>
+          <table class="stats-table admin-deploy-table">
+            <thead>
+              <tr>
+                <th>Player</th><th>Team</th>
+                <th>TOI/GP (min)</th><th>PP TOI/GP (min)</th><th>Games Projected</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="deployTbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------------- Projection Methodology ---------------- -->
+    <div id="subtabProjection" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Projection Methodology</h2>
+        </div>
+        <p class="admin-hint">
+          Controls how the Stats page's "Projected" season is computed — see the Season toggle's
+          note there for the plain-language version. Season weights are how much each of the 4
+          seasons before the projected one counts toward a player's weighted-history baseline
+          (must sum to 1). The clip range bounds how far the age curve is allowed to move that
+          baseline up or down, in case a thin sample at the young/old tails overreacts.
+        </p>
+        <div id="projLoading" class="save-status">Loading…</div>
+        <p id="projError" class="warn-text" hidden></p>
+        <div id="projForm" hidden>
+          <div class="checkbox-grid">
+            <div class="fh-field">
+              <label for="projW1">Most recent season weight</label>
+              <input id="projW1" type="number" step="0.01" min="0" max="1">
+            </div>
+            <div class="fh-field">
+              <label for="projW2">2 seasons ago weight</label>
+              <input id="projW2" type="number" step="0.01" min="0" max="1">
+            </div>
+            <div class="fh-field">
+              <label for="projW3">3 seasons ago weight</label>
+              <input id="projW3" type="number" step="0.01" min="0" max="1">
+            </div>
+            <div class="fh-field">
+              <label for="projW4">4 seasons ago weight</label>
+              <input id="projW4" type="number" step="0.01" min="0" max="1">
+            </div>
+          </div>
+          <p class="admin-hint" id="projWeightSum"></p>
+
+          <label class="check-item" style="margin: 10px 0;">
+            <input type="checkbox" id="projAgeCurveEnabled">
+            <span>Apply the age curve adjustment</span>
+          </label>
+
+          <div class="checkbox-grid">
+            <div class="fh-field">
+              <label for="projClipMin">Multiplier clip — minimum</label>
+              <input id="projClipMin" type="number" step="0.01" min="0.01">
+            </div>
+            <div class="fh-field">
+              <label for="projClipMax">Multiplier clip — maximum</label>
+              <input id="projClipMax" type="number" step="0.01" min="0.01">
+            </div>
+          </div>
+
+          <div class="admin-buttons">
+            <button type="button" id="projSaveBtn" class="primary-btn">Save methodology</button>
+            <span id="projSaveStatus" class="save-status" aria-live="polite"></span>
+          </div>
         </div>
       </section>
     </div>
@@ -237,5 +342,7 @@
 <script src="admin.js" defer></script>
 <script src="range.js" defer></script>
 <script src="admin-users.js" defer></script>
+<script src="admin-deployment.js" defer></script>
+<script src="admin-projection.js" defer></script>
 </body>
 </html>

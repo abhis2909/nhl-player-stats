@@ -235,6 +235,28 @@ async function loadSeasonStatsFor(seasonId, teamMeta) {
   return { seasonId, teamMeta, skaters, goalies };
 }
 
+/** Fetches skater time-on-ice for a season, keyed by playerId — NOT part
+ *  of loadSeasonStatsFor() above (which every plain season-toggle click
+ *  uses) since most callers don't need it; it's an extra network call
+ *  only the projections engine (projections.js) actually wants, to
+ *  compare a player's historical TOI/game against an admin-projected
+ *  one. Confirmed fields from the live API: timeOnIcePerGame (seconds),
+ *  ppTimeOnIcePerGame (seconds) — converted here to MINUTES/game to
+ *  match how deployment input is entered on admin.html. */
+async function loadSkaterTimeOnIce(seasonId) {
+  const filter = `seasonId=${seasonId} and gameTypeId=2`;
+  const q = `?limit=-1&cayenneExp=${encodeURIComponent(filter)}`;
+  const { data } = await getJSON(`${API_STATS}/en/skater/timeonice${q}`);
+  const map = new Map();
+  for (const r of data || []) {
+    map.set(r.playerId, {
+      toiPerGame: (r.timeOnIcePerGame || 0) / 60,
+      ppToiPerGame: (r.ppTimeOnIcePerGame || 0) / 60,
+    });
+  }
+  return map;
+}
+
 /** Fetches + normalizes the CURRENT season's league-wide skater/goalie
  *  stats and team directory (standings/now determines both). */
 async function loadSeasonData() {

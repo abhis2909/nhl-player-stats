@@ -62,6 +62,9 @@
       <button class="toggle-btn active" data-statmode="total" role="tab" aria-selected="true">Total</button>
       <button class="toggle-btn" data-statmode="perGame" role="tab" aria-selected="false">Per Game</button>
     </div>
+    <div class="toggle-group" role="tablist" aria-label="Games-played qualification">
+      <button class="toggle-btn" id="qualifiedToggleBtn" role="tab" aria-selected="false" title="Hide players under 20% of the season's max games played — same eligibility rule Player Ratings uses">Qualified only</button>
+    </div>
     <label class="visually-hidden" for="teamSelect">Filter by team</label>
     <select id="teamSelect" aria-label="Filter by team">
       <option value="ALL">All Teams</option>
@@ -121,6 +124,8 @@
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
 <script src="snapshots.js" defer></script>
+<script src="ratings.js" defer></script>
+<script src="projections.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
 <script src="app.js" defer></script>
 </body>

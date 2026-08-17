@@ -266,3 +266,45 @@ model PackOpening {
   pulledCardIds Json // array of Card IDs pulled this opening — drives the reveal animation + history
   createdAt     DateTime @default(now())
 }
+
+// ---------- Stats page projections ----------
+// Backs the Stats page's "Projected" season option (app.js/projections.js)
+// and its two admin sub-tabs (Deployment, Projection Methodology).
+// Deliberately separate from the Fantasy Hub games above — this is
+// site-wide Stats-page config, not league/user data — but lives in the
+// same DB since it's the same admin-gated infrastructure (Admin above).
+
+// One admin-entered deployment override per (season, player) — every
+// numeric field nullable, so a row can override just one metric and
+// leave the rest to fall back to the player's own historical average
+// (see projections.js's computeProjection()). No row at all for a
+// player is the common case and totally fine — deployment input is an
+// optional refinement, not a requirement, so projections work out of
+// the box before any admin data entry happens.
+model PlayerDeployment {
+  id             String   @id @default(cuid())
+  season         String // the season being projected, e.g. "2026-27"
+  nhlPlayerId    Int
+  toiPerGame     Float? // projected minutes/game (skaters)
+  ppToiPerGame   Float? // projected power-play minutes/game (skaters)
+  gamesProjected Int? // projected games played (skaters) or games started (goalies)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([season, nhlPlayerId])
+}
+
+// Singular tunable-methodology row — same "deliberately one row" spirit
+// as Admin above, not a multi-row settings table (@default("singleton")
+// on the id, upserted by that fixed id — see api/fantasy/admin-projection-settings.js).
+// seasonWeights is [mostRecent, ..., 4th-most-recent], must sum to 1
+// (validated in the API handler, not at the DB layer). Exists so the
+// projection's weighting/age-curve behavior can be tuned from
+// admin.html without a code change.
+model ProjectionSettings {
+  id                String   @id @default("singleton")
+  seasonWeights     Json // [w1, w2, w3, w4], newest season first, sums to 1
+  ageCurveEnabled   Boolean  @default(true)
+  multiplierClipMin Float    @default(0.85)
+  multiplierClipMax Float    @default(1.15)
+  updatedAt         DateTime @updatedAt
+}
