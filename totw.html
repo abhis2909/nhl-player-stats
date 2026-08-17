@@ -59,10 +59,17 @@
   </div>
 
   <section class="totw-leaderboard" id="totwLeaderboard" hidden>
-    <h2>Top 50 Skaters</h2>
-    <div class="table-wrap">
+    <div class="totw-leaderboard-head">
+      <h2 id="totwBoardHeading">Top 25 Skaters</h2>
+      <div class="toggle-group" role="tablist" aria-label="Leaderboard type">
+        <button type="button" class="toggle-btn active" data-board="skaters" role="tab" aria-selected="true">Skaters</button>
+        <button type="button" class="toggle-btn" data-board="goalies" role="tab" aria-selected="false">Goalies</button>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="skaterBoardWrap">
       <table class="stats-table">
-        <caption class="visually-hidden">Top 50 rated skaters</caption>
+        <caption class="visually-hidden">Top 25 rated skaters</caption>
         <thead>
           <tr><th class="col-rank">#</th><th>Player</th><th>Team</th><th>Pos</th><th class="is-numeric">OVR</th><th>Top stats</th></tr>
         </thead>
@@ -70,8 +77,7 @@
       </table>
     </div>
 
-    <h2>Top 10 Goalies</h2>
-    <div class="table-wrap">
+    <div class="table-wrap" id="goalieBoardWrap" hidden>
       <table class="stats-table">
         <caption class="visually-hidden">Top 10 rated goalies</caption>
         <thead>

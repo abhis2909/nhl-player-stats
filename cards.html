@@ -18,22 +18,6 @@
         <p class="subtitle" id="seasonLabel">Loading season…</p>
       </div>
     </div>
-    <div class="controls">
-      <div class="toggle-group" role="tablist" aria-label="Player type">
-        <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
-        <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
-      </div>
-      <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
-        <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
-        <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
-        <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
-        <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
-      </div>
-      <label class="visually-hidden" for="teamSelect">Filter by team</label>
-      <select id="teamSelect" aria-label="Filter by team">
-        <option value="ALL">All Teams</option>
-      </select>
-    </div>
   </div>
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Stats</a>
@@ -61,6 +45,23 @@
   <div class="cards-search-bar">
     <label class="visually-hidden" for="searchInput">Search players</label>
     <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+  </div>
+
+  <div class="controls filter-bar">
+    <div class="toggle-group" role="tablist" aria-label="Player type">
+      <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+      <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+    </div>
+    <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
+      <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
+      <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
+      <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
+      <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
+    </div>
+    <label class="visually-hidden" for="teamSelect">Filter by team</label>
+    <select id="teamSelect" aria-label="Filter by team">
+      <option value="ALL">All Teams</option>
+    </select>
   </div>
 
   <div id="cardsSkeleton" class="cards-skeleton" aria-hidden="true">

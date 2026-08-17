@@ -48,6 +48,10 @@ const el = {
   lineup: document.getElementById('totwLineup'),
   curtainWrap: document.getElementById('totwCurtainWrap'),
   leaderboard: document.getElementById('totwLeaderboard'),
+  boardHeading: document.getElementById('totwBoardHeading'),
+  boardButtons: Array.from(document.querySelectorAll('.toggle-btn[data-board]')),
+  skaterBoardWrap: document.getElementById('skaterBoardWrap'),
+  goalieBoardWrap: document.getElementById('goalieBoardWrap'),
   skaterBoardBody: document.getElementById('totwSkaterBoardBody'),
   goalieBoardBody: document.getElementById('totwGoalieBoardBody'),
 };
@@ -329,10 +333,14 @@ function revealAllInstant(cardEl) {
 }
 
 // ---------------------------------------------------------------------
-// Leaderboard — top 50 skaters / top 10 goalies from the same rated
+// Leaderboard — top 25 skaters / top 10 goalies from the same rated
 // pools the roster picks came from, shown below the reveal and
-// auto-scrolled to once the ceremony finishes.
+// auto-scrolled to once the ceremony finishes. A toggle switches which
+// one is visible, rather than stacking both.
 // ---------------------------------------------------------------------
+
+const SKATER_BOARD_SIZE = 25;
+const GOALIE_BOARD_SIZE = 10;
 
 function leaderboardRow(rank, p) {
   const meta = state.teamMeta.get(p.team);
@@ -348,8 +356,8 @@ function leaderboardRow(rank, p) {
 }
 
 function showLeaderboard(ratedSkaters, ratedGoalies) {
-  const topSkaters = ratedSkaters.slice(0, 50);
-  const topGoalies = ratedGoalies.slice(0, 10);
+  const topSkaters = ratedSkaters.slice(0, SKATER_BOARD_SIZE);
+  const topGoalies = ratedGoalies.slice(0, GOALIE_BOARD_SIZE);
 
   el.skaterBoardBody.innerHTML = '';
   topSkaters.forEach((p, i) => el.skaterBoardBody.appendChild(leaderboardRow(i + 1, p)));
@@ -358,8 +366,26 @@ function showLeaderboard(ratedSkaters, ratedGoalies) {
   topGoalies.forEach((p, i) => el.goalieBoardBody.appendChild(leaderboardRow(i + 1, p)));
 
   el.leaderboard.hidden = false;
+  setBoard('skaters');
   el.leaderboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function setBoard(board) {
+  el.boardButtons.forEach((b) => {
+    const active = b.dataset.board === board;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  el.skaterBoardWrap.hidden = board !== 'skaters';
+  el.goalieBoardWrap.hidden = board !== 'goalies';
+  el.boardHeading.textContent = board === 'skaters'
+    ? `Top ${SKATER_BOARD_SIZE} Skaters`
+    : `Top ${GOALIE_BOARD_SIZE} Goalies`;
+}
+
+el.boardButtons.forEach((btn) => {
+  btn.addEventListener('click', () => setBoard(btn.dataset.board));
+});
 
 function announceSlot(entry) {
   el.announce.textContent = entry.player
@@ -387,6 +413,13 @@ async function playReveal(roster, ratedSkaters, ratedGoalies) {
     el.lineup.appendChild(cardEl);
     return cardEl;
   });
+
+  // Scroll toward the goalie card specifically (first to reveal, bottom
+  // row of the diamond formation) rather than the whole stage — the full
+  // 3-row lineup is taller than most viewports, so centering the whole
+  // stage can still leave the goalie below the fold.
+  cardEls[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  await sleep(500);
 
   const finish = () => {
     el.announce.textContent = 'TEAM OF THE WEEK';

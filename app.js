@@ -15,7 +15,9 @@
 
 const el = {
   seasonLabel: document.getElementById('seasonLabel'),
-  modeButtons: Array.from(document.querySelectorAll('.toggle-btn')),
+  modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
+  posToggleGroup: document.getElementById('posToggleGroup'),
+  posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
   teamSelect: document.getElementById('teamSelect'),
   searchInput: document.getElementById('searchInput'),
   statusBanner: document.getElementById('statusBanner'),
@@ -37,6 +39,7 @@ const el = {
 const state = {
   mode: 'skaters',
   team: 'ALL',
+  pos: 'ALL',
   search: '',
   seasonId: null,
   teamMeta: new Map(),   // abbrev -> { name, logo, conference, division }
@@ -62,6 +65,15 @@ function debounce(fn, ms) {
 function activeColumns(mode) {
   const selected = new Set(state.columns[mode] || []);
   return columnCatalog(mode).filter((c) => selected.has(c.id));
+}
+
+/** Maps a raw position code (C/L/R/D) to the C/W/D filter groups above
+ *  the table (L and R share "W") — small local copy of ratings.js's
+ *  positionGroup(), since ratings.js isn't loaded on this page. */
+function positionGroup(pos) {
+  if (pos === 'D') return 'D';
+  if (pos === 'C') return 'C';
+  return 'W'; // L, R
 }
 
 /* ------------------------------ init ------------------------------ */
@@ -195,6 +207,7 @@ function getFiltered() {
     // Team column), so the filter never shows someone under a team other than
     // the one displayed — even if they were traded mid-season.
     if (state.team !== 'ALL' && p.team !== state.team) return false;
+    if (state.mode === 'skaters' && state.pos !== 'ALL' && positionGroup(p.pos) !== state.pos) return false;
     if (q && !p.name.toLowerCase().includes(q) && !p.team.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -479,6 +492,18 @@ el.modeButtons.forEach((btn) => {
       b.classList.toggle('active', b === btn);
       b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
     });
+    // Position (C/W/D) filter is skater-only.
+    el.posToggleGroup.hidden = state.mode === 'goalies';
+    state.pos = 'ALL';
+    el.posButtons.forEach((b) => b.classList.toggle('active', b.dataset.pos === 'ALL'));
+    render();
+  });
+});
+
+el.posButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.pos = btn.dataset.pos;
+    el.posButtons.forEach((b) => b.classList.toggle('active', b === btn));
     render();
   });
 });

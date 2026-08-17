@@ -48,11 +48,13 @@ const POSITION_WEIGHTS = {
     shootingPct: 1.1, gamesPlayed: 0.8, hits: 1.1, blocks: 0.6, giveaways: 0.9, takeaways: 0.8,
     faceoffPct: 0.3,
   },
-  // Defensemen: shot-blocking, physicality, PK staple, point-shot/assists over goals.
+  // Defensemen: shot-blocking, physicality, PK staple, point-shot/assists over
+  // goals. hits/blocks weighted up a bit further (2026-08-16, user feedback)
+  // to lean more into the defensive/physical side of the position.
   D: {
     goals: 0.6, assists: 1.1, points: 1.0, plusMinus: 1.1, ppGoals: 0.7, ppPoints: 1.1,
     shGoals: 1.0, shPoints: 1.3, gameWinningGoals: 0.7, otGoals: 0.6, pim: 1.0, sog: 0.7,
-    shootingPct: 0.6, gamesPlayed: 0.9, hits: 1.3, blocks: 1.8, giveaways: 1.3, takeaways: 1.3,
+    shootingPct: 0.6, gamesPlayed: 0.9, hits: 1.5, blocks: 2.1, giveaways: 1.3, takeaways: 1.3,
     faceoffPct: 0.2,
   },
 };
