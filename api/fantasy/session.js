@@ -1,12 +1,58 @@
 'use strict';
 
 const { getPrisma } = require('../_lib/db');
-const { verifySecret, hashSecret, signSession, buildSessionCookie, readJsonBody } = require('../_lib/fantasyAuth');
+const {
+  verifySecret, hashSecret, signSession, buildSessionCookie, buildClearCookie,
+  getSessionUser, readJsonBody,
+} = require('../_lib/fantasyAuth');
 
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
 
-/* POST /api/fantasy/login — unified first-time-setup-or-login.
+/* /api/fantasy/session — the league-member session lifecycle, merged
+   into one file (was login.js + logout.js + me.js) to stay under
+   Vercel Hobby's 12-serverless-function cap. Dispatched by HTTP
+   method; each branch below is otherwise byte-for-byte what its old
+   standalone file did:
+
+   GET    -> "am I logged in" check (was me.js)
+   POST   -> unified first-time-setup-or-login (was login.js)
+   DELETE -> logout (was logout.js) */
+module.exports = async function handler(req, res) {
+  if (req.method === 'GET') return handleMe(req, res);
+  if (req.method === 'POST') return handleLogin(req, res);
+  if (req.method === 'DELETE') return handleLogout(req, res);
+  res.status(405).json({ ok: false, error: 'method_not_allowed' });
+};
+
+/* GET — always 200. { user: null } means "logged out," a normal
+   state, not an error. Drives the login-UI's initial render. */
+async function handleMe(req, res) {
+  try {
+    const prisma = getPrisma();
+    const user = await getSessionUser(req, prisma);
+    res.status(200).json({
+      ok: true,
+      user: user ? { username: user.username, displayName: user.displayName || user.username } : null,
+    });
+  } catch (err) {
+    // Fail open to "logged out" rather than error the page — this is
+    // just a UI-state check, not a security gate (guesswho-sync.js
+    // separately re-validates the session and fails closed there).
+    console.error('fantasy/session (GET) error:', err);
+    res.status(200).json({ ok: true, user: null });
+  }
+}
+
+/* DELETE — clears the session cookie unconditionally. No auth
+   required to call (calling it while already logged out is a
+   harmless no-op). */
+function handleLogout(req, res) {
+  res.setHeader('Set-Cookie', buildClearCookie());
+  res.status(200).json({ ok: true });
+}
+
+/* POST — unified first-time-setup-or-login.
    Body: { username, password, displayName? }
 
    - Unknown username                          -> 404 unknown_username
@@ -19,19 +65,8 @@ const LOCKOUT_MINUTES = 15;
          this request's password + displayName, 200 + session
    - Already set up (passwordHash set):
        - wrong password                        -> 401 invalid_password
-       - right password                        -> 200 + session
-
-   Every failure path increments failedLoginAttempts and locks the
-   account for LOCKOUT_MINUTES past MAX_FAILED_ATTEMPTS — the only
-   rate-limiting layer in front of this endpoint, so it has to live in
-   the DB (an in-memory limiter is useless across serverless
-   invocations, which may each be a different instance). */
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ ok: false, error: 'method_not_allowed' });
-    return;
-  }
-
+       - right password                        -> 200 + session */
+async function handleLogin(req, res) {
   try {
     const body = await readJsonBody(req);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
@@ -105,7 +140,7 @@ module.exports = async function handler(req, res) {
     }
     await succeed({});
   } catch (err) {
-    console.error('fantasy/login error:', err);
+    console.error('fantasy/session (POST) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
-};
+}

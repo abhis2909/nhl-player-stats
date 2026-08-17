@@ -1,32 +1,61 @@
 'use strict';
 
 const { getPrisma } = require('../_lib/db');
-const { verifySecret, hashSecret, signAdminSession, buildAdminSessionCookie, readJsonBody } = require('../_lib/fantasyAuth');
+const {
+  verifySecret, hashSecret, signAdminSession, buildAdminSessionCookie, buildAdminClearCookie,
+  getSessionAdmin, readJsonBody,
+} = require('../_lib/fantasyAuth');
 
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
 
-/* POST /api/fantasy/admin-login — sign-up-or-login for the SINGLE admin
-   account, gated to whatever email ADMIN_EMAIL is set to (an env var,
-   not a DB row someone could create by guessing). No separate signup
-   step: the first successful login attempt with the right email IS the
-   signup — whatever password is submitted then becomes the permanent
-   password (hashed, never stored in plaintext).
-   Body: { email, password }
+/* /api/fantasy/admin-session — the site-admin session lifecycle,
+   merged into one file (was admin-login.js + admin-logout.js +
+   admin-me.js) to stay under Vercel Hobby's 12-serverless-function
+   cap. Dispatched by HTTP method; each branch below is otherwise
+   byte-for-byte what its old standalone file did:
 
+   GET    -> "am I logged in as admin" check (was admin-me.js)
+   POST   -> sign-up-or-login for the SINGLE admin account, gated to
+             whatever ADMIN_EMAIL is set to (was admin-login.js)
+   DELETE -> logout (was admin-logout.js) */
+module.exports = async function handler(req, res) {
+  if (req.method === 'GET') return handleMe(req, res);
+  if (req.method === 'POST') return handleLogin(req, res);
+  if (req.method === 'DELETE') return handleLogout(req, res);
+  res.status(405).json({ ok: false, error: 'method_not_allowed' });
+};
+
+/* GET — always 200. { admin: null } means "not logged in as admin," a
+   normal state, not an error. */
+async function handleMe(req, res) {
+  try {
+    const prisma = getPrisma();
+    const admin = await getSessionAdmin(req, prisma);
+    res.status(200).json({ ok: true, admin: admin ? { email: admin.email } : null });
+  } catch (err) {
+    console.error('fantasy/admin-session (GET) error:', err);
+    res.status(200).json({ ok: true, admin: null });
+  }
+}
+
+/* DELETE — clears the admin session cookie unconditionally. No auth
+   required to call. */
+function handleLogout(req, res) {
+  res.setHeader('Set-Cookie', buildAdminClearCookie());
+  res.status(200).json({ ok: true });
+}
+
+/* POST — Body: { email, password }
    - Email doesn't match ADMIN_EMAIL      -> 403 not_admin
    - Locked out                           -> 423 locked
    - No Admin row yet for this email      -> creates it with THIS
-     password, 200 + session
+     password (the first successful login attempt with the right
+     email IS the signup — no separate signup step), 200 + session
    - Admin row exists:
        - wrong password                   -> 401 invalid_password
        - right password                   -> 200 + session */
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ ok: false, error: 'method_not_allowed' });
-    return;
-  }
-
+async function handleLogin(req, res) {
   try {
     const body = await readJsonBody(req);
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -95,7 +124,7 @@ module.exports = async function handler(req, res) {
 
     await succeed(admin, {});
   } catch (err) {
-    console.error('fantasy/admin-login error:', err);
+    console.error('fantasy/admin-session (POST) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
-};
+}

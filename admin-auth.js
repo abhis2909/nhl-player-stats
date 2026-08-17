@@ -2,7 +2,7 @@
 
 /* ======================================================================
    Gates admin.html behind the single Admin account (see
-   api/fantasy/admin-login.js, prisma/schema.prisma's Admin model).
+   api/fantasy/admin-session.js, prisma/schema.prisma's Admin model).
    Shows a login form (#adminLoginGate) until authenticated, then
    reveals the real page content (#adminGatedContent) plus a small "Log
    out" control. Unlike fantasy-auth.js, this isn't meant to be dropped
@@ -46,7 +46,7 @@
     }
     submitBtn.disabled = true;
     try {
-      const res = await fetch('/api/fantasy/admin-login', {
+      const res = await fetch('/api/fantasy/admin-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -67,7 +67,7 @@
 
   async function logout() {
     try {
-      await fetch('/api/fantasy/admin-logout', { method: 'POST' });
+      await fetch('/api/fantasy/admin-session', { method: 'DELETE' });
     } catch {
       // Non-fatal — show logged-out either way.
     }
@@ -84,7 +84,7 @@
 
   (async () => {
     try {
-      const res = await fetch('/api/fantasy/admin-me');
+      const res = await fetch('/api/fantasy/admin-session');
       const data = await res.json();
       if (data.ok && data.admin) {
         showLoggedIn(data.admin);

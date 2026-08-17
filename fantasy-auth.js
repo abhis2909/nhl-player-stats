@@ -9,7 +9,7 @@
 
      window.fantasyAuth.ready          — Promise, resolves once the
                                           initial login-state check
-                                          (GET /api/fantasy/me) completes
+                                          (GET /api/fantasy/session) completes
      window.fantasyAuth.getUser()      — the current user object (with
                                           .username/.displayName) or
                                           null if logged out
@@ -93,7 +93,7 @@
   let modalMode = 'login';
 
   /** Switches the modal between "Log in" and "Sign up" presentation.
-   *  Both submit to the exact same /api/fantasy/login endpoint — it
+   *  Both submit to the exact same POST /api/fantasy/session endpoint — it
    *  already handles either case correctly based on whether the account
    *  is unclaimed and whether a name was sent (a name sent for an
    *  already-claimed account is just ignored server-side). This is
@@ -153,7 +153,7 @@
     }
 
     try {
-      const res = await fetch('/api/fantasy/login', {
+      const res = await fetch('/api/fantasy/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, displayName }),
@@ -205,7 +205,7 @@
 
   async function logout() {
     try {
-      await fetch('/api/fantasy/logout', { method: 'POST' });
+      await fetch('/api/fantasy/session', { method: 'DELETE' });
     } catch {
       // Non-fatal — clear local state either way.
     }
@@ -216,7 +216,7 @@
 
   async function checkSession() {
     try {
-      const res = await fetch('/api/fantasy/me');
+      const res = await fetch('/api/fantasy/session');
       const data = await res.json();
       state.user = (data.ok && data.user) || null;
     } catch {
