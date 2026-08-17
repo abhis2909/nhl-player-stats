@@ -434,8 +434,55 @@ function wireGuessBar() {
 }
 
 // ---------------------------------------------------------------------
-// Init
+// Init + daily reset
 // ---------------------------------------------------------------------
+
+/** Loads (or starts fresh) whatever puzzle belongs to TODAY, per the
+ *  browser's local calendar date. This is the entire "reset daily"
+ *  mechanism: `state.dateKey` is always `todayISO()`, every localStorage
+ *  read/write is scoped under that date's own key
+ *  (`nhlStats.guessWho.v1.<dateKey>`), and `pickMysteryPlayer()` is a
+ *  pure function of (pool, dateKey) — so a NEW date automatically means
+ *  no saved entry exists yet, which automatically means a fresh mystery
+ *  player and an empty guess list. No explicit "reset" code path is
+ *  needed; "today" simply has never been played until it has.
+ *  Yesterday's entry is just left behind in localStorage, unused —
+ *  harmless, and lets `shareText()` still work if someone looks back at
+ *  an old day (not currently exposed in the UI, but the data's there). */
+function loadPuzzleForToday() {
+  state.dateKey = todayISO();
+  const saved = loadSavedState(state.dateKey);
+  if (saved && saved.mystery) {
+    state.mystery = saved.mystery;
+    state.guesses = saved.guesses || [];
+    state.gameOver = !!saved.gameOver;
+    state.won = !!saved.won;
+  } else {
+    state.mystery = pickMysteryPlayer(state.pool, state.dateKey);
+    state.guesses = [];
+    state.gameOver = false;
+    state.won = false;
+    saveState();
+  }
+  state.selectedGuess = null;
+}
+
+/** The one gap `loadPuzzleForToday()` alone doesn't cover: a tab left
+ *  open FROM BEFORE midnight won't notice the calendar date changed
+ *  underneath it just by sitting there — `state.dateKey` only gets
+ *  re-read on a fresh call. This polls for that and, when the date has
+ *  rolled over, reloads today's (new) puzzle live, no manual refresh
+ *  needed — clearing any leftover UI (open win modal, confetti, typed
+ *  guess) from the puzzle that just ended. */
+function checkForNewDay() {
+  if (todayISO() === state.dateKey) return;
+  closeWinModal();
+  el.confettiLayer.innerHTML = '';
+  el.guessInput.value = '';
+  el.suggestions.hidden = true;
+  loadPuzzleForToday();
+  renderBoard();
+}
 
 async function init() {
   try {
@@ -447,21 +494,7 @@ async function init() {
     state.teamMeta = teamMeta;
     state.pool = pool.filter((p) => p.birthDate && p.heightInInches).sort((a, b) => a.name.localeCompare(b.name));
     state.poolById = new Map(pool.map((p) => [p.playerId, p]));
-    state.dateKey = todayISO();
-
-    const saved = loadSavedState(state.dateKey);
-    if (saved && saved.mystery) {
-      state.mystery = saved.mystery;
-      state.guesses = saved.guesses || [];
-      state.gameOver = !!saved.gameOver;
-      state.won = !!saved.won;
-    } else {
-      state.mystery = pickMysteryPlayer(state.pool, state.dateKey);
-      state.guesses = [];
-      state.gameOver = false;
-      state.won = false;
-      saveState();
-    }
+    loadPuzzleForToday();
 
     el.subtitle.textContent = `A new player every day · ${state.pool.length.toLocaleString()} players in the pool`;
     el.skeleton.hidden = true;
@@ -469,6 +502,16 @@ async function init() {
     wireGuessBar();
     wireWinModal();
     renderBoard();
+
+    // Catch a midnight rollover while this tab stays open: a light
+    // interval poll (cheap — just a string compare) plus a check
+    // whenever the tab regains focus/visibility, which is when a
+    // stale "yesterday" puzzle would actually be noticed.
+    setInterval(checkForNewDay, 60000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForNewDay();
+    });
+    window.addEventListener('focus', checkForNewDay);
   } catch (err) {
     el.skeleton.hidden = true;
     showError(`Couldn't load today's puzzle (${err.message}). Try refreshing.`);
