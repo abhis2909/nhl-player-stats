@@ -2659,3 +2659,70 @@ a.mg-game-card:hover {
   .gw-guess-bar { flex-direction: column; }
   .gw-autocomplete { max-width: none; }
 }
+
+/* ---------- Fantasy Hub — login/account (fantasy-auth.js) ---------- */
+.fh-auth-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fh-auth-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.fh-auth-modal-panel {
+  max-width: 360px;
+}
+
+.fh-auth-modal-panel h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+}
+
+.fh-login-sub {
+  margin: 0 0 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.fh-field {
+  margin-bottom: 14px;
+}
+
+.fh-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.fh-field input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.fh-login-error {
+  margin: 0 0 14px;
+  color: #ff8b96;
+  font-size: 12.5px;
+}
+
+#fhLoginSubmit {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .fh-auth-slot { order: 3; width: 100%; justify-content: flex-end; }
+}

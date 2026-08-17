@@ -2,9 +2,21 @@
   "name": "nhl-player-stats",
   "version": "1.0.0",
   "private": true,
-  "description": "NHL player stats site (unofficial NHL API) with a proxy for local dev and Vercel deployment.",
+  "description": "NHL player stats site (unofficial NHL API) with a proxy for local dev and Vercel deployment. Also hosts the Fantasy Hub backend (api/fantasy/*, Prisma + Neon) — see fantasy-hub/README.md.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "create-user": "node --env-file=.env fantasy-hub/scripts/create-user.js"
+  },
+  "dependencies": {
+    "@prisma/adapter-neon": "^6.19.3",
+    "@prisma/client": "^6.19.3",
+    "@neondatabase/serverless": "^1.1.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3"
   }
 }

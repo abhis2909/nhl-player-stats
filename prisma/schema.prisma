@@ -1,13 +1,18 @@
 // ============================================================
-// Fantasy Hub — credits ledger + 4 minigames
+// Fantasy Hub — credits ledger + 5 minigames
 //
-// STATUS: design spec only — nothing here is wired up yet (no
-// package.json, no `prisma` install, no database). See README.md in
-// this folder for what's decided, what's still open, and next steps.
+// Moved here from fantasy-hub/schema.prisma (Prisma's own convention —
+// `prisma/schema.prisma` at the repo root — so every `prisma` CLI
+// command works with no `--schema` flag). fantasy-hub/README.md is
+// still the human-readable design doc; keep the two in sync.
 //
-// If you already have a schema.prisma for the rest of the site,
-// drop the datasource/generator blocks below and just merge in
-// the models you need.
+// PHASE 1 STATUS (see fantasy-hub/README.md for the full story):
+// User (username/password/claim-code auth) and DailyGuess (linking the
+// already-live "Guess the Player" game to accounts) are ACTIVE this
+// phase. Every other model — CreditTransaction, Bet/BetEntry, Faceoff,
+// GridBoard/GridEntry, Card/Pack/UserCard/PackOpening,
+// YahooMatchupCache — exists in the DB from the first migration on,
+// but nothing reads/writes them yet. Yahoo OAuth is deferred entirely.
 // ============================================================
 
 datasource db {
@@ -22,26 +27,46 @@ generator client {
 // ---------- Identity ----------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String?  @unique // for magic-link login
-  displayName  String
-  yahooTeamKey String?  @unique // e.g. "453.l.12345.t.4" — links them to their Yahoo roster
+  id        String   @id @default(cuid())
+  username  String   @unique // commissioner-assigned; the login handle
+  displayName String? // optional friendly name; falls back to username in UI
+
+  // Claim-your-account flow: the commissioner's CLI script
+  // (fantasy-hub/scripts/create-user.js) creates a User with just a
+  // username + claimCodeHash and passwordHash left null. The first
+  // successful login attempt that supplies the matching claim code
+  // sets passwordHash and clears claimCodeHash (single-use). After
+  // that, it's a normal username+password login. Both are scrypt
+  // hashes (see api/_lib/fantasyAuth.js) — never store either in
+  // plaintext.
+  passwordHash  String?
+  claimCodeHash String?
+
+  // Cheap brute-force guard — there's no other rate-limiting layer in
+  // front of these serverless functions.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+
+  yahooTeamKey String?  @unique // e.g. "453.l.12345.t.4" — unused in Phase 1, kept for future Yahoo linking
   createdAt    DateTime @default(now())
 
-  transactions CreditTransaction[]
-  betEntries   BetEntry[]
-  faceoffsA    Faceoff[]     @relation("FaceoffUserA")
-  faceoffsB    Faceoff[]     @relation("FaceoffUserB")
-  dailyGuesses DailyGuess[]
-  gridEntries  GridEntry[]
-  cards        UserCard[]
-  packOpenings PackOpening[]
+  transactions CreditTransaction[] // unused in Phase 1
+  betEntries   BetEntry[]          // unused in Phase 1
+  faceoffsA    Faceoff[]     @relation("FaceoffUserA") // unused in Phase 1
+  faceoffsB    Faceoff[]     @relation("FaceoffUserB") // unused in Phase 1
+  dailyGuesses DailyGuess[]        // ACTIVE in Phase 1
+  gridEntries  GridEntry[]         // unused in Phase 1
+  cards        UserCard[]          // unused in Phase 1
+  packOpenings PackOpening[]       // unused in Phase 1
 }
 
 // ---------- Shared credits ledger ----------
 // Balance is never stored directly — it's SUM(amount) for a user.
 // Every stake, payout, and reward is its own row here, which gives
 // you a full audit trail and avoids sync bugs across games.
+// Unused in Phase 1 — kept so the table exists from the first
+// migration on, ready for when credits are introduced.
 
 model CreditTransaction {
   id        String   @id @default(cuid())
@@ -58,6 +83,7 @@ model CreditTransaction {
 // Pulled with ONE commissioner-level OAuth token via a scheduled
 // job, not per-user tokens — Yahoo's access rules are based on
 // league membership, so one token can read the whole league.
+// Deferred entirely in Phase 1 (see fantasy-hub/README.md).
 
 model YahooMatchupCache {
   matchupKey String   @id // Yahoo's matchup identifier
@@ -67,6 +93,7 @@ model YahooMatchupCache {
 }
 
 // ---------- Game 1: Betting (matchup / category / over-under) ----------
+// Unused in Phase 1.
 
 model Bet {
   id         String    @id @default(cuid())
@@ -95,6 +122,7 @@ model BetEntry {
 }
 
 // ---------- Game 2: Draft faceoff ----------
+// Unused in Phase 1.
 
 model Faceoff {
   id        String   @id @default(cuid())
@@ -112,6 +140,18 @@ model Faceoff {
 }
 
 // ---------- Game 3: Daily guesser (Poeltl-style) ----------
+// ACTIVE in Phase 1 — links the already-live guesswho.html/.js game to
+// accounts. DailyPlayer is a frozen, get-or-create-per-date snapshot of
+// whichever mystery player guesswho.js's own deterministic
+// pickMysteryPlayer(pool, date) algorithm picks for that date (see
+// api/_lib/guessWhoPool.js — must replicate that logic byte-for-byte,
+// including the same p.birthDate/p.heightInInches pool filter, so
+// anonymous (client-computed) and logged-in (server-recorded) players
+// always see the identical daily answer). DailyGuess.guesses is a bare
+// array of nhlPlayerId ints (not full bio objects — the client
+// re-hydrates from its own already-loaded pool), replaced wholesale on
+// every sync rather than appended, so a fire-and-forget sync call is
+// trivially idempotent even if it fires more than once or out of order.
 
 model DailyPlayer {
   date        String @id // "2026-08-16"
@@ -124,15 +164,17 @@ model DailyGuess {
   date      String
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  guesses   Json // ordered list of guessed player IDs + hint feedback
-  solved    Boolean  @default(false)
+  guesses   Json // array of guessed nhlPlayerId ints, in guess order — full snapshot, replaced (not appended) on every sync
+  solved    Boolean  @default(false) // computed server-side from `guesses` vs. DailyPlayer.nhlPlayerId, never trusted from the client
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([date, userId])
 }
 
 // ---------- Game 4: Immaculate-grid board ----------
+// Unused in Phase 1.
 
 model GridBoard {
   date String @id
@@ -153,8 +195,9 @@ model GridEntry {
 }
 
 // ---------- Game 5: Player packs (collectibles) ----------
-// Cost comes out of the same credits ledger as everything else — a
-// purchase is just a CreditTransaction with reason "pack_purchase".
+// Unused in Phase 1. Cost comes out of the same credits ledger as
+// everything else — a purchase is just a CreditTransaction with reason
+// "pack_purchase".
 
 model Card {
   id          String  @id @default(cuid())

@@ -1,6 +1,9 @@
 // Zero-dependency local server for the NHL Stats site.
 // Serves the static front-end AND proxies NHL's JSON APIs (which don't send
 // CORS headers, so the browser can't call them directly from a page).
+// Also locally routes /api/fantasy/* to the Fantasy Hub serverless
+// functions in api/fantasy/ (see handleFantasyApi() below) — those need
+// DATABASE_URL/SESSION_SECRET, loaded from .env if present.
 //
 // Usage: node server.js [port]
 const http = require('http');
@@ -9,6 +12,27 @@ const path = require('path');
 
 const port = process.argv[2] || 5173;
 const root = __dirname;
+
+// Minimal, dependency-free .env loader — a silent no-op if .env doesn't
+// exist, so the main site (which needs none of this) still runs with
+// zero setup. Only the Fantasy Hub routes actually need these vars.
+function loadEnvFile() {
+  const envPath = path.join(root, '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+loadEnvFile();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -60,6 +84,47 @@ function proxy(req, res, prefix, upstreamBase) {
     });
 }
 
+// ---- Fantasy Hub API (local dev) ----
+// Routes /api/fantasy/<name> to api/fantasy/<name>.js's handler
+// UNMODIFIED — same file Vercel deploys. Node's raw http.ServerResponse
+// doesn't have Vercel's res.status()/res.json() helpers, so this adds
+// just enough of a shim to reproduce them locally (same spirit as the
+// NHL API proxy above: local dev and Vercel share identical route
+// shapes and handler code).
+function augmentResponse(res) {
+  res.status = function (code) {
+    res.statusCode = code;
+    return res;
+  };
+  res.json = function (body) {
+    if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(body));
+    return res;
+  };
+  return res;
+}
+
+async function handleFantasyApi(req, res, name) {
+  augmentResponse(res);
+  let handler;
+  try {
+    // Fresh require each time (bypass the module cache) so edits to a
+    // handler file take effect without restarting this dev server.
+    const modPath = require.resolve(`./api/fantasy/${name}.js`);
+    delete require.cache[modPath];
+    handler = require(modPath);
+  } catch {
+    res.status(404).json({ ok: false, error: 'not_found' });
+    return;
+  }
+  try {
+    await handler(req, res);
+  } catch (err) {
+    console.error(`api/fantasy/${name} error:`, err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: 'server_error' });
+  }
+}
+
 function serveStatic(req, res) {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
   if (urlPath === '/') urlPath = '/index.html';
@@ -89,6 +154,11 @@ const server = http.createServer((req, res) => {
       proxy(req, res, prefix, upstreamBase);
       return;
     }
+  }
+  const fantasyMatch = req.url.split('?')[0].match(/^\/api\/fantasy\/([a-zA-Z0-9_-]+)$/);
+  if (fantasyMatch) {
+    handleFantasyApi(req, res, fantasyMatch[1]);
+    return;
   }
   serveStatic(req, res);
 });

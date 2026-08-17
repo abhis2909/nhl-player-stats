@@ -473,6 +473,31 @@ function submitGuess() {
     spawnConfetti();
     openWinModal(guess);
   }
+  syncToAccountIfLoggedIn();
+}
+
+/** Best-effort "shadow sync" — if fantasy-auth.js is present on this
+ *  page AND the visitor is logged in, fire-and-forget a copy of the
+ *  current guess state to the account so it's tracked server-side too.
+ *  Purely additive: anonymous play (no fantasy-auth.js, or logged out)
+ *  is completely unaffected, and any failure here is swallowed — this
+ *  never blocks or errors the actual game. See
+ *  fantasy-hub/README.md's "How the daily guesser links to accounts". */
+function syncToAccountIfLoggedIn() {
+  if (!window.fantasyAuth || !window.fantasyAuth.getUser()) return;
+  fetch('/api/fantasy/guesswho-sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      date: state.dateKey,
+      guesses: state.guesses.map((g) => g.playerId),
+      gameOver: state.gameOver,
+      won: state.won,
+    }),
+  }).catch(() => {
+    // Non-fatal — the local game is already saved via saveState() above;
+    // this is purely a best-effort mirror to the account.
+  });
 }
 
 function wireGuessBar() {
