@@ -10,20 +10,19 @@
 
    Rating methodology (recap — see cards.js's header comment for the
    full breakdown of the season-to-date pipeline that consumes this):
-   - Each category's rating = a player's percentile rank for that stat
-     ON A PER-GAME BASIS, WITHIN THEIR OWN POSITION GROUP (C / W / D;
-     goalies are their own single group), rescaled to RATING_FLOOR..CEIL.
-     Per-game (not raw season totals) so a strong performer in fewer
-     games isn't outranked by a compiler who's just played more; rate
-     stats that are already per-something (shooting%, faceoff%, GAA,
-     save%) pass through unchanged — see perGameRate().
+   - Each category's rating = a player's percentile rank for that stat's
+     RAW TOTAL, WITHIN THEIR OWN POSITION GROUP (C / W / D; goalies are
+     their own single group), rescaled to RATING_FLOOR..CEIL. Raw totals
+     (not per-game) so accumulated season production is what's being
+     compared — see 2026-08-16 history below if this ever needs
+     revisiting: a per-game basis was tried and explicitly reverted.
    - Overall = weighted average of category percentiles (position-
      weighted for skaters, single-profile for goalies), same rescale.
    - Every rating gets a flat +4% premium (RATING_PREMIUM), capped.
    - Overall maps to one of six gem tiers (tierFor()).
    ====================================================================== */
 
-const MIN_GP_FRACTION = 0.2; // must have played >=20% of the pool's max games to be rated (lowered from 30% 2026-08-16 — pairs with the per-game basis above so a real small-sample performer isn't excluded, just not overweighted by counting-stat volume)
+const MIN_GP_FRACTION = 0.2; // must have played >=20% of the pool's max games to be rated
 const RATING_FLOOR = 25;
 const RATING_CEIL = 99;
 const RATING_PREMIUM = 1.04; // flat +4% applied to every rating (category and overall), capped at RATING_CEIL
@@ -118,27 +117,6 @@ function toCardRating(percentile) {
   return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw * RATING_PREMIUM)));
 }
 
-// Stats that are already a rate/percentage rather than a counting total —
-// dividing these by games played again would double-normalize them.
-// gamesPlayed itself is included here too: dividing it by itself is
-// meaningless (always exactly 1), so it's rated on its raw value, same as
-// before (still useful as a durability/iron-man category if selected).
-const RATE_STATS_ALREADY_PER_GAME = new Set(['shootingPct', 'faceoffPct', 'gaa', 'savePct', 'gamesPlayed']);
-
-/** `player[catId]` normalized to a per-game rate — the basis ratePool()
- *  percentile-ranks players on (2026-08-16, user feedback: raw season/
- *  window totals let players who've simply played more games outrank
- *  more efficient players with fewer games — per-game differentiates on
- *  production RATE instead of accumulated volume). Works on any pool
- *  with a `gamesPlayed` field, so it applies equally to a full-season
- *  pool and a delta pool (range.js/totw.js), where `gamesPlayed` is
- *  already the games-played DELTA for that window. */
-function perGameRate(player, catId) {
-  if (RATE_STATS_ALREADY_PER_GAME.has(catId)) return player[catId] ?? 0;
-  const gp = player.gamesPlayed || 0;
-  return gp > 0 ? (player[catId] ?? 0) / gp : 0;
-}
-
 /** Rates one pool (skaters or goalies) against itself, using whichever
  *  columns are currently enabled for that mode. Cheap (~tens of ms for
  *  ~700 players), safe to call whenever the column config might change.
@@ -158,10 +136,10 @@ function perGameRate(player, catId) {
  *  Goalies are already a single homogeneous group, so this is a no-op
  *  for them (one group either way).
  *
- *  Percentiles are also PER-GAME (see perGameRate() above), while the
- *  `value` kept on each rating for display/tooltips stays the raw
- *  counting total — the card face still shows "34 G", it's only the
- *  badge/percentile underneath that's rate-based now. */
+ *  Percentiles are on each stat's RAW TOTAL (2026-08-16: a per-game
+ *  version was tried, then reverted per direct follow-up feedback —
+ *  keep the position-relative grouping above, but rank on accumulated
+ *  season/window production, not rate). */
 function ratePool(pool, mode) {
   const categories = activeColumns(mode);
   const isGoalie = mode === 'goalies';
@@ -177,7 +155,7 @@ function ratePool(pool, mode) {
   const statPoolsByGroup = new Map();
   for (const [key, groupPlayers] of groups) {
     const statPools = {};
-    for (const cat of categories) statPools[cat.id] = groupPlayers.map((p) => perGameRate(p, cat.id));
+    for (const cat of categories) statPools[cat.id] = groupPlayers.map((p) => p[cat.id] ?? 0);
     statPoolsByGroup.set(key, statPools);
   }
 
@@ -185,7 +163,7 @@ function ratePool(pool, mode) {
     const statPools = statPoolsByGroup.get(groupKey(player));
     const ratings = categories.map((cat) => {
       const value = player[cat.id] ?? 0;
-      let pct = percentileRank(perGameRate(player, cat.id), statPools[cat.id]);
+      let pct = percentileRank(value, statPools[cat.id]);
       if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
       return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct), pct };
     });
