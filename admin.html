@@ -33,50 +33,72 @@
 <main class="admin-main">
   <div id="statusBanner" class="status-banner" hidden></div>
 
-  <section class="admin-section">
-    <div class="admin-section-head">
-      <h2>Skater Columns <span class="section-sub">(forwards &amp; defensemen)</span></h2>
-      <div class="admin-section-actions">
-        <button type="button" class="link-btn" data-select-all="skaters">Select all</button>
-        <button type="button" class="link-btn" data-select-none="skaters">Clear</button>
-      </div>
+  <div id="adminLoginGate" class="fh-admin-gate">
+    <h2>Admin Login</h2>
+    <p class="fh-login-sub">First time? Enter the admin email and choose a password — that becomes your login from then on.</p>
+    <div class="fh-field">
+      <label for="adminEmail">Email</label>
+      <input id="adminEmail" type="email" autocomplete="username">
     </div>
-    <div class="checkbox-grid" id="skaterChecks"></div>
-    <p class="warn-text" id="skaterWarn" hidden>Select at least one stat.</p>
-  </section>
-
-  <section class="admin-section">
-    <div class="admin-section-head">
-      <h2>Goalie Columns</h2>
-      <div class="admin-section-actions">
-        <button type="button" class="link-btn" data-select-all="goalies">Select all</button>
-        <button type="button" class="link-btn" data-select-none="goalies">Clear</button>
-      </div>
+    <div class="fh-field">
+      <label for="adminPassword">Password</label>
+      <input id="adminPassword" type="password" autocomplete="current-password">
     </div>
-    <div class="checkbox-grid" id="goalieChecks"></div>
-    <p class="warn-text" id="goalieWarn" hidden>Select at least one stat.</p>
-  </section>
-
-  <div class="admin-buttons">
-    <button type="button" id="saveBtn" class="primary-btn">Save changes</button>
-    <button type="button" id="resetBtn" class="ghost-btn">Reset to defaults</button>
-    <span id="saveStatus" class="save-status" aria-live="polite"></span>
+    <p class="fh-login-error" id="adminLoginError" hidden></p>
+    <button type="button" id="adminLoginSubmit" class="primary-btn">Log in</button>
   </div>
 
-  <section class="admin-section">
-    <div class="admin-section-head">
-      <h2>Config JSON</h2>
-      <div class="admin-section-actions">
-        <button type="button" id="copyJsonBtn" class="link-btn">Copy</button>
-        <button type="button" id="applyJsonBtn" class="link-btn">Apply JSON below</button>
-      </div>
+  <div id="adminGatedContent" hidden>
+    <div class="admin-who-bar">
+      <span id="adminWho"></span>
+      <button type="button" id="adminLogoutBtn" class="ghost-btn">Log out</button>
     </div>
-    <p class="admin-hint">
-      For reuse elsewhere (other pages, sharing a preset, etc.) — this mirrors the
-      checkboxes above. Edit it and hit "Apply JSON below" to load a config back in.
-    </p>
-    <textarea id="jsonBox" class="json-box" spellcheck="false" rows="6"></textarea>
-  </section>
+
+    <section class="admin-section">
+      <div class="admin-section-head">
+        <h2>Skater Columns <span class="section-sub">(forwards &amp; defensemen)</span></h2>
+        <div class="admin-section-actions">
+          <button type="button" class="link-btn" data-select-all="skaters">Select all</button>
+          <button type="button" class="link-btn" data-select-none="skaters">Clear</button>
+        </div>
+      </div>
+      <div class="checkbox-grid" id="skaterChecks"></div>
+      <p class="warn-text" id="skaterWarn" hidden>Select at least one stat.</p>
+    </section>
+
+    <section class="admin-section">
+      <div class="admin-section-head">
+        <h2>Goalie Columns</h2>
+        <div class="admin-section-actions">
+          <button type="button" class="link-btn" data-select-all="goalies">Select all</button>
+          <button type="button" class="link-btn" data-select-none="goalies">Clear</button>
+        </div>
+      </div>
+      <div class="checkbox-grid" id="goalieChecks"></div>
+      <p class="warn-text" id="goalieWarn" hidden>Select at least one stat.</p>
+    </section>
+
+    <div class="admin-buttons">
+      <button type="button" id="saveBtn" class="primary-btn">Save changes</button>
+      <button type="button" id="resetBtn" class="ghost-btn">Reset to defaults</button>
+      <span id="saveStatus" class="save-status" aria-live="polite"></span>
+    </div>
+
+    <section class="admin-section">
+      <div class="admin-section-head">
+        <h2>Config JSON</h2>
+        <div class="admin-section-actions">
+          <button type="button" id="copyJsonBtn" class="link-btn">Copy</button>
+          <button type="button" id="applyJsonBtn" class="link-btn">Apply JSON below</button>
+        </div>
+      </div>
+      <p class="admin-hint">
+        For reuse elsewhere (other pages, sharing a preset, etc.) — this mirrors the
+        checkboxes above. Edit it and hit "Apply JSON below" to load a config back in.
+      </p>
+      <textarea id="jsonBox" class="json-box" spellcheck="false" rows="6"></textarea>
+    </section>
+  </div>
 </main>
 
 <footer class="site-footer">
@@ -84,6 +106,7 @@
 </footer>
 
 <script src="columns.js" defer></script>
+<script src="admin-auth.js" defer></script>
 <script src="admin.js" defer></script>
 </body>
 </html>

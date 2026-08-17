@@ -3,16 +3,27 @@
 /* ======================================================================
    Fantasy Hub — auth toolkit shared by every api/fantasy/*.js endpoint
    AND fantasy-hub/scripts/create-user.js (the commissioner's CLI) —
-   single source of truth for the hash format, so a password/claim-code
-   hashed by the CLI script verifies correctly against a login request,
-   and vice versa.
+   single source of truth for the hash format, so a password hashed by
+   the CLI script (or the admin-login endpoint) verifies correctly
+   against a login request, and vice versa.
 
-   - Passwords + claim codes: Node's built-in crypto.scrypt (no new
-     dependency, no native-module bundling risk on Vercel), stored as a
-     self-describing string so the format is versionable later without
-     a migration: "scrypt:N:r:p:<saltHex>:<hashHex>".
+   Two SEPARATE, independent sessions share this same machinery:
+   - The regular Fantasy Hub `User` session (league members, `fh_session`
+     cookie) — see getSessionUser()/signSession().
+   - The site `Admin` session (a single account gated to a specific
+     email via ADMIN_EMAIL, `fh_admin_session` cookie, its own DB table)
+     — see getSessionAdmin()/signAdminSession(). Deliberately a
+     different cookie/table from User: being logged in as a league
+     member and being logged in as the admin are orthogonal, and an
+     admin session should never accidentally satisfy a `getSessionUser`
+     check or vice versa.
+
+   - Passwords: Node's built-in crypto.scrypt (no new dependency, no
+     native-module bundling risk on Vercel), stored as a self-describing
+     string so the format is versionable later without a migration:
+     "scrypt:N:r:p:<saltHex>:<hashHex>".
    - Sessions: a stateless HMAC-SHA256-signed cookie, NOT a DB-backed
-     session table — {uid, iat, exp} signed with SESSION_SECRET.
+     session table — {..., iat, exp} signed with SESSION_SECRET.
      Trade-off: no instant server-side revocation (a stolen/leaked
      cookie is valid until it expires), accepted for now since nothing
      credit-bearing is at stake yet — revisit with a real Session table
@@ -30,6 +41,7 @@ const SCRYPT_P = 1;
 const SCRYPT_KEYLEN = 64;
 
 const SESSION_COOKIE_NAME = 'fh_session';
+const ADMIN_SESSION_COOKIE_NAME = 'fh_admin_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function sessionSecret() {
@@ -65,18 +77,20 @@ async function verifySecret(plain, stored) {
   return crypto.timingSafeEqual(actual, expected);
 }
 
-/** Signs a session token for `uid`, valid for SESSION_MAX_AGE_SECONDS. */
-function signSession(uid) {
+/** Signs an arbitrary payload, valid for SESSION_MAX_AGE_SECONDS. Both
+ *  session kinds below are built on this. */
+function signToken(payload) {
   const now = Math.floor(Date.now() / 1000);
-  const payload = { uid, iat: now, exp: now + SESSION_MAX_AGE_SECONDS };
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const full = { ...payload, iat: now, exp: now + SESSION_MAX_AGE_SECONDS };
+  const payloadB64 = Buffer.from(JSON.stringify(full)).toString('base64url');
   const sig = crypto.createHmac('sha256', sessionSecret()).update(payloadB64).digest('base64url');
   return `${payloadB64}.${sig}`;
 }
 
-/** Verifies + decodes a session token. Returns { uid } or null (never
- *  throws) — expired/tampered/malformed tokens all just fail closed. */
-function verifySessionToken(token) {
+/** Verifies + decodes a signed token. Returns the payload object or
+ *  null (never throws) — expired/tampered/malformed tokens all just
+ *  fail closed. */
+function verifyToken(token) {
   if (!token || typeof token !== 'string' || !token.includes('.')) return null;
   const [payloadB64, sig] = token.split('.');
   if (!payloadB64 || !sig) return null;
@@ -92,8 +106,26 @@ function verifySessionToken(token) {
     return null;
   }
   const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp !== 'number' || payload.exp < now || !payload.uid) return null;
-  return { uid: payload.uid };
+  if (typeof payload.exp !== 'number' || payload.exp < now) return null;
+  return payload;
+}
+
+function signSession(uid) {
+  return signToken({ uid });
+}
+
+function verifySessionToken(token) {
+  const payload = verifyToken(token);
+  return payload && payload.uid ? { uid: payload.uid } : null;
+}
+
+function signAdminSession(adminId) {
+  return signToken({ aid: adminId });
+}
+
+function verifyAdminSessionToken(token) {
+  const payload = verifyToken(token);
+  return payload && payload.aid ? { aid: payload.aid } : null;
 }
 
 /** Parses the Cookie header into a plain object. */
@@ -111,13 +143,29 @@ function parseCookies(req) {
   return out;
 }
 
-function buildSessionCookie(token) {
+function buildCookieFor(name, token) {
   const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly;${secure} SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`;
+  return `${name}=${encodeURIComponent(token)}; HttpOnly;${secure} SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`;
+}
+
+function buildClearCookieFor(name) {
+  return `${name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+function buildSessionCookie(token) {
+  return buildCookieFor(SESSION_COOKIE_NAME, token);
 }
 
 function buildClearCookie() {
-  return `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+  return buildClearCookieFor(SESSION_COOKIE_NAME);
+}
+
+function buildAdminSessionCookie(token) {
+  return buildCookieFor(ADMIN_SESSION_COOKIE_NAME, token);
+}
+
+function buildAdminClearCookie() {
+  return buildClearCookieFor(ADMIN_SESSION_COOKIE_NAME);
 }
 
 /** Reads the session cookie (if any), verifies it, and loads the
@@ -129,6 +177,18 @@ async function getSessionUser(req, prisma) {
   if (!session) return null;
   try {
     return await prisma.user.findUnique({ where: { id: session.uid } });
+  } catch {
+    return null;
+  }
+}
+
+/** Same idea as getSessionUser(), for the separate Admin session/table. */
+async function getSessionAdmin(req, prisma) {
+  const cookies = parseCookies(req);
+  const session = verifyAdminSessionToken(cookies[ADMIN_SESSION_COOKIE_NAME]);
+  if (!session) return null;
+  try {
+    return await prisma.admin.findUnique({ where: { id: session.aid } });
   } catch {
     return null;
   }
@@ -159,10 +219,16 @@ module.exports = {
   verifySecret,
   signSession,
   verifySessionToken,
+  signAdminSession,
+  verifyAdminSessionToken,
   parseCookies,
   buildSessionCookie,
   buildClearCookie,
+  buildAdminSessionCookie,
+  buildAdminClearCookie,
   getSessionUser,
+  getSessionAdmin,
   readJsonBody,
   SESSION_COOKIE_NAME,
+  ADMIN_SESSION_COOKIE_NAME,
 };

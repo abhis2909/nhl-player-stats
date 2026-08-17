@@ -1636,6 +1636,33 @@ td.stat-num {
   flex-wrap: wrap;
 }
 
+.fh-admin-gate {
+  max-width: 360px;
+  margin: 40px auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px 26px 22px;
+}
+
+.fh-admin-gate h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+}
+
+.fh-admin-gate[hidden] {
+  display: none;
+}
+
+.admin-who-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 4px 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
 .primary-btn,
 .ghost-btn {
   font: inherit;

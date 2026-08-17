@@ -61,6 +61,29 @@ model User {
   packOpenings PackOpening[]       // unused in Phase 1
 }
 
+// The SINGLE site administrator — a completely separate concept from
+// User above (league members playing games). Gates admin.html (stat
+// column config) and anything else site-configuration-related later.
+// Only one email is ever allowed to have a row here: whatever
+// ADMIN_EMAIL is set to (api/fantasy/admin-login.js checks this before
+// touching the table at all) — so this model doesn't need a "role"
+// field or multi-admin support, it's deliberately singular. First
+// login for that email (passwordHash null) sets the password, exactly
+// like User's first-login flow, just without a separate displayName
+// step. Own session/cookie (see api/_lib/fantasyAuth.js's
+// getSessionAdmin/ADMIN_SESSION_COOKIE_NAME) — being logged in as the
+// admin and being logged in as a User (league member) are orthogonal.
+model Admin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+}
+
 // ---------- Shared credits ledger ----------
 // Balance is never stored directly — it's SUM(amount) for a user.
 // Every stake, payout, and reward is its own row here, which gives

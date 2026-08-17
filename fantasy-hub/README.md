@@ -94,6 +94,33 @@ HMAC-signed cookie (`SESSION_SECRET` env var), not a DB-backed session
 table — accepted trade-off (no instant server-side revocation) given
 there's nothing credit-bearing at stake yet.
 
+## Site admin login (separate from league-member accounts)
+
+A completely separate, single-account login for configuring the site
+itself — gates `admin.html` (the stat-column picker), and is the
+natural home for any future site-configuration controls. Deliberately
+**not** the same thing as a `User` above: this is you, the site owner,
+not a league member playing games, and being logged in as one has no
+bearing on the other (separate DB table, separate session cookie).
+
+- Gated to **one specific email**, set via the `ADMIN_EMAIL` env var —
+  not a row anyone could create by guessing, since the login endpoint
+  checks the submitted email against `ADMIN_EMAIL` before it ever
+  touches the `Admin` table.
+- **Self-serve, no separate signup step**: the first successful login
+  attempt with the right email — whatever password you type — becomes
+  the permanent password from then on. Every login after that is a
+  normal email + password check.
+- Same `crypto.scrypt` hashing and stateless-HMAC-cookie session
+  approach as the league-member accounts (see `signAdminSession`/
+  `getSessionAdmin` in `api/_lib/fantasyAuth.js`), just under its own
+  `fh_admin_session` cookie and `Admin` table so the two logins can
+  never be confused for one another.
+- `admin.html` shows a login gate (`admin-auth.js`) until you're
+  authenticated, then reveals the actual column-picker UI (unchanged —
+  still `localStorage`-based, per-browser; the admin login controls WHO
+  can reach that UI, not (yet) where the resulting config is stored).
+
 ## How the daily guesser links to accounts
 
 The tricky part: `guesswho.js`'s mystery-player pick is a **pure,
@@ -167,17 +194,19 @@ pin deliberately later if there's a reason to.
 |---|---|
 | `../prisma/schema.prisma` | The Prisma data model (moved out of this folder — see top of this doc) |
 | `scripts/create-user.js` | Commissioner's local CLI — creates a username (or resets one) |
-| `../api/fantasy/*.js` | Vercel serverless functions — login, logout, session check, Guess the Player sync |
+| `../api/fantasy/*.js` | Vercel serverless functions — user login/logout/me, admin login/logout/me, Guess the Player sync |
 | `../api/_lib/db.js` | Cached Prisma client (Neon adapter) |
-| `../api/_lib/fantasyAuth.js` | Password hashing, session sign/verify, cookie helpers |
+| `../api/_lib/fantasyAuth.js` | Password hashing, session sign/verify (both User and Admin sessions), cookie helpers |
 | `../api/_lib/guessWhoPool.js` | Server-side mirror of `guesswho.js`'s deterministic daily-pick algorithm |
-| `../fantasy-auth.js` | Client-side login-UI module (currently wired into `guesswho.html` only) |
+| `../fantasy-auth.js` | Client-side league-member login-UI module (currently wired into `guesswho.html` only) |
+| `../admin-auth.js` | Client-side site-admin login gate, wired into `admin.html` |
 
 ## Next steps (once Neon is authorized)
 
-1. Set the real `DATABASE_URL` (Neon's **pooled** connection string) and
-   a generated `SESSION_SECRET` in Vercel's project env vars, and
-   locally in `.env` (already gitignored).
+1. Set the real `DATABASE_URL` (Neon's **pooled** connection string), a
+   generated `SESSION_SECRET`, and `ADMIN_EMAIL` (the one email allowed
+   to log into `admin.html`) in Vercel's project env vars, and locally
+   in `.env` (already gitignored).
 2. `npx prisma migrate dev --name init` against a Neon dev branch.
 3. Run the commissioner CLI script for real to create the first
    account, log in end-to-end (setting a password + name), and confirm
