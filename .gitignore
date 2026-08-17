@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# fantasy-hub (Prisma/Neon credentials, once that gets built)
+.env
+.env*.local

@@ -1,0 +1,202 @@
+// ============================================================
+// Fantasy Hub — credits ledger + 4 minigames
+//
+// STATUS: design spec only — nothing here is wired up yet (no
+// package.json, no `prisma` install, no database). See README.md in
+// this folder for what's decided, what's still open, and next steps.
+//
+// If you already have a schema.prisma for the rest of the site,
+// drop the datasource/generator blocks below and just merge in
+// the models you need.
+// ============================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Identity ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?  @unique // for magic-link login
+  displayName  String
+  yahooTeamKey String?  @unique // e.g. "453.l.12345.t.4" — links them to their Yahoo roster
+  createdAt    DateTime @default(now())
+
+  transactions CreditTransaction[]
+  betEntries   BetEntry[]
+  faceoffsA    Faceoff[]     @relation("FaceoffUserA")
+  faceoffsB    Faceoff[]     @relation("FaceoffUserB")
+  dailyGuesses DailyGuess[]
+  gridEntries  GridEntry[]
+  cards        UserCard[]
+  packOpenings PackOpening[]
+}
+
+// ---------- Shared credits ledger ----------
+// Balance is never stored directly — it's SUM(amount) for a user.
+// Every stake, payout, and reward is its own row here, which gives
+// you a full audit trail and avoids sync bugs across games.
+
+model CreditTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  amount    Int // positive = credit in, negative = debit out
+  reason    String // "season_seed" | "bet_stake" | "bet_payout" | "daily_reward" | "faceoff_stake" | "faceoff_payout" | "grid_reward"
+  refType   String? // "Bet" | "Faceoff" | "DailyGuess" | "GridEntry"
+  refId     String?
+  createdAt DateTime @default(now())
+}
+
+// ---------- Cached Yahoo data ----------
+// Pulled with ONE commissioner-level OAuth token via a scheduled
+// job, not per-user tokens — Yahoo's access rules are based on
+// league membership, so one token can read the whole league.
+
+model YahooMatchupCache {
+  matchupKey String   @id // Yahoo's matchup identifier
+  weekKey    String
+  rawData    Json
+  fetchedAt  DateTime @default(now())
+}
+
+// ---------- Game 1: Betting (matchup / category / over-under) ----------
+
+model Bet {
+  id         String    @id @default(cuid())
+  type       String // "matchup_winner" | "category_winner" | "over_under"
+  matchupKey String
+  category   String? // e.g. "goals" — category/O-U bets only
+  line       Float? // O/U line, if applicable
+  status     String    @default("open") // "open" | "locked" | "settled" | "void"
+  resultJson Json?
+  locksAt    DateTime // matchup start time
+  createdAt  DateTime  @default(now())
+
+  entries BetEntry[]
+}
+
+model BetEntry {
+  id        String   @id @default(cuid())
+  betId     String
+  bet       Bet      @relation(fields: [betId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  side      String // "team_a" | "team_b" | "over" | "under"
+  amount    Int
+  payout    Int?
+  createdAt DateTime @default(now())
+}
+
+// ---------- Game 2: Draft faceoff ----------
+
+model Faceoff {
+  id        String   @id @default(cuid())
+  userAId   String
+  userA     User     @relation("FaceoffUserA", fields: [userAId], references: [id])
+  userBId   String
+  userB     User     @relation("FaceoffUserB", fields: [userBId], references: [id])
+  stake     Int
+  metric    String // the hard number that decides it, e.g. "season_fantasy_points"
+  scoreA    Float?
+  scoreB    Float?
+  winnerId  String?
+  status    String   @default("pending") // "pending" | "accepted" | "resolved" | "declined"
+  createdAt DateTime @default(now())
+}
+
+// ---------- Game 3: Daily guesser (Poeltl-style) ----------
+
+model DailyPlayer {
+  date        String @id // "2026-08-16"
+  nhlPlayerId Int
+  attributes  Json // snapshot: team, position, nationality, age, etc.
+}
+
+model DailyGuess {
+  id        String   @id @default(cuid())
+  date      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  guesses   Json // ordered list of guessed player IDs + hint feedback
+  solved    Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([date, userId])
+}
+
+// ---------- Game 4: Immaculate-grid board ----------
+
+model GridBoard {
+  date String @id
+  rows Json // 3 constraints, e.g. ["team:BOS", "nationality:CAN", "30+ goal season"]
+  cols Json
+}
+
+model GridEntry {
+  id           String   @id @default(cuid())
+  date         String
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  answers      Json // 9 cells → nhlPlayerId or null
+  correctCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([date, userId])
+}
+
+// ---------- Game 5: Player packs (collectibles) ----------
+// Cost comes out of the same credits ledger as everything else — a
+// purchase is just a CreditTransaction with reason "pack_purchase".
+
+model Card {
+  id          String  @id @default(cuid())
+  nhlPlayerId Int     @unique
+  name        String
+  team        String
+  position    String
+  rarity      String // "common" | "rare" | "legendary" | "hot_streak" — hot_streak is optional, tied to a live scoring streak
+  season      String // e.g. "2026-27" — lets the pool refresh year to year
+  imageUrl    String?
+
+  owners UserCard[]
+}
+
+model Pack {
+  id        String @id @default(cuid())
+  name      String // "Standard Pack" — themed packs (Original Six, Rookies) can be added later as more rows
+  cost      Int // credits
+  cardCount Int    @default(5)
+  oddsJson  Json // rarity → probability weight, e.g. {"common":70,"rare":25,"legendary":5}
+
+  openings PackOpening[]
+}
+
+model UserCard {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  cardId     String
+  card       Card     @relation(fields: [cardId], references: [id])
+  quantity   Int      @default(1) // duplicates stack here — use this to drive the auto-scrap/refund logic
+  acquiredAt DateTime @default(now())
+
+  @@unique([userId, cardId])
+}
+
+model PackOpening {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  packId        String
+  pack          Pack     @relation(fields: [packId], references: [id])
+  pulledCardIds Json // array of Card IDs pulled this opening — drives the reveal animation + history
+  createdAt     DateTime @default(now())
+}
