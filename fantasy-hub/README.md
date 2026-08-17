@@ -58,33 +58,38 @@ current phase. The schema keeps the table and `User.yahooTeamKey` for
 when it's picked back up, but no OAuth app is registered and no token
 handling exists.
 
-## Accounts: the "claim your account" flow
+## Accounts: username assigned, everything else self-serve
 
-Usernames are **assigned by the commissioner**, passwords are **chosen
-by the league member themselves**:
+Usernames are **assigned by the commissioner**; the password AND name
+are set by the league member themselves, first time they log in — no
+code to send:
 
 1. The commissioner runs `node fantasy-hub/scripts/create-user.js
-   <username> [displayName]` locally. This creates a `User` row with
-   that username and a freshly generated **one-time claim code**
-   (printed to the console — the only place it's ever shown in
-   plaintext), `passwordHash` left `null`.
-2. The commissioner hands the username + claim code to that person,
-   out-of-band (text, Discord, whatever).
-3. That person visits the site, enters the username + password they
-   want. Since the account is unclaimed, the login form asks for the
-   claim code too (see the API contract below) — entering it correctly
-   sets their password and clears the claim code (single-use). From then
+   <username>` locally. This creates a `User` row with just that
+   username, `passwordHash` left `null`.
+2. The commissioner hands the username to that person, out-of-band
+   (text, Discord, whatever).
+3. That person visits the site and enters the username + a password
+   they choose. Since the account hasn't been set up yet, the login
+   form also asks for their name (see the API contract below) —
+   submitting that sets their password and name in one step. From then
    on it's a normal username + password login.
 
-The claim code exists specifically so a stranger can't squat a username
-before its real owner claims it — knowing the username alone isn't
-enough. `--reset <username>` on the same script (nulls the password,
-issues a fresh claim code, clears any lockout) is the account-recovery
-path — no email/forgot-password flow needed since the commissioner
-already has an out-of-band channel to every member.
+`--reset <username>` on the same script (nulls the password, clears any
+lockout) is the account-recovery path — next login just asks them to
+set a new password and name again, no email/forgot-password flow
+needed since the commissioner already has an out-of-band channel to
+every member.
 
-Auth mechanics: passwords and claim codes are hashed with Node's
-built-in `crypto.scrypt` (no new dependency); sessions are a stateless
+**Trade-off, explicit**: since there's no separate secret gating
+first-time setup, anyone who knows (or guesses) a username before its
+real owner logs in could set its password themselves. Accepted for a
+small private friend league where usernames aren't secret and nothing
+credit-bearing is at stake yet — revisit (e.g. bring back a one-time
+code) if that ever stops being true.
+
+Auth mechanics: passwords are hashed with Node's built-in
+`crypto.scrypt` (no new dependency); sessions are a stateless
 HMAC-signed cookie (`SESSION_SECRET` env var), not a DB-backed session
 table — accepted trade-off (no instant server-side revocation) given
 there's nothing credit-bearing at stake yet.
@@ -120,8 +125,9 @@ fire-and-forget sync call trivially safe to fire more than once.
   actual migrations and DB reads/writes are blocked until Neon is
   connected.
 - **Yahoo OAuth**: deferred entirely, not part of any current phase.
-- **Auth**: username (commissioner-assigned) + password (self-chosen),
-  claim-code-gated — see above. Not magic-link, not Yahoo-linked.
+- **Auth**: username (commissioner-assigned) + password + name
+  (self-chosen, set together on first login) — see above. Not
+  magic-link, not Yahoo-linked, no separate code to hand over.
 - **Existing "Guess the Player" game**: coexists with the new
   account-linked version — anonymous `localStorage` play stays exactly
   as-is, login adds synced progress on top. Not a replacement.
@@ -160,10 +166,10 @@ pin deliberately later if there's a reason to.
 | File | Purpose |
 |---|---|
 | `../prisma/schema.prisma` | The Prisma data model (moved out of this folder — see top of this doc) |
-| `scripts/create-user.js` | Commissioner's local CLI — creates a username + one-time claim code |
+| `scripts/create-user.js` | Commissioner's local CLI — creates a username (or resets one) |
 | `../api/fantasy/*.js` | Vercel serverless functions — login, logout, session check, Guess the Player sync |
 | `../api/_lib/db.js` | Cached Prisma client (Neon adapter) |
-| `../api/_lib/fantasyAuth.js` | Password/claim-code hashing, session sign/verify, cookie helpers |
+| `../api/_lib/fantasyAuth.js` | Password hashing, session sign/verify, cookie helpers |
 | `../api/_lib/guessWhoPool.js` | Server-side mirror of `guesswho.js`'s deterministic daily-pick algorithm |
 | `../fantasy-auth.js` | Client-side login-UI module (currently wired into `guesswho.html` only) |
 
@@ -173,9 +179,9 @@ pin deliberately later if there's a reason to.
    a generated `SESSION_SECRET` in Vercel's project env vars, and
    locally in `.env` (already gitignored).
 2. `npx prisma migrate dev --name init` against a Neon dev branch.
-3. Run the commissioner CLI script for real to create the first account,
-   claim it end-to-end, and confirm a `DailyGuess` row shows up after
-   playing.
+3. Run the commissioner CLI script for real to create the first
+   account, log in end-to-end (setting a password + name), and confirm
+   a `DailyGuess` row shows up after playing.
 4. Only then, add `prisma migrate deploy` as a Vercel build step (see
    the warning above).
 5. Later phases: the credits ledger + betting first (proves the pattern

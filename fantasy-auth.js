@@ -63,9 +63,9 @@
           <label for="fhPassword">Password</label>
           <input id="fhPassword" type="password" autocomplete="current-password">
         </div>
-        <div class="fh-field" id="fhClaimCodeField" hidden>
-          <label for="fhClaimCode">Claim code</label>
-          <input id="fhClaimCode" type="text" autocomplete="one-time-code">
+        <div class="fh-field" id="fhNameField" hidden>
+          <label for="fhDisplayName">Your name</label>
+          <input id="fhDisplayName" type="text" autocomplete="name">
         </div>
         <p class="fh-login-error" id="fhLoginError" hidden></p>
         <button type="button" id="fhLoginSubmit" class="primary-btn">Log in</button>
@@ -95,10 +95,10 @@
     if (!modalEl) return;
     modalEl.hidden = true;
     document.getElementById('fhLoginError').hidden = true;
-    document.getElementById('fhClaimCodeField').hidden = true;
+    document.getElementById('fhNameField').hidden = true;
     document.getElementById('fhUsername').value = '';
     document.getElementById('fhPassword').value = '';
-    document.getElementById('fhClaimCode').value = '';
+    document.getElementById('fhDisplayName').value = '';
   }
 
   function showError(message) {
@@ -110,11 +110,15 @@
   async function submitLogin() {
     const username = document.getElementById('fhUsername').value.trim();
     const password = document.getElementById('fhPassword').value;
-    const claimCodeField = document.getElementById('fhClaimCodeField');
-    const claimCode = claimCodeField.hidden ? undefined : document.getElementById('fhClaimCode').value.trim();
+    const nameField = document.getElementById('fhNameField');
+    const displayName = nameField.hidden ? undefined : document.getElementById('fhDisplayName').value.trim();
 
     if (!username || !password) {
       showError('Enter a username and password.');
+      return;
+    }
+    if (!nameField.hidden && !displayName) {
+      showError('Enter your name.');
       return;
     }
 
@@ -122,7 +126,7 @@
       const res = await fetch('/api/fantasy/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, claimCode }),
+        body: JSON.stringify({ username, password, displayName }),
       });
       const data = await res.json();
 
@@ -134,10 +138,10 @@
         return;
       }
 
-      if (data.error === 'needs_claim_code') {
-        claimCodeField.hidden = false;
-        document.getElementById('fhClaimCode').focus();
-        showError(data.message || 'Enter the claim code your commissioner gave you.');
+      if (data.error === 'needs_name') {
+        nameField.hidden = false;
+        document.getElementById('fhDisplayName').focus();
+        showError(data.message || "First time logging in — what's your name?");
         return;
       }
 

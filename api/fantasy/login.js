@@ -6,19 +6,18 @@ const { verifySecret, hashSecret, signSession, buildSessionCookie, readJsonBody 
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
 
-/* POST /api/fantasy/login — unified claim-or-login.
-   Body: { username, password, claimCode? }
+/* POST /api/fantasy/login — unified first-time-setup-or-login.
+   Body: { username, password, displayName? }
 
    - Unknown username                          -> 404 unknown_username
    - Locked out (too many recent failures)     -> 423 locked
-   - Unclaimed account (passwordHash is null):
-       - no claimCode sent                     -> 409 needs_claim_code
-         (lets the UI progressively reveal that field — normal logins
-         to already-claimed accounts never see it)
-       - wrong claimCode                       -> 401 invalid_claim_code
-       - right claimCode                       -> sets passwordHash to
-         this request's password (single-use claim), 200 + session
-   - Claimed account (passwordHash set):
+   - Not set up yet (passwordHash is null):
+       - no displayName sent                   -> 409 needs_name
+         (lets the UI progressively reveal a "your name" field — normal
+         logins to already-set-up accounts never see it)
+       - displayName sent                      -> sets passwordHash to
+         this request's password + displayName, 200 + session
+   - Already set up (passwordHash set):
        - wrong password                        -> 401 invalid_password
        - right password                        -> 200 + session
 
@@ -37,7 +36,7 @@ module.exports = async function handler(req, res) {
     const body = await readJsonBody(req);
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const claimCode = typeof body.claimCode === 'string' ? body.claimCode.trim() : '';
+    const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
 
     if (!username || !password) {
       res.status(400).json({ ok: false, error: 'invalid_input', message: 'Username and password are required.' });
@@ -82,29 +81,22 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Unclaimed account: passwordHash is null.
+    // Not set up yet: passwordHash is null.
     if (!user.passwordHash) {
-      if (!claimCode) {
+      if (!displayName) {
         res.status(409).json({
           ok: false,
-          error: 'needs_claim_code',
-          message: "This account hasn't been claimed yet — enter the claim code your commissioner gave you.",
+          error: 'needs_name',
+          message: "Looks like this is your first time — what's your name?",
         });
         return;
       }
-      const validCode = await verifySecret(claimCode, user.claimCodeHash);
-      if (!validCode) {
-        await recordFailure();
-        res.status(401).json({ ok: false, error: 'invalid_claim_code' });
-        return;
-      }
-      // Claim: set the password, clear the claim code (single-use).
       const passwordHash = await hashSecret(password);
-      await succeed({ passwordHash, claimCodeHash: null });
+      await succeed({ passwordHash, displayName });
       return;
     }
 
-    // Claimed account: normal password login.
+    // Already set up: normal password login.
     const validPassword = await verifySecret(password, user.passwordHash);
     if (!validPassword) {
       await recordFailure();

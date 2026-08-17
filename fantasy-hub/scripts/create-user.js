@@ -4,72 +4,44 @@
    Commissioner's local CLI — creates a new Fantasy Hub account (or
    resets one). Usage:
 
-     npm run create-user -- <username> [displayName]
+     npm run create-user -- <username>
      npm run create-user -- --reset <username>
 
    (or directly: node --env-file=.env fantasy-hub/scripts/create-user.js ...)
 
-   Prints the one-time claim code to hand to that person out-of-band
-   (text, Discord, whatever) — this is the ONLY place it's ever shown in
-   plaintext, and it's never logged or stored anywhere except as a hash.
-   Requires a real DATABASE_URL (Neon) in .env — see
-   fantasy-hub/README.md.
+   Hand the username to the league member out-of-band (text, Discord,
+   whatever). The first time they log in with it, they'll be asked to
+   choose a password and enter their own name — that's what actually
+   "claims" the account, no code needed from you. Requires a real
+   DATABASE_URL (Neon) in .env — see fantasy-hub/README.md.
    ====================================================================== */
 
-const crypto = require('crypto');
 const { getPrisma } = require('../../api/_lib/db');
-const { hashSecret } = require('../../api/_lib/fantasyAuth');
 
-// 8 uppercase alphanumeric chars, human-typeable — excludes visually
-// ambiguous characters (0/O, 1/I/L).
-const CLAIM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const CLAIM_CODE_LENGTH = 8;
-
-function generateClaimCode() {
-  const bytes = crypto.randomBytes(CLAIM_CODE_LENGTH);
-  let code = '';
-  for (let i = 0; i < CLAIM_CODE_LENGTH; i++) {
-    code += CLAIM_CODE_ALPHABET[bytes[i] % CLAIM_CODE_ALPHABET.length];
-  }
-  return code;
-}
-
-async function createUser(username, displayName) {
+async function createUser(username) {
   const prisma = getPrisma();
-  const claimCode = generateClaimCode();
-  const claimCodeHash = await hashSecret(claimCode);
-
-  const user = await prisma.user.create({
-    data: { username, displayName: displayName || null, claimCodeHash },
-  });
+  const user = await prisma.user.create({ data: { username } });
 
   console.log('\nAccount created:');
-  console.log(`  Username:   ${user.username}`);
-  console.log(`  Claim code: ${claimCode}`);
-  console.log('\nHand BOTH of these to the league member out-of-band (text, Discord, etc).');
-  console.log('This claim code will not be shown again — if it’s lost, run:');
-  console.log(`  npm run create-user -- --reset ${user.username}\n`);
+  console.log(`  Username: ${user.username}`);
+  console.log('\nHand this to the league member out-of-band (text, Discord, etc).');
+  console.log("They'll choose their own password and name the first time they log in.\n");
 }
 
 async function resetUser(username) {
   const prisma = getPrisma();
-  const claimCode = generateClaimCode();
-  const claimCodeHash = await hashSecret(claimCode);
-
   const user = await prisma.user.update({
     where: { username },
     data: {
       passwordHash: null,
-      claimCodeHash,
       failedLoginAttempts: 0,
       lockedUntil: null,
     },
   });
 
   console.log('\nAccount reset:');
-  console.log(`  Username:       ${user.username}`);
-  console.log(`  New claim code: ${claimCode}`);
-  console.log('\nHand this to the league member out-of-band — their old password no longer works.\n');
+  console.log(`  Username: ${user.username}`);
+  console.log('\nTheir old password no longer works — next login will ask them to set a new one.\n');
 }
 
 async function main() {
@@ -86,13 +58,13 @@ async function main() {
     return;
   }
 
-  const [username, displayName] = args;
+  const [username] = args;
   if (!username) {
-    console.error('Usage: npm run create-user -- <username> [displayName]');
+    console.error('Usage: npm run create-user -- <username>');
     process.exitCode = 1;
     return;
   }
-  await createUser(username, displayName);
+  await createUser(username);
 }
 
 main()

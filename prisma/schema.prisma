@@ -7,12 +7,13 @@
 // still the human-readable design doc; keep the two in sync.
 //
 // PHASE 1 STATUS (see fantasy-hub/README.md for the full story):
-// User (username/password/claim-code auth) and DailyGuess (linking the
-// already-live "Guess the Player" game to accounts) are ACTIVE this
-// phase. Every other model — CreditTransaction, Bet/BetEntry, Faceoff,
-// GridBoard/GridEntry, Card/Pack/UserCard/PackOpening,
-// YahooMatchupCache — exists in the DB from the first migration on,
-// but nothing reads/writes them yet. Yahoo OAuth is deferred entirely.
+// User (username/password auth, name set on first login) and
+// DailyGuess (linking the already-live "Guess the Player" game to
+// accounts) are ACTIVE this phase. Every other model —
+// CreditTransaction, Bet/BetEntry, Faceoff, GridBoard/GridEntry,
+// Card/Pack/UserCard/PackOpening, YahooMatchupCache — exists in the DB
+// from the first migration on, but nothing reads/writes them yet.
+// Yahoo OAuth is deferred entirely.
 // ============================================================
 
 datasource db {
@@ -29,18 +30,17 @@ generator client {
 model User {
   id        String   @id @default(cuid())
   username  String   @unique // commissioner-assigned; the login handle
-  displayName String? // optional friendly name; falls back to username in UI
+  displayName String? // set by the person themselves on first login; falls back to username in UI until then
 
-  // Claim-your-account flow: the commissioner's CLI script
+  // First-login setup: the commissioner's CLI script
   // (fantasy-hub/scripts/create-user.js) creates a User with just a
-  // username + claimCodeHash and passwordHash left null. The first
-  // successful login attempt that supplies the matching claim code
-  // sets passwordHash and clears claimCodeHash (single-use). After
-  // that, it's a normal username+password login. Both are scrypt
-  // hashes (see api/_lib/fantasyAuth.js) — never store either in
-  // plaintext.
-  passwordHash  String?
-  claimCodeHash String?
+  // username, passwordHash left null. The first login attempt for that
+  // username sets passwordHash (a scrypt hash — see
+  // api/_lib/fantasyAuth.js, never stored in plaintext) AND displayName
+  // in one step — the login form asks for a name alongside the chosen
+  // password the first time. After that, it's a normal
+  // username+password login.
+  passwordHash String?
 
   // Cheap brute-force guard — there's no other rate-limiting layer in
   // front of these serverless functions.
