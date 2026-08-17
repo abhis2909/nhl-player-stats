@@ -57,6 +57,11 @@
       <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
       <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
     </div>
+    <div class="toggle-group" role="tablist" aria-label="Season" id="seasonToggleGroup"></div>
+    <div class="toggle-group" role="tablist" aria-label="Total or per-game">
+      <button class="toggle-btn active" data-statmode="total" role="tab" aria-selected="true">Total</button>
+      <button class="toggle-btn" data-statmode="perGame" role="tab" aria-selected="false">Per Game</button>
+    </div>
     <label class="visually-hidden" for="teamSelect">Filter by team</label>
     <select id="teamSelect" aria-label="Filter by team">
       <option value="ALL">All Teams</option>

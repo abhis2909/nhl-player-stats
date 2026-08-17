@@ -18,6 +18,8 @@ const el = {
   modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
   posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
+  seasonToggleGroup: document.getElementById('seasonToggleGroup'),
+  statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   teamSelect: document.getElementById('teamSelect'),
   searchInput: document.getElementById('searchInput'),
   statusBanner: document.getElementById('statusBanner'),
@@ -41,9 +43,15 @@ const state = {
   team: 'ALL',
   pos: 'ALL',
   search: '',
-  seasonId: null,
+  seasonId: null,          // the CURRENT (live/active-snapshot) season — always fetched, regardless of which season is selected below
+  selectedSeasonId: null,  // whichever season the table is actually showing
+  seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw totals — avoids refetching a season already looked at
+  statMode: 'total',       // 'total' | 'perGame' — see applyStatMode()
+  snapshotLabel: null,     // set in init() when the CURRENT season is showing a saved snapshot rather than live data
   teamMeta: new Map(),   // abbrev -> { name, logo, conference, division }
-  skaters: [],
+  rawSkaters: [],  // selected season's totals, as fetched — untouched by statMode
+  rawGoalies: [],
+  skaters: [],     // DERIVED from raw* + statMode (applyStatMode()) — what render/sort/filter actually use
   goalies: [],
   columns: loadColumnConfig(), // { skaters: [...ids], goalies: [...ids] } — see columns.js
   sort: {
@@ -51,6 +59,13 @@ const state = {
     goalies: { key: 'wins', dir: 'desc' },
   },
 };
+
+// How far back the season toggle goes: current, and the 2 seasons before
+// it. NHL season ids follow a YYYYYYYY+1 pattern, so stepping back one
+// season is always -10001 (see cards.js's identical convention).
+function seasonOffsets() {
+  return [state.seasonId - 20002, state.seasonId - 10001, state.seasonId];
+}
 
 /* ---------------------------- helpers ---------------------------- */
 /* getJSON / escapeHtml / lastTeam / seasonLabel / loadSeasonData all come
@@ -76,21 +91,146 @@ function positionGroup(pos) {
   return 'W'; // L, R
 }
 
+/* ------------------------ season + stat mode ------------------------ */
+
+/** Fetches (or reuses a cached copy of) `seasonId`'s totals and makes it
+ *  the selected season — mirrors cards.js's loadAndRateSeason() minus
+ *  the rating pass (this page shows raw/derived stats, not percentiles).
+ *  No network call if already cached (covers both "switch back to a
+ *  season you already viewed" and "the current season, already fetched
+ *  by getSeasonData() in init()"). */
+async function loadStatsForSeason(seasonId) {
+  let raw = state.seasonDataCache.get(seasonId);
+  if (!raw) {
+    const data = await loadSeasonStatsFor(seasonId, state.teamMeta);
+    raw = { skaters: data.skaters, goalies: data.goalies };
+    state.seasonDataCache.set(seasonId, raw);
+  }
+  state.rawSkaters = raw.skaters;
+  state.rawGoalies = raw.goalies;
+  state.selectedSeasonId = seasonId;
+  applyStatMode();
+}
+
+/** Divides every plain counting stat (no `fmt` on its column def, i.e.
+ *  not already a rate like SH%/GAA/SV%) by games played. Columns that
+ *  are already a rate, and Games Played itself (which would trivially
+ *  become 1 for everyone), are left untouched. Recomputed from the
+ *  untouched raw* arrays each time — never divides an already-divided
+ *  value. */
+function toPerGame(list, catalog) {
+  if (state.statMode !== 'perGame') return list;
+  return list.map((p) => {
+    const gp = p.gamesPlayed || 0;
+    const out = { ...p };
+    for (const col of catalog) {
+      if (col.fmt || col.id === 'gamesPlayed') continue;
+      out[col.id] = gp > 0 ? p[col.id] / gp : 0;
+    }
+    return out;
+  });
+}
+
+function applyStatMode() {
+  state.skaters = toPerGame(state.rawSkaters, SKATER_COLUMNS);
+  state.goalies = toPerGame(state.rawGoalies, GOALIE_COLUMNS);
+}
+
+/** Same as columns.js's formatColumnValue(), except a per-game counting
+ *  stat gets a fixed 2-decimal display (formatColumnValue's default
+ *  String(n) would otherwise show a long division result like
+ *  0.8181818181818182). Rate columns and Games Played are unaffected —
+ *  same values in both stat modes, so they format the same way too. */
+function formatStatValue(col, value) {
+  if (state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed') {
+    return (typeof value === 'number' ? value : Number(value) || 0).toFixed(2);
+  }
+  return formatColumnValue(col, value);
+}
+
+/** Rebuilds the 3-button Season toggle (current + the 2 seasons before
+ *  it) — dynamic, not static markup, since the actual years depend on
+ *  what "current" resolves to. Re-run on every init() so a season
+ *  rollover picks up automatically. */
+function populateSeasonToggle() {
+  const ids = seasonOffsets(); // oldest -> newest, left to right
+  el.seasonToggleGroup.innerHTML = '';
+  for (const id of ids) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toggle-btn';
+    btn.setAttribute('role', 'tab');
+    btn.dataset.season = String(id);
+    btn.textContent = seasonLabel(id) + (id === state.seasonId ? ' (Current)' : '');
+    btn.setAttribute('aria-selected', id === state.selectedSeasonId ? 'true' : 'false');
+    btn.classList.toggle('active', id === state.selectedSeasonId);
+    btn.addEventListener('click', () => onSeasonToggleClick(id));
+    el.seasonToggleGroup.appendChild(btn);
+  }
+}
+
+function markActiveSeasonButton() {
+  el.seasonToggleGroup.querySelectorAll('.toggle-btn').forEach((btn) => {
+    const active = Number(btn.dataset.season) === state.selectedSeasonId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
+async function onSeasonToggleClick(seasonId) {
+  if (seasonId === state.selectedSeasonId) return;
+  toggleSkeleton(true);
+  hideBanner();
+  try {
+    await loadStatsForSeason(seasonId);
+    markActiveSeasonButton();
+    updateSeasonLabel();
+    ensureValidSort();
+    render();
+  } catch (err) {
+    showBanner(`Couldn't load ${seasonLabel(seasonId)} stats (${err.message}).`);
+  } finally {
+    toggleSkeleton(false);
+  }
+}
+
+function updateSeasonLabel() {
+  const current = state.selectedSeasonId === state.seasonId;
+  const statModeLabel = state.statMode === 'perGame' ? 'Per Game' : 'Total';
+  el.seasonLabel.textContent =
+    `${seasonLabel(state.selectedSeasonId)}${current ? ' (Current)' : ''} · Regular Season stats · ${statModeLabel}` +
+    (current && state.snapshotLabel ? ` · ${state.snapshotLabel}` : '');
+}
+
 /* ------------------------------ init ------------------------------ */
 
 async function init() {
   toggleSkeleton(true);
   hideBanner();
   try {
+    // Always fetch the CURRENT season (live, or the active local
+    // snapshot) — it's the default season shown, and the other 2 Season
+    // toggle options are counted back from it (see seasonOffsets()).
     const { seasonId, teamMeta, skaters, goalies, source, snapshotLabel } = await getSeasonData();
     state.seasonId = seasonId;
     state.teamMeta = teamMeta;
-    state.skaters = skaters;
-    state.goalies = goalies;
-    el.seasonLabel.textContent = `${seasonLabel(state.seasonId)} · Regular Season stats` +
-      (source === 'snapshot' ? ` · ${snapshotLabel}` : '');
+    state.seasonDataCache.set(seasonId, { skaters, goalies });
 
     populateTeamSelect();
+    populateSeasonToggle();
+
+    // A data-bar action (switching snapshots, Retrieve Latest Stats)
+    // re-runs init() — keep whatever season the user had selected
+    // rather than silently jumping back to current, unless this is the
+    // first load (selectedSeasonId still null) or it's no longer one of
+    // the 3 offsets (a season rolled over since).
+    const validSeasons = new Set(seasonOffsets());
+    const targetSeason = validSeasons.has(state.selectedSeasonId) ? state.selectedSeasonId : seasonId;
+    await loadStatsForSeason(targetSeason); // no-op network-wise when targetSeason === seasonId (just cached above)
+    markActiveSeasonButton();
+
+    state.snapshotLabel = source === 'snapshot' ? snapshotLabel : null;
+    updateSeasonLabel();
     ensureValidSort();
     renderTableHeaders();
     toggleSkeleton(false);
@@ -168,7 +308,8 @@ function renderTableHeaders() {
       th.className = 'sortable is-numeric';
       th.dataset.key = col.id;
       th.dataset.type = 'number';
-      th.title = col.label;
+      const perGame = state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed';
+      th.title = perGame ? `${col.label} per game` : col.label;
       th.textContent = col.short;
       th.addEventListener('click', () => onSortClick(mode, col.id, 'number'));
       row.appendChild(th);
@@ -271,7 +412,7 @@ function playerCell(p) {
 function statCell(p, col) {
   const td = document.createElement('td');
   td.className = 'is-numeric stat-num';
-  td.textContent = formatColumnValue(col, p[col.id]);
+  td.textContent = formatStatValue(col, p[col.id]);
   return td;
 }
 
@@ -364,7 +505,7 @@ function renderModalHero(landing, player) {
     : 'Undrafted';
 
   const chipCols = activeColumns(player.pos === 'G' ? 'goalies' : 'skaters');
-  const statChips = chipCols.map((col) => [col.short, formatColumnValue(col, player[col.id])]);
+  const statChips = chipCols.map((col) => [col.short, formatStatValue(col, player[col.id])]);
 
   el.modalContent.innerHTML = `
     <div class="ph-hero">
@@ -504,6 +645,20 @@ el.posButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
     state.pos = btn.dataset.pos;
     el.posButtons.forEach((b) => b.classList.toggle('active', b === btn));
+    render();
+  });
+});
+
+el.statModeButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.statMode = btn.dataset.statmode;
+    el.statModeButtons.forEach((b) => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+    applyStatMode();
+    updateSeasonLabel();
+    renderTableHeaders(); // header tooltips ("X per game") depend on stat mode
     render();
   });
 });
