@@ -15,7 +15,7 @@
       <span class="brand-icon" aria-hidden="true">🤝</span>
       <div>
         <h1>Hockey Hub</h1>
-        <p class="subtitle">Trade Analyzer, Power Rankings, and your Fantasy Hub account.</p>
+        <p class="subtitle">Tools, Recent Transactions, and your Fantasy Hub account.</p>
       </div>
     </div>
     <div id="fhAuthSlot" class="fh-auth-slot"></div>
@@ -39,77 +39,31 @@
       <div class="fh-panel-head">
         <h2>🛠 Tools</h2>
       </div>
-
-      <div class="fh-tool-block" id="panelTradeAnalyzer">
-        <div class="fh-tool-block-head">
-          <h3>🤝 Trade Analyzer</h3>
+      <div class="mg-grid">
+        <a href="trade-analyzer.html" class="mg-game-card">
+          <span class="mg-game-icon" aria-hidden="true">🤝</span>
+          <h2>Trade Analyzer</h2>
           <p>Pick players for each side and see who wins, graded by the same rating engine behind Player Ratings.</p>
-        </div>
-
-        <div class="fh-trade-sides">
-          <div class="fh-trade-side" id="tradeSideA" data-side="A">
-            <h3>Side A</h3>
-            <div class="fh-player-search">
-              <input type="text" id="sideASearch" placeholder="Search a player to add…" autocomplete="off">
-              <div class="fh-suggestions" id="sideASuggestions" hidden></div>
-            </div>
-            <ul class="fh-trade-list" id="sideAList"></ul>
-            <p class="fh-trade-grade" id="sideAGrade">—</p>
-          </div>
-
-          <div class="fh-trade-vs" aria-hidden="true">⇄</div>
-
-          <div class="fh-trade-side" id="tradeSideB" data-side="B">
-            <h3>Side B</h3>
-            <div class="fh-player-search">
-              <input type="text" id="sideBSearch" placeholder="Search a player to add…" autocomplete="off">
-              <div class="fh-suggestions" id="sideBSuggestions" hidden></div>
-            </div>
-            <ul class="fh-trade-list" id="sideBList"></ul>
-            <p class="fh-trade-grade" id="sideBGrade">—</p>
-          </div>
-        </div>
-
-        <div class="fh-trade-verdict" id="tradeVerdict" hidden></div>
-        <div class="fh-trade-actions">
-          <button type="button" class="ghost-btn" id="tradeResetBtn">Reset</button>
-          <button type="button" class="primary-btn" id="tradeLogBtn" disabled>📋 Log this trade</button>
-          <p class="admin-hint" id="tradeLoginHint" hidden>Log in to save this trade to Recent Transactions.</p>
-          <p class="fh-trade-status" id="tradeLogStatus"></p>
-        </div>
-      </div>
-
-      <div class="fh-tool-block" id="panelPowerRankings">
-        <div class="fh-tool-block-head">
-          <h3>🏅 Power Rankings</h3>
-          <div class="toggle-group" role="tablist" aria-label="Power Rankings mode" id="prModeGroup">
-            <button type="button" class="toggle-btn active" data-pr-mode="skaters" role="tab" aria-selected="true">Skaters</button>
-            <button type="button" class="toggle-btn" data-pr-mode="goalies" role="tab" aria-selected="false">Goalies</button>
-          </div>
-        </div>
-        <ol class="fh-rank-list" id="powerRankList"></ol>
-        <a href="cards.html" class="fh-panel-link">View full Player Ratings →</a>
-      </div>
-
-      <div class="fh-tool-block" id="panelMoreTools">
-        <div class="fh-tool-block-head">
-          <h3>🗓 More Pages</h3>
-          <p>Same pages as before — just tucked in here now instead of the top nav.</p>
-        </div>
-        <div class="mg-grid">
-          <a href="schedule.html" class="mg-game-card">
-            <span class="mg-game-icon" aria-hidden="true">🗓</span>
-            <h2>Schedule</h2>
-            <p>Team-by-team weekly grid with off-nights, back-to-backs, and matchup-strength coloring — good for spotting streaming targets.</p>
-            <span class="mg-game-cta">Open →</span>
-          </a>
-          <a href="totw.html" class="mg-game-card">
-            <span class="mg-game-icon" aria-hidden="true">🏆</span>
-            <h2>Team of the Week</h2>
-            <p>The top-rated skater at every position for the current (or any past) week, with a full reveal ceremony.</p>
-            <span class="mg-game-cta">Open →</span>
-          </a>
-        </div>
+          <span class="mg-game-cta">Open →</span>
+        </a>
+        <a href="power-rankings.html" class="mg-game-card">
+          <span class="mg-game-icon" aria-hidden="true">🏅</span>
+          <h2>Power Rankings</h2>
+          <p>The live skater and goalie leaderboard, same percentile-based rating engine behind Player Ratings.</p>
+          <span class="mg-game-cta">Open →</span>
+        </a>
+        <a href="schedule.html" class="mg-game-card">
+          <span class="mg-game-icon" aria-hidden="true">🗓</span>
+          <h2>Schedule</h2>
+          <p>Team-by-team weekly grid with off-nights, back-to-backs, and matchup-strength coloring — good for spotting streaming targets.</p>
+          <span class="mg-game-cta">Open →</span>
+        </a>
+        <a href="totw.html" class="mg-game-card">
+          <span class="mg-game-icon" aria-hidden="true">🏆</span>
+          <h2>Team of the Week</h2>
+          <p>The top-rated skater at every position for the current (or any past) week, with a full reveal ceremony.</p>
+          <span class="mg-game-cta">Open →</span>
+        </a>
       </div>
     </section>
 
@@ -138,9 +92,6 @@
   </p>
 </footer>
 
-<script src="data.js" defer></script>
-<script src="columns.js" defer></script>
-<script src="ratings.js" defer></script>
 <script src="avatar.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
 <script src="fantasy-hub.js" defer></script>

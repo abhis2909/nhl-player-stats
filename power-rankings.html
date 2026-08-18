@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Rankings — NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏅</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🏅</span>
+      <div>
+        <h1>Hockey Hub</h1>
+        <p class="subtitle">Live leaderboard, same rating engine as Player Ratings.</p>
+      </div>
+    </div>
+    <div id="fhAuthSlot" class="fh-auth-slot"></div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Player Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
+    <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
+    <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
+    <a href="admin.html" class="nav-tab">⚙ Admin</a>
+  </nav>
+</header>
+
+<main>
+  <div id="statusBanner" class="status-banner" hidden></div>
+  <div id="skeleton" class="skeleton" aria-hidden="true"></div>
+
+  <div id="toolBody" hidden>
+    <section class="fh-panel" style="max-width: 480px;">
+      <div class="fh-panel-head">
+        <h2>🏅 Power Rankings</h2>
+        <div class="toggle-group" role="tablist" aria-label="Power Rankings mode" id="prModeGroup">
+          <button type="button" class="toggle-btn active" data-pr-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+          <button type="button" class="toggle-btn" data-pr-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+        </div>
+      </div>
+      <ol class="fh-rank-list" id="powerRankList"></ol>
+      <a href="cards.html" class="fh-panel-link">View full Player Ratings →</a>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Same percentile-based rating engine as Player Ratings and the Stats page's Power Ranking column — see
+    <a href="admin.html">Admin → Rating Methodology</a> to tune it. Data via the unofficial
+    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="columns.js" defer></script>
+<script src="ratings.js" defer></script>
+<script src="avatar.js" defer></script>
+<script src="fantasy-auth.js" defer></script>
+<script src="power-rankings.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade Analyzer — NHL Player Stats</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤝</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🤝</span>
+      <div>
+        <h1>Hockey Hub</h1>
+        <p class="subtitle">Pick players for each side and see who wins.</p>
+      </div>
+    </div>
+    <div id="fhAuthSlot" class="fh-auth-slot"></div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Player Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
+    <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
+    <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
+    <a href="admin.html" class="nav-tab">⚙ Admin</a>
+  </nav>
+</header>
+
+<main>
+  <div id="statusBanner" class="status-banner" hidden></div>
+  <div id="skeleton" class="skeleton" aria-hidden="true"></div>
+
+  <div id="toolBody" hidden>
+    <section class="fh-panel">
+      <div class="fh-panel-head">
+        <h2>🤝 Trade Analyzer</h2>
+        <p>Graded by the same rating engine behind Player Ratings.</p>
+      </div>
+
+      <div class="fh-trade-sides">
+        <div class="fh-trade-side" id="tradeSideA" data-side="A">
+          <h3>Side A</h3>
+          <div class="fh-player-search">
+            <input type="text" id="sideASearch" placeholder="Search a player to add…" autocomplete="off">
+            <div class="fh-suggestions" id="sideASuggestions" hidden></div>
+          </div>
+          <ul class="fh-trade-list" id="sideAList"></ul>
+          <p class="fh-trade-grade" id="sideAGrade">—</p>
+        </div>
+
+        <div class="fh-trade-vs" aria-hidden="true">⇄</div>
+
+        <div class="fh-trade-side" id="tradeSideB" data-side="B">
+          <h3>Side B</h3>
+          <div class="fh-player-search">
+            <input type="text" id="sideBSearch" placeholder="Search a player to add…" autocomplete="off">
+            <div class="fh-suggestions" id="sideBSuggestions" hidden></div>
+          </div>
+          <ul class="fh-trade-list" id="sideBList"></ul>
+          <p class="fh-trade-grade" id="sideBGrade">—</p>
+        </div>
+      </div>
+
+      <div class="fh-trade-verdict" id="tradeVerdict" hidden></div>
+      <div class="fh-trade-actions">
+        <button type="button" class="ghost-btn" id="tradeResetBtn">Reset</button>
+        <button type="button" class="primary-btn" id="tradeLogBtn" disabled>📋 Log this trade</button>
+        <p class="admin-hint" id="tradeLoginHint" hidden>Log in to save this trade to Recent Transactions.</p>
+        <p class="fh-trade-status" id="tradeLogStatus"></p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Trade grades come from the same percentile-based rating engine as Player Ratings and the Stats page's
+    Power Ranking column — see <a href="admin.html">Admin → Rating Methodology</a> to tune it. Data via the
+    unofficial <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="columns.js" defer></script>
+<script src="ratings.js" defer></script>
+<script src="avatar.js" defer></script>
+<script src="fantasy-auth.js" defer></script>
+<script src="trade-analyzer.js" defer></script>
+</body>
+</html>
