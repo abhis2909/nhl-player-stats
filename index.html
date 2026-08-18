@@ -126,9 +126,17 @@
 
 <div id="modalRoot" class="modal-root" hidden>
   <div class="modal-overlay" id="modalOverlay"></div>
-  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
+  <div class="modal-panel pcard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalPlayerName">
     <button class="modal-close" id="modalClose" aria-label="Close player details">✕</button>
     <div id="modalContent"><div class="modal-spinner">Loading…</div></div>
+  </div>
+</div>
+
+<div id="compareModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="compareModalOverlay"></div>
+  <div class="modal-panel pcard-modal-panel compare-modal-panel" role="dialog" aria-modal="true" aria-label="Player comparison">
+    <button class="modal-close" id="compareModalClose" aria-label="Close comparison">✕</button>
+    <div id="compareModalContent"></div>
   </div>
 </div>
 
@@ -144,9 +152,11 @@
 
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
+<script src="snapshots.js" defer></script>
 <script src="ratings.js" defer></script>
 <script src="projections.js" defer></script>
 <script src="avatar.js" defer></script>
+<script src="player-modal.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
 <script src="app.js" defer></script>
 </body>

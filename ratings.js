@@ -312,7 +312,7 @@ function buildCard(player, teamMeta, onOpen, cfg) {
         <div class="pc-top-row">
           <div>
             <div class="pc-ovr-badge" title="Overall, weighted for ${weightLabel}">
-              <span class="val">${player.overall}</span><span class="lbl">OVR</span>
+              <span class="val">${player.overall ?? '—'}</span><span class="lbl">OVR</span>
             </div>
             <div class="pc-pos-badge">${escapeHtml(player.pos)}</div>
           </div>

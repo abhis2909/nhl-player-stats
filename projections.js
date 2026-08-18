@@ -134,6 +134,11 @@ function fitQuadratic(points) {
   return (x) => a * x * x + b * x + c;
 }
 
+// Reserved key (not a real column id) for the raw-games-played-vs-age
+// curve fit alongside every other stat's PER-GAME-RATE curve in the
+// same `curves` object — see fitAgeCurves()'s comment at its use.
+const ROOKIE_GP_CURVE_KEY = '__rookieGamesPlayed';
+
 /** Builds { [positionGroup]: { [statId]: predict(age) | null } } for
  *  every skater column, plus a single 'G' group for goalie columns —
  *  fit from every qualifying player-season across the 4 pooled
@@ -159,6 +164,15 @@ function fitAgeCurves(seasonsPooled, bioMap) {
         if (!isCountingColumn(col)) continue;
         addPoint(group, col.id, age, p[col.id] / p.gamesPlayed);
       }
+      // Raw (not per-game-rate) games-played vs age — a rookie's games
+      // played is set FROM this curve (see computeProjection()'s
+      // ROOKIE_GP_CURVE_KEY use), not from the per-stat rate curves
+      // above, since "games played per game played" is meaningless.
+      // Fit only on the same MIN_GP_FRACTION-eligible pool everything
+      // else uses, so it still reflects a real NHL role, not a cup of
+      // coffee — but young ages naturally pull it below a full season,
+      // which a flat league-max default never could.
+      addPoint(group, ROOKIE_GP_CURVE_KEY, age, p.gamesPlayed);
     }
     for (const p of goalies) {
       const birthDate = bioMap.get(p.playerId);
@@ -168,6 +182,7 @@ function fitAgeCurves(seasonsPooled, bioMap) {
         if (!isCountingColumn(col)) continue;
         addPoint('G', col.id, age, p[col.id] / p.gamesPlayed);
       }
+      addPoint('G', ROOKIE_GP_CURVE_KEY, age, p.gamesPlayed);
     }
   }
 
@@ -247,9 +262,20 @@ function computeProjection({
       historicalPpToi = groupToiAvg.ppToi;
     }
   }
-  historicalGP = isRookie
-    ? defaultGamesPlayed
-    : qualified.reduce((s, h) => s + h.weight * h.row.gamesPlayed, 0);
+  if (isRookie) {
+    // A rookie's default games-played comes from the age-vs-raw-GP
+    // curve (ROOKIE_GP_CURVE_KEY, fit alongside every other per-game
+    // rate curve — see fitAgeCurves()), evaluated at this player's
+    // projected age — NOT the flat league-wide max every prior version
+    // of this used, which projected every rookie (including depth
+    // call-ups and backup goalies who structurally split starts) at a
+    // full 82-84 games. Falls back to defaultGamesPlayed only if the
+    // curve couldn't be fit at all (too few data points).
+    const gpCurve = ageCurves[group]?.[ROOKIE_GP_CURVE_KEY];
+    historicalGP = gpCurve ? Math.max(1, gpCurve(projectedAge)) : defaultGamesPlayed;
+  } else {
+    historicalGP = qualified.reduce((s, h) => s + h.weight * h.row.gamesPlayed, 0);
+  }
 
   const out = { ...currentInfo, playerId };
 

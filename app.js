@@ -64,6 +64,10 @@ const state = {
   rawGoalies: [],
   skaters: [],     // DERIVED from raw* + statMode (applyStatMode()) — what render/sort/filter actually use
   goalies: [],
+  ratedSkatersById: new Map(), // playerId -> raw-totals rated player (ratedPoolFor()) — what row clicks hand to the shared player-modal.js, never the possibly-per-game-divided state.skaters row itself
+  ratedGoaliesById: new Map(),
+  currentSeasonRatedSkaters: [], // state.seasonId's own rated pool, fixed regardless of period/view — feeds player-modal.js's Rating Trend "Live" point
+  currentSeasonRatedGoalies: [],
   columns: loadColumnConfig(), // { skaters: [...ids], goalies: [...ids] } — see columns.js
   sort: {
     skaters: { key: 'goals', dir: 'desc' },
@@ -175,33 +179,53 @@ function toPerGame(list, catalog) {
 /** Computes the Power Ranking ("overall") column via ratings.js's
  *  ratePool() — the exact same percentile-blend engine Player Ratings
  *  cards use, admin-tunable under Admin -> Rating Methodology
- *  (state.ratingConfig, fetched once in init()) — and merges the result
- *  onto `list` by playerId. Always computed from RAW totals (ratePool's
- *  documented convention), never the per-game-divided view — so this
- *  runs on state.raw* before toPerGame(), and the merge-on step after
- *  is keyed by playerId rather than array position so it's correct
- *  regardless of stat mode. Skipped entirely (cheap early-out) unless
- *  the "overall" column is actually enabled — no reason to pay for an
- *  extra O(n) ratePool() pass otherwise. */
-function attachPowerRankings(rawList, displayList, mode) {
-  if (!state.columns[mode]?.includes('overall')) return displayList;
+ *  (state.ratingConfig, fetched once in init()). Always computed from
+ *  RAW totals (ratePool's documented convention), never the
+ *  per-game-divided view — this is also exactly why the returned Map
+ *  (not the possibly-per-game-divided table row) is what gets passed to
+ *  the shared player-modal.js on row click (see openModalForPlayer()):
+ *  passing a per-game-divided row straight into the modal would feed
+ *  its own "current season" stats window fractional per-game numbers as
+ *  if they were season totals. Always computed now, not just when the
+ *  PWR column happens to be displayed — the modal needs .overall/
+ *  .ratings for every clickable row regardless of whether that column
+ *  is currently visible. Confirmed cheap enough for the whole
+ *  ~700-player pool elsewhere in this codebase. */
+function ratedPoolFor(rawList, mode) {
   // Same eligibility pre-filter cards.js applies before rating — not
   // just to avoid a misleadingly extreme percentile for a 1-game
   // callup, but because a long tail of near-zero-total depth players
   // in the pool compresses the percentile range for everyone else.
-  // Ineligible players just show "—" (formatStatValue's null check)
-  // rather than a real-looking-but-meaningless number.
+  // Ineligible players just show "—" (formatStatValue's null check,
+  // and buildCard()'s own null-safe OVR badge) rather than a
+  // real-looking-but-meaningless number.
   const minGpFraction = state.ratingConfig?.minGpFraction ?? MIN_GP_FRACTION;
   const minGp = Math.ceil(seasonGameCount(rawList) * minGpFraction);
   const eligible = rawList.filter((p) => p.gamesPlayed >= minGp);
   const rated = ratePool(eligible, mode, state.ratingConfig); // ratings.js
-  const overallById = new Map(rated.map((p) => [p.playerId, p.overall]));
-  return displayList.map((p) => ({ ...p, overall: overallById.get(p.playerId) ?? null }));
+  return new Map(rated.map((p) => [p.playerId, p]));
+}
+
+/** Merges .overall/.ratings from `ratedById` (see ratedPoolFor() above)
+ *  onto `displayList` by playerId — safe regardless of whether
+ *  `displayList` is the raw or per-game-divided view, since only the
+ *  identity-keyed lookup values (never displayList's own fields) feed
+ *  the merged rating data. */
+function attachPowerRankings(displayList, ratedById) {
+  return displayList.map((p) => {
+    const r = ratedById.get(p.playerId);
+    return { ...p, overall: r?.overall ?? null, ratings: r?.ratings ?? [] };
+  });
 }
 
 function applyStatMode() {
-  state.skaters = attachPowerRankings(state.rawSkaters, toPerGame(state.rawSkaters, SKATER_COLUMNS), 'skaters');
-  state.goalies = attachPowerRankings(state.rawGoalies, toPerGame(state.rawGoalies, GOALIE_COLUMNS), 'goalies');
+  // Kept separately (raw-totals, never per-game-divided) so row clicks
+  // can hand the shared player-modal.js a player object it can safely
+  // treat as season totals — see ratedPoolFor()'s doc comment.
+  state.ratedSkatersById = ratedPoolFor(state.rawSkaters, 'skaters');
+  state.ratedGoaliesById = ratedPoolFor(state.rawGoalies, 'goalies');
+  state.skaters = attachPowerRankings(toPerGame(state.rawSkaters, SKATER_COLUMNS), state.ratedSkatersById);
+  state.goalies = attachPowerRankings(toPerGame(state.rawGoalies, GOALIE_COLUMNS), state.ratedGoaliesById);
 }
 
 /** Same as columns.js's formatColumnValue(), except a per-game counting
@@ -481,6 +505,7 @@ function updateSeasonLabel() {
 
 async function init() {
   hideBanner();
+  await snapshotsReady; // snapshots.js — the shared player-modal.js's Rating Trend chart reads snapshot history
   // Admin-tuned rating weights for the Power Ranking column (Admin ->
   // Rating Methodology) — null (fetch failure, or nothing saved yet)
   // falls back to ratings.js's own hardcoded defaults. Fetched once
@@ -497,6 +522,25 @@ async function init() {
     populateHistoricalSeasonGroup();
     populateCurrentSeasonSubGroup();
     renderTableHeaders();
+
+    // state.seasonId's own rated pool, fixed regardless of whatever
+    // period/view ends up displayed below — feeds the shared
+    // player-modal.js's Rating Trend "Live" point and its in-modal
+    // Compare search pool. Computed once here, not per-view.
+    const skRatedById = ratedPoolFor(skaters, 'skaters');
+    const goRatedById = ratedPoolFor(goalies, 'goalies');
+    state.currentSeasonRatedSkaters = Array.from(skRatedById.values());
+    state.currentSeasonRatedGoalies = Array.from(goRatedById.values());
+    initPlayerModal({ // player-modal.js
+      teamMeta: state.teamMeta,
+      seasonId: state.seasonId,
+      ratingConfig: state.ratingConfig,
+      seasonDataCache: state.seasonDataCache,
+      currentSeasonRatedSkaters: state.currentSeasonRatedSkaters,
+      currentSeasonRatedGoalies: state.currentSeasonRatedGoalies,
+      historicalSeasonIds: historicalSeasonIdsUI(),
+      searchPool: [...state.currentSeasonRatedSkaters, ...state.currentSeasonRatedGoalies],
+    });
 
     // Landing state: just the Historical / Current Season cards, nothing
     // fetched or rendered for either view yet — picking one is what
@@ -707,9 +751,19 @@ function buildRow(p, rank, cols) {
   tr.append(rankTd, playerTd, teamTd);
   for (const col of cols) tr.appendChild(statCell(p, col));
 
-  tr.addEventListener('click', () => openModal(p));
-  tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(p); } });
+  tr.addEventListener('click', () => openModalForPlayer(p));
+  tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModalForPlayer(p); } });
   return tr;
+}
+
+/** Looks up `p`'s raw-totals rated counterpart (ratedPoolFor(), never
+ *  the row's own possibly-per-game-divided fields) and hands THAT to
+ *  the shared player-modal.js — see attachPowerRankings()'s doc
+ *  comment for why this indirection matters. Falls back to `p` itself
+ *  in the (should-never-happen) case the lookup misses. */
+function openModalForPlayer(p) {
+  const ratedById = state.mode === 'goalies' ? state.ratedGoaliesById : state.ratedSkatersById;
+  openPlayerModal(ratedById.get(p.playerId) || p); // openPlayerModal() — player-modal.js
 }
 
 function render() {
@@ -737,164 +791,6 @@ function updateSortHeaders() {
     if (th.dataset.key === key) th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
     else th.removeAttribute('aria-sort');
   });
-}
-
-/* ------------------------------ modal ------------------------------ */
-
-function openModal(player) {
-  el.modalRoot.hidden = false;
-  document.body.style.overflow = 'hidden';
-  el.modalContent.innerHTML = '<div class="modal-spinner">Loading player…</div>';
-
-  getJSON(`${API_WEB}/v1/player/${player.playerId}/landing`)
-    .then((landing) => {
-      renderModalHero(landing, player);
-      setupGameLog(landing, player);
-    })
-    .catch((err) => {
-      el.modalContent.innerHTML = `<div class="modal-spinner">Couldn't load player details (${escapeHtml(err.message)}).</div>`;
-    });
-}
-
-function closeModal() {
-  el.modalRoot.hidden = true;
-  document.body.style.overflow = '';
-  el.modalContent.innerHTML = '';
-}
-
-function renderModalHero(landing, player) {
-  const name = `${landing.firstName?.default ?? ''} ${landing.lastName?.default ?? ''}`.trim() || player.name;
-  const headshot = landing.headshot || `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
-  const teamLogo = landing.teamLogo;
-  const teamName = landing.fullTeamName?.default;
-  const statusLabel = landing.isActive === false ? 'Retired / Not on an NHL roster' : (teamName || 'Free Agent');
-  const age = ageFromBirthDate(landing.birthDate);
-  const height = formatHeight(landing.heightInInches);
-  const weight = landing.weightInPounds ? `${landing.weightInPounds} lb` : '—';
-  const birthplace = [landing.birthCity?.default, landing.birthStateProvince?.default, landing.birthCountry]
-    .filter(Boolean).join(', ');
-  const draft = landing.draftDetails
-    ? `${landing.draftDetails.year} · Rd ${landing.draftDetails.round}, Pick ${landing.draftDetails.overallPick} (${landing.draftDetails.teamAbbrev})`
-    : 'Undrafted';
-
-  const chipCols = activeColumns(player.pos === 'G' ? 'goalies' : 'skaters');
-  const statChips = chipCols.map((col) => [col.short, formatStatValue(col, player[col.id])]);
-
-  el.modalContent.innerHTML = `
-    <div class="ph-hero">
-      <img class="ph-headshot" src="${headshot}" alt="" onerror="this.style.visibility='hidden'">
-      <div>
-        <h2 class="ph-name" id="modalPlayerName">${escapeHtml(name)}</h2>
-        <div class="ph-meta">
-          ${teamLogo ? `<img class="team-logo" src="${teamLogo}" alt="">` : ''}
-          <span>${escapeHtml(statusLabel)}</span>
-          ${landing.sweaterNumber ? `<span>· #${landing.sweaterNumber}</span>` : ''}
-          <span>· ${escapeHtml(landing.position || player.pos)}</span>
-        </div>
-      </div>
-    </div>
-    <div class="ph-bio">
-      <div class="ph-bio-item"><span class="label">Age</span><span class="value">${age ?? '—'}</span></div>
-      <div class="ph-bio-item"><span class="label">Height</span><span class="value">${height}</span></div>
-      <div class="ph-bio-item"><span class="label">Weight</span><span class="value">${weight}</span></div>
-      <div class="ph-bio-item"><span class="label">Shoots/Catches</span><span class="value">${landing.shootsCatches ?? '—'}</span></div>
-      <div class="ph-bio-item"><span class="label">Birthplace</span><span class="value">${escapeHtml(birthplace) || '—'}</span></div>
-      <div class="ph-bio-item"><span class="label">Draft</span><span class="value">${escapeHtml(draft)}</span></div>
-    </div>
-    <div class="ph-stats">
-      ${statChips.map(([lbl, num]) => `<div class="stat-chip"><span class="num">${num ?? 0}</span><span class="lbl">${lbl}</span></div>`).join('')}
-    </div>
-    <div class="gamelog-head">
-      <h3>Game Log</h3>
-      <div class="gamelog-controls">
-        <select id="gameLogSeason" aria-label="Season"></select>
-        <button type="button" id="gtRegular" class="active">Regular</button>
-        <button type="button" id="gtPlayoffs">Playoffs</button>
-      </div>
-    </div>
-    <div class="gamelog-table-wrap" id="gameLogWrap"><div class="gamelog-loading">Loading…</div></div>
-  `;
-}
-
-function setupGameLog(landing, player) {
-  const seasons = Array.from(new Set(
-    (landing.seasonTotals || [])
-      .filter((s) => s.leagueAbbrev === 'NHL')
-      .map((s) => s.season),
-  )).sort((a, b) => b - a);
-
-  if (seasons.length === 0) seasons.push(state.seasonId);
-
-  const seasonSelect = document.getElementById('gameLogSeason');
-  seasonSelect.innerHTML = seasons.map((s) => `<option value="${s}">${seasonLabel(s)}</option>`).join('');
-
-  const btnReg = document.getElementById('gtRegular');
-  const btnPo = document.getElementById('gtPlayoffs');
-  let gameType = 2;
-
-  const loadLog = () => fetchGameLog(player.playerId, seasonSelect.value, gameType, player.pos);
-
-  seasonSelect.addEventListener('change', loadLog);
-  btnReg.addEventListener('click', () => {
-    gameType = 2;
-    btnReg.classList.add('active');
-    btnPo.classList.remove('active');
-    loadLog();
-  });
-  btnPo.addEventListener('click', () => {
-    gameType = 3;
-    btnPo.classList.add('active');
-    btnReg.classList.remove('active');
-    loadLog();
-  });
-
-  loadLog();
-}
-
-async function fetchGameLog(playerId, season, gameType, pos) {
-  const wrap = document.getElementById('gameLogWrap');
-  if (!wrap) return;
-  wrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
-  try {
-    const data = await getJSON(`${API_WEB}/v1/player/${playerId}/game-log/${season}/${gameType}`);
-    const games = data.gameLog || [];
-    if (games.length === 0) {
-      wrap.innerHTML = `<div class="gamelog-empty">No ${gameType === 3 ? 'playoff' : 'regular season'} games found for ${seasonLabel(season)}.</div>`;
-      return;
-    }
-    wrap.innerHTML = buildGameLogTable(games, pos);
-  } catch (err) {
-    wrap.innerHTML = `<div class="gamelog-empty">Couldn't load game log (${escapeHtml(err.message)}).</div>`;
-  }
-}
-
-function buildGameLogTable(games, pos) {
-  const isGoalie = pos === 'G';
-  const head = isGoalie
-    ? '<tr><th>Date</th><th>Opp</th><th>Dec</th><th>GA</th><th>SA</th><th>SV%</th><th>SO</th><th>TOI</th></tr>'
-    : '<tr><th>Date</th><th>Opp</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>TOI</th></tr>';
-
-  const rows = games.map((g) => {
-    const opp = (g.homeRoadFlag === 'H' ? 'vs ' : '@ ') + (g.opponentAbbrev ?? '');
-    if (isGoalie) {
-      const dec = g.decision || '—';
-      const decClass = dec === 'W' ? 'result-w' : dec === 'L' ? 'result-l' : dec === 'O' ? 'result-o' : '';
-      const svPct = typeof g.savePctg === 'number' ? g.savePctg.toFixed(3).replace(/^0/, '') : '—';
-      return `<tr>
-        <td>${formatDate(g.gameDate)}</td><td>${escapeHtml(opp)}</td>
-        <td class="${decClass}">${dec}</td>
-        <td>${g.goalsAgainst ?? 0}</td><td>${g.shotsAgainst ?? 0}</td>
-        <td>${svPct}</td><td>${g.shutouts ?? 0}</td><td>${g.toi ?? '—'}</td>
-      </tr>`;
-    }
-    return `<tr>
-      <td>${formatDate(g.gameDate)}</td><td>${escapeHtml(opp)}</td>
-      <td>${g.goals ?? 0}</td><td>${g.assists ?? 0}</td><td>${g.points ?? 0}</td>
-      <td>${g.plusMinus ?? 0}</td><td>${g.shots ?? 0}</td><td>${g.pim ?? 0}</td><td>${g.toi ?? '—'}</td>
-    </tr>`;
-  }).join('');
-
-  return `<table class="gamelog-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
 /* ---------------------------- event wiring ---------------------------- */
@@ -961,11 +857,8 @@ el.searchInput.addEventListener('input', debounce(() => {
   render();
 }, 150));
 
-el.modalClose.addEventListener('click', closeModal);
-el.modalOverlay.addEventListener('click', closeModal);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !el.modalRoot.hidden) closeModal();
-});
+// modalClose/modalOverlay/Escape are wired by the shared player-modal.js
+// (loaded before this file) — it owns the modal now, see openModalForPlayer().
 
 // Pick up column-selection changes saved from admin.html in another tab.
 window.addEventListener('storage', (e) => {
