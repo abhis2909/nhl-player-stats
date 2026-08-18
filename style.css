@@ -3011,6 +3011,39 @@ a.mg-game-card:hover {
 
 .fh-panel-wide { grid-column: 1 / -1; }
 
+/* Tools panel — groups Trade Analyzer, Power Rankings, and the
+   Schedule/Team-of-the-Week page links into one bordered panel instead
+   of three separate ones, each block separated by a divider (same
+   "first block has no top border" shape as the admin Manage modal's
+   .um-section). */
+.fh-tool-block {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.fh-tool-block:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.fh-tool-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.fh-tool-block-head h3 { margin: 0; font-size: 15px; }
+
+.fh-tool-block-head p {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  flex-basis: 100%;
+}
+
 .fh-panel-head {
   display: flex;
   align-items: center;
