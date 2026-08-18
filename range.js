@@ -111,12 +111,13 @@ function endpointLabel(key) {
 
 /** Saved snapshots for the CURRENT season only, oldest first — crossing a
  *  season boundary in a delta wouldn't mean anything, so last season's
- *  snapshots just don't show up as pickable endpoints once 2026-27 starts. */
+ *  snapshots just don't show up as pickable endpoints once 2026-27 starts.
+ *  Thin wrapper over snapshots.js's shared snapshotsForSeason() (also
+ *  used by app.js's date-range picker on the Stats page) — kept as its
+ *  own name here since every call site in this file already says
+ *  "current season snapshots", not "snapshots for state.seasonId". */
 function currentSeasonSnapshots() {
-  return listSnapshots()
-    .map((s) => ({ ...s, full: getSnapshotByKey(s.key) }))
-    .filter((s) => s.full && s.full.data.seasonId === state.seasonId)
-    .sort((a, b) => a.savedAt.localeCompare(b.savedAt));
+  return snapshotsForSeason(state.seasonId);
 }
 
 function rerate() {

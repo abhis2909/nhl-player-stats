@@ -62,6 +62,40 @@ function listSnapshots() {
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
+/** Saved snapshots for one season only, oldest first — crossing a season
+ *  boundary in a delta wouldn't mean anything. Shared by range.js's
+ *  endpoint pickers and app.js's date-range feature (both need "which
+ *  snapshots am I even allowed to pick between"). */
+function snapshotsForSeason(seasonId) {
+  return listSnapshots()
+    .map((s) => ({ ...s, full: getSnapshotByKey(s.key) }))
+    .filter((s) => s.full && s.full.data.seasonId === seasonId)
+    .sort((a, b) => a.savedAt.localeCompare(b.savedAt));
+}
+
+/** The saved snapshot (for `seasonId`) whose date is closest to
+ *  `targetDateStr` ("YYYY-MM-DD") — or null if there are no snapshots
+ *  for that season at all. This is a NEAREST match, not an exact one:
+ *  the NHL stats API only exposes season-cumulative totals, not
+ *  "stats as of an arbitrary past date", so any date-based view on this
+ *  site can only ever resolve to whichever snapshot happens to be
+ *  closest to the date you asked for — see range.js's identical
+ *  days-ago version (pickClosestSnapshot) for the original of this
+ *  pattern; this is the date-string-based generalization used by
+ *  app.js's calendar date-range picker. */
+function pickSnapshotClosestToDate(targetDateStr, seasonId) {
+  const snaps = snapshotsForSeason(seasonId);
+  if (snaps.length === 0) return null;
+  const targetTime = new Date(targetDateStr + 'T00:00:00Z').getTime();
+  let best = snaps[0];
+  let bestDiff = Infinity;
+  for (const s of snaps) {
+    const diff = Math.abs(new Date(s.savedAt).getTime() - targetTime);
+    if (diff < bestDiff) { bestDiff = diff; best = s; }
+  }
+  return best;
+}
+
 function serializeSeasonData({ seasonId, teamMeta, skaters, goalies }) {
   return { seasonId, teamMeta: Array.from(teamMeta.entries()), skaters, goalies };
 }

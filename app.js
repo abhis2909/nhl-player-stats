@@ -21,6 +21,12 @@ const el = {
   seasonToggleGroup: document.getElementById('seasonToggleGroup'),
   statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   qualifiedToggleBtn: document.getElementById('qualifiedToggleBtn'),
+  quickWeekBtn: document.getElementById('quickWeekBtn'),
+  quickMonthBtn: document.getElementById('quickMonthBtn'),
+  statsFromDate: document.getElementById('statsFromDate'),
+  statsToDate: document.getElementById('statsToDate'),
+  statsRangeClearBtn: document.getElementById('statsRangeClearBtn'),
+  statsRangeNote: document.getElementById('statsRangeNote'),
   teamSelect: document.getElementById('teamSelect'),
   searchInput: document.getElementById('searchInput'),
   statusBanner: document.getElementById('statusBanner'),
@@ -49,7 +55,8 @@ const state = {
   seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw totals — avoids refetching a season already looked at
   statMode: 'total',       // 'total' | 'perGame' — see applyStatMode()
   qualifiedOnly: false,    // when true, hide players under MIN_GP_FRACTION (ratings.js) of the pool's max games played
-  snapshotLabel: null,     // set in init() when the CURRENT season is showing a saved snapshot rather than live data
+  viewMode: 'season',      // 'season' | 'range' — range means the date-range picker is driving the table, not the Season toggle
+  activeRange: null,       // { fromLabel, toLabel } for whichever range is currently shown, set by loadDateRange()
   teamMeta: new Map(),   // abbrev -> { name, logo, conference, division }
   rawSkaters: [],  // selected season's totals, as fetched — untouched by statMode
   rawGoalies: [],
@@ -62,11 +69,14 @@ const state = {
   },
 };
 
-// How far back the season toggle goes: current, and the 2 seasons before
-// it. NHL season ids follow a YYYYYYYY+1 pattern, so stepping back one
-// season is always -10001 (see cards.js's identical convention).
+// How far back the season toggle goes: current, and the season before it.
+// (Used to go back 2 seasons — dropped the older one per explicit
+// request, "kinda useless"; the date-range picker covers recent-history
+// use cases better anyway.) NHL season ids follow a YYYYYYYY+1 pattern,
+// so stepping back one season is always -10001 (see cards.js's
+// identical convention).
 function seasonOffsets() {
-  return [state.seasonId - 20002, state.seasonId - 10001, state.seasonId];
+  return [state.seasonId - 10001, state.seasonId];
 }
 
 // The 4th, projected season — one season ahead of "current". Its
@@ -107,7 +117,7 @@ function positionGroup(pos) {
  *  the rating pass (this page shows raw/derived stats, not percentiles).
  *  No network call if already cached (covers both "switch back to a
  *  season you already viewed" and "the current season, already fetched
- *  by getSeasonData() in init()"). */
+ *  by loadSeasonData() in init()"). */
 async function loadStatsForSeason(seasonId) {
   let raw = state.seasonDataCache.get(seasonId);
   if (!raw) {
@@ -237,18 +247,20 @@ async function loadProjectedSeason(seasonId) {
 
 function markActiveSeasonButton() {
   el.seasonToggleGroup.querySelectorAll('.toggle-btn').forEach((btn) => {
-    const active = Number(btn.dataset.season) === state.selectedSeasonId;
+    const active = state.viewMode === 'season' && Number(btn.dataset.season) === state.selectedSeasonId;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active ? 'true' : 'false');
   });
 }
 
 async function onSeasonToggleClick(seasonId) {
-  if (seasonId === state.selectedSeasonId) return;
+  if (state.viewMode === 'season' && seasonId === state.selectedSeasonId) return;
   toggleSkeleton(true);
   hideBanner();
   try {
+    state.viewMode = 'season';
     await loadSelectedSeason(seasonId);
+    clearDateInputs();
     markActiveSeasonButton();
     updateSeasonLabel();
     ensureValidSort();
@@ -261,15 +273,119 @@ async function onSeasonToggleClick(seasonId) {
 }
 
 function updateSeasonLabel() {
+  const statModeLabel = state.statMode === 'perGame' ? 'Per Game' : 'Total';
+
+  if (state.viewMode === 'range') {
+    const { fromLabel, toLabel } = state.activeRange;
+    el.seasonLabel.textContent =
+      `Custom range: ${fromLabel} → ${toLabel} · Regular Season stats · ${statModeLabel} — ` +
+      'showing whoever played at least one game in this window, resolved to the nearest saved snapshots.';
+    return;
+  }
+
   const current = state.selectedSeasonId === state.seasonId;
   const projected = state.selectedSeasonId === projectedSeasonId();
-  const statModeLabel = state.statMode === 'perGame' ? 'Per Game' : 'Total';
   let text = `${seasonLabel(state.selectedSeasonId)}${current ? ' (Current)' : projected ? ' (Projected)' : ''} · Regular Season stats · ${statModeLabel}`;
-  if (current && state.snapshotLabel) text += ` · ${state.snapshotLabel}`;
   if (projected) {
     text += ' · Projection: weighted recent seasons + age curve + deployment input — not real stats, tune the methodology under Admin → Projection Methodology.';
   }
   el.seasonLabel.textContent = text;
+}
+
+/* ------------------------------ date range ------------------------------ */
+/* "Last 30 Days" / "Previous Week" / a custom calendar range — computed
+   from saved snapshots via the exact same delta engine Range Ratings
+   uses (buildDeltaPool, ratings.js), so this is bounded by the same
+   real constraint that page has: the NHL stats API only exposes
+   season-cumulative totals, not "stats as of an arbitrary date", so any
+   date picked here resolves to whichever SAVED SNAPSHOT is closest to
+   it (pickSnapshotClosestToDate(), snapshots.js) — not an exact value.
+   Snapshots are created from Admin → Range Ratings' own "Retrieve
+   Latest Stats" button now that this page's own copy of that control
+   is gone; both read/write the same localStorage snapshot store. */
+
+/** Builds the { seasonId, teamMeta, skaters, goalies } shape
+ *  buildDeltaPool() expects for the CURRENT season's live/cached data —
+ *  used as the "to" side whenever no explicit To date is given. */
+function currentSeasonDataObject() {
+  const cur = state.seasonDataCache.get(state.seasonId);
+  return { seasonId: state.seasonId, teamMeta: state.teamMeta, skaters: cur.skaters, goalies: cur.goalies };
+}
+
+/** Loads (or reuses a cached copy of) the delta between whichever
+ *  snapshot is closest to `fromDate` and whichever is closest to
+ *  `toDate` (or live current data if `toDate` is falsy). Throws with a
+ *  clear message if there's no saved snapshot for the current season
+ *  at all yet, so the caller's catch block can show it as a banner. */
+async function loadDateRange(fromDate, toDate) {
+  const cacheKey = `range:${fromDate}:${toDate || 'live'}`;
+  let raw = state.seasonDataCache.get(cacheKey);
+  if (!raw) {
+    const fromSnap = pickSnapshotClosestToDate(fromDate, state.seasonId); // snapshots.js
+    if (!fromSnap) {
+      throw new Error('no saved snapshot for this season yet — retrieve one from Admin → Range Ratings first');
+    }
+    let toDataObj, toLabel;
+    if (toDate) {
+      const toSnap = pickSnapshotClosestToDate(toDate, state.seasonId);
+      if (!toSnap) throw new Error('no saved snapshot for this season yet — retrieve one from Admin → Range Ratings first');
+      toDataObj = toSnap.full.data;
+      toLabel = toSnap.label;
+    } else {
+      toDataObj = currentSeasonDataObject();
+      toLabel = 'Live (now)';
+    }
+    const deltaSkaters = buildDeltaPool(fromSnap.full.data, toDataObj, 'skaters'); // ratings.js
+    const deltaGoalies = buildDeltaPool(fromSnap.full.data, toDataObj, 'goalies');
+    raw = { skaters: deltaSkaters, goalies: deltaGoalies, fromLabel: fromSnap.label, toLabel };
+    state.seasonDataCache.set(cacheKey, raw);
+  }
+  state.rawSkaters = raw.skaters;
+  state.rawGoalies = raw.goalies;
+  state.activeRange = { fromLabel: raw.fromLabel, toLabel: raw.toLabel };
+  state.viewMode = 'range';
+  applyStatMode();
+}
+
+function clearDateInputs() {
+  el.statsFromDate.value = '';
+  el.statsToDate.value = '';
+  el.statsRangeClearBtn.hidden = true;
+  el.statsRangeNote.textContent = '';
+}
+
+async function applyDateRange(fromDate, toDate) {
+  toggleSkeleton(true);
+  hideBanner();
+  try {
+    await loadDateRange(fromDate, toDate);
+    el.statsRangeClearBtn.hidden = false;
+    el.statsRangeNote.textContent =
+      `Resolved to the nearest saved snapshots: ${state.activeRange.fromLabel} → ${state.activeRange.toLabel}.`;
+    markActiveSeasonButton(); // clears any season button's active state
+    updateSeasonLabel();
+    ensureValidSort();
+    render();
+  } catch (err) {
+    showBanner(`Couldn't build that range (${err.message}).`);
+  } finally {
+    toggleSkeleton(false);
+  }
+}
+
+async function exitRangeView() {
+  clearDateInputs();
+  toggleSkeleton(true);
+  try {
+    state.viewMode = 'season';
+    await loadSelectedSeason(state.selectedSeasonId ?? state.seasonId);
+    markActiveSeasonButton();
+    updateSeasonLabel();
+    ensureValidSort();
+    render();
+  } finally {
+    toggleSkeleton(false);
+  }
 }
 
 /* ------------------------------ init ------------------------------ */
@@ -278,10 +394,11 @@ async function init() {
   toggleSkeleton(true);
   hideBanner();
   try {
-    // Always fetch the CURRENT season (live, or the active local
-    // snapshot) — it's the default season shown, and the other 2 Season
-    // toggle options are counted back from it (see seasonOffsets()).
-    const { seasonId, teamMeta, skaters, goalies, source, snapshotLabel } = await getSeasonData();
+    // Always live — this page no longer has its own snapshot-vs-live
+    // switcher (removed; Admin → Range Ratings already has the
+    // equivalent "Retrieve Latest Stats" control and both read/write
+    // the same snapshot store, so nothing was lost, just de-duplicated).
+    const { seasonId, teamMeta, skaters, goalies } = await loadSeasonData(); // data.js
     state.seasonId = seasonId;
     state.teamMeta = teamMeta;
     state.seasonDataCache.set(seasonId, { skaters, goalies });
@@ -289,17 +406,13 @@ async function init() {
     populateTeamSelect();
     populateSeasonToggle();
 
-    // A data-bar action (switching snapshots, Retrieve Latest Stats)
-    // re-runs init() — keep whatever season the user had selected
-    // rather than silently jumping back to current, unless this is the
-    // first load (selectedSeasonId still null) or it's no longer one of
-    // the 4 options (a season rolled over since).
-    const validSeasons = new Set([...seasonOffsets(), projectedSeasonId()]);
-    const targetSeason = validSeasons.has(state.selectedSeasonId) ? state.selectedSeasonId : seasonId;
+    const targetSeason = new Set(seasonOffsets()).has(state.selectedSeasonId) || state.selectedSeasonId === projectedSeasonId()
+      ? state.selectedSeasonId
+      : seasonId;
+    state.viewMode = 'season';
     await loadSelectedSeason(targetSeason); // no-op network-wise when targetSeason === seasonId (just cached above), or cached if Projected was already built this session
     markActiveSeasonButton();
 
-    state.snapshotLabel = source === 'snapshot' ? snapshotLabel : null;
     updateSeasonLabel();
     ensureValidSort();
     renderTableHeaders();
@@ -746,6 +859,30 @@ el.qualifiedToggleBtn.addEventListener('click', () => {
   render();
 });
 
+el.quickWeekBtn.addEventListener('click', () => {
+  const from = addDays(todayISO(), -7); // data.js
+  el.statsFromDate.value = from;
+  el.statsToDate.value = '';
+  applyDateRange(from, null);
+});
+
+el.quickMonthBtn.addEventListener('click', () => {
+  const from = addDays(todayISO(), -30); // data.js
+  el.statsFromDate.value = from;
+  el.statsToDate.value = '';
+  applyDateRange(from, null);
+});
+
+function onDateInputChange() {
+  const from = el.statsFromDate.value;
+  if (!from) return; // From is required; To alone does nothing yet
+  applyDateRange(from, el.statsToDate.value || null);
+}
+el.statsFromDate.addEventListener('change', onDateInputChange);
+el.statsToDate.addEventListener('change', onDateInputChange);
+
+el.statsRangeClearBtn.addEventListener('click', exitRangeView);
+
 el.teamSelect.addEventListener('change', () => {
   state.team = el.teamSelect.value;
   render();
@@ -770,7 +907,5 @@ window.addEventListener('storage', (e) => {
   renderTableHeaders();
   render();
 });
-
-wireDataBar(init, (err) => showBanner(`Couldn't retrieve latest stats (${err.message}).`));
 
 init();

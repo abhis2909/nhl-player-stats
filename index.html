@@ -14,7 +14,7 @@
     <div class="brand">
       <span class="brand-icon" aria-hidden="true">🏒</span>
       <div>
-        <h1>NHL Player Stats</h1>
+        <h1>Hockey Hub</h1>
         <p class="subtitle" id="seasonLabel">Loading season…</p>
       </div>
     </div>
@@ -31,15 +31,24 @@
 </header>
 
 <main>
-  <div class="data-bar">
-    <span class="data-bar-label" id="dataSourceLabel">Live data</span>
-    <label class="visually-hidden" for="snapshotSelect">Data snapshot</label>
-    <select id="snapshotSelect"></select>
-    <button type="button" id="retrieveBtn" class="ghost-btn">📥 Retrieve Latest Stats</button>
-    <button type="button" id="deleteSnapshotBtn" class="ghost-btn danger-btn" hidden>🗑 Delete Snapshot</button>
-  </div>
-
   <div id="statusBanner" class="status-banner" hidden></div>
+
+  <div class="range-bar">
+    <div class="range-quick">
+      <button type="button" id="quickWeekBtn" class="ghost-btn">Past Week</button>
+      <button type="button" id="quickMonthBtn" class="ghost-btn">Past Month</button>
+    </div>
+    <div class="range-field">
+      <label for="statsFromDate">From</label>
+      <input type="date" id="statsFromDate">
+    </div>
+    <div class="range-field">
+      <label for="statsToDate">To</label>
+      <input type="date" id="statsToDate" placeholder="Live (now)">
+    </div>
+    <button type="button" id="statsRangeClearBtn" class="ghost-btn" hidden>✕ Back to season view</button>
+  </div>
+  <p class="range-note" id="statsRangeNote"></p>
 
   <div class="cards-search-bar">
     <label class="visually-hidden" for="searchInput">Search players</label>

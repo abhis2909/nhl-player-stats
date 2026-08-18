@@ -60,7 +60,7 @@ a { color: var(--accent); }
 .header-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 14px 20px;
+  padding: 9px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -71,25 +71,29 @@ a { color: var(--accent); }
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
 }
 
+/* Every page shares the one "Hockey Hub" <h1> now (a page's identity
+   comes from its icon + subtitle + the active nav tab instead), so the
+   header itself is smaller/lower-emphasis than when each page had its
+   own distinct title here. */
 .brand-icon {
-  font-size: 30px;
+  font-size: 20px;
   line-height: 1;
   filter: drop-shadow(0 0 10px rgba(79, 179, 255, 0.35));
 }
 
 .brand h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: 14.5px;
   font-weight: 700;
   letter-spacing: 0.2px;
 }
 
 .subtitle {
-  margin: 2px 0 0;
-  font-size: 12.5px;
+  margin: 1px 0 0;
+  font-size: 11.5px;
   color: var(--text-dim);
 }
 
@@ -707,6 +711,21 @@ td.stat-num {
      scrollWidth > innerWidth on the <body> at in-between widths). */
   overflow-x: auto;
   scrollbar-width: thin;
+  /* Scroll-shadow hint (mobile, mainly): a soft dark fade at whichever
+     edge still has more tabs to scroll to, so it doesn't just look like
+     the nav ends there. Pure CSS, no JS/markup — two gradients matching
+     the header background are `local`-attached (scroll WITH the tab
+     row, so they land exactly at the start/end of the content and only
+     ever hide the shadow behind them, never draw a visible seam), two
+     shadow gradients underneath are `scroll`-attached (pinned to the
+     viewport edge) and only peek out from under the cover gradient
+     while there's unscrolled content in that direction. Fully
+     self-hiding at either scroll extreme with no extra logic needed. */
+  background:
+    linear-gradient(to right, var(--bg-header) 0%, rgba(14, 20, 29, 0) 100%) left / 26px 100% no-repeat local,
+    linear-gradient(to left, var(--bg-header) 0%, rgba(14, 20, 29, 0) 100%) right / 26px 100% no-repeat local,
+    linear-gradient(to right, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) left / 14px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) right / 14px 100% no-repeat scroll;
 }
 
 .nav-tab {
@@ -1669,6 +1688,14 @@ td.stat-num {
 
 .admin-subtabs {
   margin: 0 0 20px;
+  /* 5 sub-tabs (since Deployment/Methodology were added) no longer fit
+     one row at mobile widths — confirmed 434px needed vs. 375px
+     available. Unlike .site-nav (which scrolls, to keep tab position
+     muscle-memory-stable across pages people flip between a lot), this
+     wraps to a 2nd line instead — simpler, no discoverability problem
+     since wrapped buttons are all immediately visible, and this page
+     isn't the kind of frequent side-to-side flipping .site-nav is. */
+  flex-wrap: wrap;
 }
 
 /* Users sub-tab reuses .stats-table's look, but rows aren't clickable
