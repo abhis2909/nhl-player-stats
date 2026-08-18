@@ -69,17 +69,34 @@
   const POSITION_LABEL = { C: 'Centers', W: 'Wingers (L/R combined)', D: 'Defensemen' };
 
   let loaded = false;
+  // Last-loaded (or reset-to-default) settings — readFromForm() merges
+  // its edits into this rather than starting blank, so a stat that's
+  // currently hidden (not one of the active Stats-page columns, so it
+  // has no input on this form) keeps whatever weight it already had
+  // instead of silently reverting to 1 on the next Save.
+  let currentSettings = DEFAULTS;
 
   function weightInputId(group, statId) {
     return `ratingW-${group}-${statId}`;
   }
 
+  // Only stats currently active on the Stats page (Admin -> Columns)
+  // get a weight field here — a hidden stat isn't part of ratePool()'s
+  // computation at all (see ratings.js), so a weight input for it would
+  // just be misleading. Synthetic columns (Power Ranking itself) are
+  // never rateable inputs, so they're excluded regardless.
+  function activeRateableColumns(mode) {
+    return activeColumns(mode).filter((c) => !c.synthetic);
+  }
+
   function buildWeightGroups() {
     weightGroupsEl.innerHTML = '';
+    const skaterCols = activeRateableColumns('skaters');
+    const goalieCols = activeRateableColumns('goalies');
     for (const group of ['C', 'W', 'D']) {
-      weightGroupsEl.appendChild(buildWeightSection(POSITION_LABEL[group], group, SKATER_COLUMNS));
+      weightGroupsEl.appendChild(buildWeightSection(POSITION_LABEL[group], group, skaterCols));
     }
-    weightGroupsEl.appendChild(buildWeightSection('Goalies', 'G', GOALIE_COLUMNS));
+    weightGroupsEl.appendChild(buildWeightSection('Goalies', 'G', goalieCols));
   }
 
   function buildWeightSection(title, group, catalog) {
@@ -89,6 +106,14 @@
     head.className = 'admin-section-head';
     head.innerHTML = `<h2 style="font-size: 13.5px;">${title}</h2>`;
     section.appendChild(head);
+
+    if (catalog.length === 0) {
+      const note = document.createElement('p');
+      note.className = 'admin-hint';
+      note.textContent = 'No stat columns are currently selected for this group — enable some under Admin → Columns to tune their weights.';
+      section.appendChild(note);
+      return section;
+    }
 
     const grid = document.createElement('div');
     grid.className = 'checkbox-grid';
@@ -114,6 +139,7 @@
 
   function applyToForm(settings) {
     const s = settings || DEFAULTS;
+    currentSettings = s; // remembered so readFromForm() can preserve weights for stats not shown right now
     for (const group of ['C', 'W', 'D']) {
       const weights = s.positionWeights[group] || {};
       for (const col of SKATER_COLUMNS) {
@@ -132,16 +158,23 @@
     for (const key of Object.keys(tierEls)) tierEls[key].value = s.tierThresholds[key];
   }
 
+  // Starts from currentSettings (so any stat currently hidden — not an
+  // active Stats-page column, so it has no input on this form — keeps
+  // its existing weight untouched) and overlays only what's actually
+  // editable right now.
   function readFromForm() {
     const positionWeights = { C: {}, W: {}, D: {} };
     for (const group of ['C', 'W', 'D']) {
+      positionWeights[group] = { ...(currentSettings.positionWeights?.[group] || DEFAULTS.positionWeights[group]) };
       for (const col of SKATER_COLUMNS) {
-        positionWeights[group][col.id] = Number(document.getElementById(weightInputId(group, col.id)).value) || 0;
+        const input = document.getElementById(weightInputId(group, col.id));
+        if (input) positionWeights[group][col.id] = Number(input.value) || 0;
       }
     }
-    const goalieWeights = {};
+    const goalieWeights = { ...(currentSettings.goalieWeights || DEFAULTS.goalieWeights) };
     for (const col of GOALIE_COLUMNS) {
-      goalieWeights[col.id] = Number(document.getElementById(weightInputId('G', col.id)).value) || 0;
+      const input = document.getElementById(weightInputId('G', col.id));
+      if (input) goalieWeights[col.id] = Number(input.value) || 0;
     }
     const tierThresholds = {};
     for (const key of Object.keys(tierEls)) tierThresholds[key] = Number(tierEls[key].value);
