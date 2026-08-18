@@ -217,10 +217,16 @@
         <div id="usersLoading" class="save-status">Loading…</div>
         <p id="usersError" class="warn-text" hidden></p>
         <p id="usersEmpty" class="admin-hint" hidden>No accounts yet — issue one above.</p>
+
+        <div id="avatarRequestsWrap" hidden>
+          <h3 style="font-size: 13.5px; margin: 18px 0 8px;">🎨 Pending Avatar Requests</h3>
+          <div id="avatarRequestsList" class="fh-transactions-list"></div>
+        </div>
+
         <div class="table-wrap" id="usersTableWrap" hidden>
           <table class="stats-table admin-users-table">
             <thead>
-              <tr><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th><th></th></tr>
             </thead>
             <tbody id="usersTbody"></tbody>
           </table>

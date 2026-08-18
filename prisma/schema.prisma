@@ -59,6 +59,18 @@ model User {
   // buildAvatarImg()) until one is set.
   avatarUrl String?
 
+  // A manager's own self-submitted avatar request, awaiting commissioner
+  // review — separate from avatarUrl itself so a request never takes
+  // effect until approved (Admin -> Users). Stored as a data: URI
+  // (submitted directly from fantasy-hub.js's file picker, resized/
+  // compressed client-side first) rather than a real upload/CDN, since
+  // there's no storage infra and no function-count headroom for one —
+  // see api/fantasy/session.js's PATCH handler. avatarRequestedAt null
+  // means no pending request; approving or rejecting clears all three.
+  avatarRequestUrl   String?
+  avatarRequestNote  String?
+  avatarRequestedAt  DateTime?
+
   transactions CreditTransaction[] // unused in Phase 1
   betEntries   BetEntry[]          // unused in Phase 1
   faceoffsA    Faceoff[]     @relation("FaceoffUserA") // unused in Phase 1

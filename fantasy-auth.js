@@ -236,6 +236,11 @@
   window.fantasyAuth = {
     ready,
     getUser: () => state.user,
+    // Lets another page script (e.g. fantasy-hub.js, after a successful
+    // PATCH /api/fantasy/session) update the cached user in place —
+    // triggers the same onChange listeners + header re-render as a
+    // real login would, without a full page reload.
+    setUser: (user) => { state.user = user; notify(); render(); },
     onChange: (fn) => { state.listeners.push(fn); },
   };
 })();

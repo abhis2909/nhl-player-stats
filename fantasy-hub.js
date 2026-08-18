@@ -353,18 +353,108 @@ function renderTransactions(trades) {
    scripts/set-avatar.js) — this panel just displays whichever image is
    assigned, no self-serve editor. */
 
+// Resize/compress a picked file down to a small JPEG data: URI before
+// it ever leaves the browser — there's no upload/CDN infra here, this
+// gets stored as plain text on the User row (see api/fantasy/session.js's
+// PATCH), so keeping it small matters. Caps the longer side at 640px,
+// preserving aspect ratio (NOT forced square — these are full-body
+// portraits), JPEG quality 0.82.
+const AVATAR_REQUEST_MAX_DIM = 640;
+const AVATAR_REQUEST_JPEG_QUALITY = 0.82;
+
+function resizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That doesn't look like a valid image."));
+      img.onload = () => {
+        const scale = Math.min(1, AVATAR_REQUEST_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.round(img.naturalWidth * scale);
+        const h = Math.round(img.naturalHeight * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', AVATAR_REQUEST_JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function renderAvatarPanel() {
   const user = window.fantasyAuth && window.fantasyAuth.getUser();
   if (!user) {
     el.avatarPanelBody.innerHTML = '<p class="admin-hint">Log in to see your avatar.</p>';
     return;
   }
+
+  const requestSection = user.avatarRequestPending
+    ? '<p class="admin-hint">⏳ Your avatar request is pending review — submitting a new one below replaces it.</p>'
+    : '';
+
   el.avatarPanelBody.innerHTML = `
     <div class="fh-avatar-panel-row">
       ${buildAvatarImg(user.avatarUrl, 64)}
-      <p class="admin-hint">${user.avatarUrl ? 'Ask your commissioner if you\'d like this updated.' : 'No avatar set yet — ask your commissioner.'}</p>
+      <p class="admin-hint">${user.avatarUrl ? 'Your current avatar.' : 'No avatar set yet.'}</p>
+    </div>
+    ${requestSection}
+    <div class="fh-avatar-request-form">
+      <div class="fh-field">
+        <label for="avatarRequestFile">${user.avatarRequestPending ? 'Replace your request' : 'Request a new avatar'}</label>
+        <input type="file" id="avatarRequestFile" accept="image/*">
+      </div>
+      <div class="fh-field">
+        <label for="avatarRequestNote">Note to your commissioner (optional)</label>
+        <input type="text" id="avatarRequestNote" placeholder="e.g. new haircut, different jersey..." maxlength="500">
+      </div>
+      <button type="button" class="ghost-btn" id="avatarRequestSubmitBtn" disabled>Submit Request</button>
+      <p class="fh-trade-status" id="avatarRequestStatus"></p>
     </div>
   `;
+
+  const fileInput = document.getElementById('avatarRequestFile');
+  const noteInput = document.getElementById('avatarRequestNote');
+  const submitBtn = document.getElementById('avatarRequestSubmitBtn');
+  const statusEl = document.getElementById('avatarRequestStatus');
+  let pendingDataUrl = null;
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    submitBtn.disabled = true;
+    pendingDataUrl = null;
+    if (!file) return;
+    statusEl.textContent = 'Processing image…';
+    try {
+      pendingDataUrl = await resizeImageFile(file);
+      statusEl.textContent = 'Ready to submit.';
+      submitBtn.disabled = false;
+    } catch (err) {
+      statusEl.textContent = err.message;
+    }
+  });
+
+  submitBtn.addEventListener('click', async () => {
+    if (!pendingDataUrl) return;
+    submitBtn.disabled = true;
+    statusEl.textContent = 'Submitting…';
+    try {
+      const res = await fetch('/api/fantasy/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarRequestUrl: pendingDataUrl, avatarRequestNote: noteInput.value.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      window.fantasyAuth.setUser(data.user); // triggers onChange -> re-renders this panel showing "pending"
+      statusEl.textContent = 'Submitted ✓';
+    } catch (err) {
+      statusEl.textContent = `Couldn't submit (${err.message}).`;
+      submitBtn.disabled = false;
+    }
+  });
 }
 
 /* ------------------------------- boot ------------------------------- */

@@ -15,6 +15,8 @@
   const issueInput = document.getElementById('issueUsernameInput');
   const issueBtn = document.getElementById('issueUsernameBtn');
   const issueStatus = document.getElementById('issueUsernameStatus');
+  const requestsWrap = document.getElementById('avatarRequestsWrap');
+  const requestsList = document.getElementById('avatarRequestsList');
 
   let loaded = false;
 
@@ -51,6 +53,7 @@
       } else {
         tbody.innerHTML = data.users.map((u) => `
           <tr data-username="${escapeHtmlLocal(u.username)}">
+            <td>${buildAvatarImg(u.avatarUrl, 28, 'bust')}</td>
             <td>${escapeHtmlLocal(u.username)}</td>
             <td>${escapeHtmlLocal(u.displayName || '—')}</td>
             <td>${fmtDate(u.createdAt)}</td>
@@ -61,6 +64,8 @@
         `).join('');
         wrapEl.hidden = false;
       }
+
+      renderAvatarRequests(data.users.filter((u) => u.avatarRequestedAt));
     } catch (err) {
       errorEl.textContent = `Couldn't load users (${err.message}).`;
       errorEl.hidden = false;
@@ -131,6 +136,55 @@
     if (!e.target.classList.contains('user-reset-btn')) return;
     const tr = e.target.closest('tr');
     resetUsername(tr.dataset.username, e.target);
+  });
+
+  function renderAvatarRequests(pending) {
+    if (!pending.length) {
+      requestsWrap.hidden = true;
+      requestsList.innerHTML = '';
+      return;
+    }
+    requestsWrap.hidden = false;
+    requestsList.innerHTML = pending.map((u) => `
+      <div class="fh-transaction-row" data-username="${escapeHtmlLocal(u.username)}">
+        ${buildAvatarImg(u.avatarRequestUrl, 48)}
+        <div class="fh-tx-body">
+          <div class="fh-tx-user">${escapeHtmlLocal(u.displayName || u.username)}</div>
+          <div class="fh-tx-sides">${u.avatarRequestNote ? escapeHtmlLocal(u.avatarRequestNote) : 'No note.'} — requested ${fmtDate(u.avatarRequestedAt)}</div>
+        </div>
+        <div class="fh-tx-meta" style="flex-direction: row; gap: 8px;">
+          <button type="button" class="ghost-btn avatar-request-approve">Approve</button>
+          <button type="button" class="ghost-btn avatar-request-reject">Reject</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function reviewAvatarRequest(username, action, row) {
+    row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try {
+      const res = await fetch('/api/fantasy/admin-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, action }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      load(); // refreshes both the table (new avatarUrl if approved) and the request list
+    } catch (err) {
+      row.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+      window.alert(`Couldn't review that request (${err.message}).`);
+    }
+  }
+
+  requestsList.addEventListener('click', (e) => {
+    const row = e.target.closest('.fh-transaction-row');
+    if (!row) return;
+    if (e.target.classList.contains('avatar-request-approve')) {
+      reviewAvatarRequest(row.dataset.username, 'approveAvatar', row);
+    } else if (e.target.classList.contains('avatar-request-reject')) {
+      reviewAvatarRequest(row.dataset.username, 'rejectAvatar', row);
+    }
   });
 
   window.__adminUsersTab = {

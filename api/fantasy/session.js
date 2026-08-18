@@ -9,6 +9,12 @@ const {
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
 
+// Sanity cap on a submitted avatar request's data: URI — well under
+// Vercel's default ~4.5MB request-body limit, and fantasy-hub.js
+// resizes/recompresses to a few hundred KB before ever sending one, so
+// hitting this in normal use would mean something's gone wrong client-side.
+const MAX_AVATAR_REQUEST_LENGTH = 2_000_000;
+
 /* /api/fantasy/session — the league-member session lifecycle, merged
    into one file (was login.js + logout.js + me.js) to stay under
    Vercel Hobby's 12-serverless-function cap. Dispatched by HTTP
@@ -17,10 +23,13 @@ const LOCKOUT_MINUTES = 15;
 
    GET    -> "am I logged in" check (was me.js)
    POST   -> unified first-time-setup-or-login (was login.js)
+   PATCH  -> submit an avatar change request (see handlePatch's doc
+             comment) -- new, not part of the original 3-file merge
    DELETE -> logout (was logout.js) */
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') return handleMe(req, res);
   if (req.method === 'POST') return handleLogin(req, res);
+  if (req.method === 'PATCH') return handlePatch(req, res);
   if (req.method === 'DELETE') return handleLogout(req, res);
   res.status(405).json({ ok: false, error: 'method_not_allowed' });
 };
@@ -29,10 +38,15 @@ function toUserPayload(user) {
   return {
     username: user.username,
     displayName: user.displayName || user.username,
-    // Commissioner-managed, not self-serve — see
-    // fantasy-hub/scripts/set-avatar.js. Null renders as a placeholder
+    // The CURRENT, admin-approved avatar (fantasy-hub/scripts/set-avatar.js
+    // or an approved request below) — null renders as a placeholder
     // (avatar.js's buildAvatarImg()) until one's been assigned.
     avatarUrl: user.avatarUrl || null,
+    // Whether this user has a pending, not-yet-reviewed avatar request
+    // in flight — the client only needs to know THAT one exists (to show
+    // "pending review"), never the request image/note itself over this
+    // endpoint; those are for Admin -> Users only (admin-users.js).
+    avatarRequestPending: Boolean(user.avatarRequestedAt),
   };
 }
 
@@ -58,6 +72,52 @@ async function handleMe(req, res) {
 function handleLogout(req, res) {
   res.setHeader('Set-Cookie', buildClearCookie());
   res.status(200).json({ ok: true });
+}
+
+/* PATCH — session required. Body: { avatarRequestUrl, avatarRequestNote? }.
+   Submits (or replaces) a pending avatar-change request — this does NOT
+   touch avatarUrl itself, it only stages a request for the commissioner
+   to review and approve/reject from Admin -> Users
+   (api/fantasy/admin-users.js's POST). avatarRequestUrl is expected to
+   be a data: URI (fantasy-hub.js resizes/compresses the picked file to
+   one client-side before ever sending it) — there's no file-upload/CDN
+   infra here, so the request image is just stored as text on the row
+   until approved, at which point it's copied straight to avatarUrl
+   (also just a string the <img> tag points at, data: URIs render fine
+   as-is). Submitting again while a request is already pending simply
+   replaces it (no queue, last request wins) — that's normal and
+   expected, not an error. */
+async function handlePatch(req, res) {
+  try {
+    const prisma = getPrisma();
+    const user = await getSessionUser(req, prisma);
+    if (!user) {
+      res.status(401).json({ ok: false, error: 'unauthenticated' });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const avatarRequestUrl = typeof body.avatarRequestUrl === 'string' ? body.avatarRequestUrl.trim() : '';
+    const avatarRequestNote = typeof body.avatarRequestNote === 'string' ? body.avatarRequestNote.trim().slice(0, 500) : null;
+
+    if (!avatarRequestUrl || !avatarRequestUrl.startsWith('data:image/')) {
+      res.status(400).json({ ok: false, error: 'invalid_input', message: 'Pick an image to submit.' });
+      return;
+    }
+    if (avatarRequestUrl.length > MAX_AVATAR_REQUEST_LENGTH) {
+      res.status(400).json({ ok: false, error: 'invalid_input', message: 'That image is too large — try a smaller one.' });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { avatarRequestUrl, avatarRequestNote, avatarRequestedAt: new Date() },
+    });
+    res.status(200).json({ ok: true, user: toUserPayload(updated) });
+  } catch (err) {
+    console.error('fantasy/session (PATCH) error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
 }
 
 /* POST — unified first-time-setup-or-login.
