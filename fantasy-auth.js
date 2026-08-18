@@ -192,7 +192,7 @@
       // script on every page (see each page's <script> order). Falls
       // back to the plain 👤 glyph if it's missing for any reason
       // rather than erroring the whole header.
-      const avatar = typeof buildAvatarImg === 'function' ? buildAvatarImg(state.user.avatarUrl, 22) : '👤';
+      const avatar = typeof buildAvatarImg === 'function' ? buildAvatarImg(state.user.avatarUrl, 22, 'bust') : '👤';
       slot.innerHTML = `
         <span class="fh-auth-name">${avatar} ${name}</span>
         <button type="button" class="ghost-btn" id="fhLogoutBtn">Log out</button>

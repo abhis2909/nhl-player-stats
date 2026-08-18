@@ -334,7 +334,7 @@ function renderTransactions(trades) {
     const winnerLabel = t.winner === 'even' ? 'Even trade' : `Side ${escapeHtml(t.winner)} wins`;
     return `
       <div class="fh-transaction-row">
-        ${buildAvatarImg(t.user?.avatarUrl, 32)}
+        ${buildAvatarImg(t.user?.avatarUrl, 32, 'bust')}
         <div class="fh-tx-body">
           <div class="fh-tx-user">${who}</div>
           <div class="fh-tx-sides">${escapeHtml(sideANames)} ⇄ ${escapeHtml(sideBNames)}</div>
