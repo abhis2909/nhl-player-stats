@@ -18,6 +18,7 @@ const SKATER_COLUMNS = [
   // from there on. Never divided by games played (see app.js's
   // toPerGame()/formatStatValue() — treated like gamesPlayed itself).
   { id: 'overall', short: 'PWR', label: 'Power Ranking (Card Rating)', synthetic: true },
+  { id: 'gamesPlayed', short: 'GP', label: 'Games Played' },
   { id: 'goals', short: 'G', label: 'Goals' },
   { id: 'assists', short: 'A', label: 'Assists' },
   { id: 'points', short: 'PTS', label: 'Points' },
@@ -31,7 +32,6 @@ const SKATER_COLUMNS = [
   { id: 'pim', short: 'PIM', label: 'Penalty Minutes' },
   { id: 'sog', short: 'SOG', label: 'Shots on Goal' },
   { id: 'shootingPct', short: 'SH%', label: 'Shooting %', fmt: 'pct1' },
-  { id: 'gamesPlayed', short: 'GP', label: 'Games Played' },
   { id: 'hits', short: 'HIT', label: 'Hits' },
   { id: 'blocks', short: 'BLK', label: 'Blocked Shots' },
   { id: 'giveaways', short: 'GV', label: 'Giveaways' },
