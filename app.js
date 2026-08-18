@@ -18,7 +18,9 @@ const el = {
   modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
   posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
-  periodButtons: Array.from(document.querySelectorAll('.toggle-btn[data-period]')),
+  periodButtons: Array.from(document.querySelectorAll('.period-card[data-period]')),
+  historicalCardDesc: document.getElementById('historicalCardDesc'),
+  statsContent: document.getElementById('statsContent'),
   historicalSeasonGroup: document.getElementById('historicalSeasonGroup'),
   statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   qualifiedToggleBtn: document.getElementById('qualifiedToggleBtn'),
@@ -46,7 +48,7 @@ const state = {
   pos: 'ALL',
   search: '',
   seasonId: null,          // the CURRENT (live) season, as the NHL API sees it right now — treated as historical (the season has effectively been played)
-  period: 'current',       // 'historical' | 'current' — the whole toggle
+  period: null,            // null (nothing picked yet, landing state) | 'historical' | 'current' — the whole toggle
   historicalSeasonId: null, // whichever of the 2 historical seasons is showing, when period === 'historical'
   currentIsLive: false,    // true once the upcoming season has any real recorded games — set by loadCurrentSeasonView()
   seasonDataCache: new Map(), // seasonId (or a synthetic string key for the current-season view) -> { skaters, goalies } raw totals — avoids refetching something already looked at
@@ -206,6 +208,9 @@ function formatStatValue(col, value) {
  *  to the newest historical season. */
 function populateHistoricalSeasonGroup() {
   const ids = historicalSeasonIdsUI();
+  if (el.historicalCardDesc) {
+    el.historicalCardDesc.textContent = `Full-season stats — ${ids.map(seasonLabel).reverse().join(' & ')}.`;
+  }
   el.historicalSeasonGroup.innerHTML = '';
   for (const id of ids) {
     const btn = document.createElement('button');
@@ -314,6 +319,7 @@ async function loadForView(period) {
  *  of UI (control visibility/active states, the header label, sort
  *  validity, the table itself). */
 async function activateView(period) {
+  el.statsContent.hidden = false; // reveal search/filters/table on the first pick — stays visible from here on
   toggleSkeleton(true);
   hideBanner();
   try {
@@ -340,6 +346,8 @@ function updateActiveStates() {
     const active = b.dataset.period === state.period;
     b.classList.toggle('active', active);
     b.setAttribute('aria-selected', active ? 'true' : 'false');
+    const cta = b.querySelector('.period-card-cta');
+    if (cta) cta.textContent = active ? '● Viewing' : 'View →';
   });
   el.historicalSeasonGroup.querySelectorAll('.toggle-btn').forEach((b) => {
     const active = state.period === 'historical' && Number(b.dataset.season) === state.historicalSeasonId;
@@ -365,7 +373,6 @@ function updateSeasonLabel() {
 /* ------------------------------ init ------------------------------ */
 
 async function init() {
-  toggleSkeleton(true);
   hideBanner();
   // Admin-tuned rating weights for the Power Ranking column (Admin ->
   // Rating Methodology) — null (fetch failure, or nothing saved yet)
@@ -383,11 +390,12 @@ async function init() {
     populateHistoricalSeasonGroup();
     renderTableHeaders();
 
-    // First (only) load — period is still at its default ('current'),
-    // so this builds Current Season's view straight away (and renders it).
-    await activateView('current');
+    // Landing state: just the Historical / Current Season cards, nothing
+    // fetched or rendered for either view yet — picking one is what
+    // triggers activateView() (see el.periodButtons' click handler) and
+    // reveals el.statsContent (search/filters/table).
+    el.seasonLabel.textContent = 'Pick Historical or Current Season below to see stats.';
   } catch (err) {
-    toggleSkeleton(false);
     showBanner(`Couldn't load NHL data (${err.message}). Make sure the local server is running, then retry.`);
   }
 }
