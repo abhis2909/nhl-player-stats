@@ -21,6 +21,8 @@ const el = {
   periodButtons: Array.from(document.querySelectorAll('.period-card[data-period]')),
   historicalCardDesc: document.getElementById('historicalCardDesc'),
   statsContent: document.getElementById('statsContent'),
+  currentPlaceholder: document.getElementById('currentPlaceholder'),
+  statsListArea: document.getElementById('statsListArea'),
   historicalSeasonGroup: document.getElementById('historicalSeasonGroup'),
   statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   qualifiedToggleBtn: document.getElementById('qualifiedToggleBtn'),
@@ -212,7 +214,7 @@ function populateHistoricalSeasonGroup() {
     el.historicalCardDesc.textContent = `Full-season stats — ${ids.map(seasonLabel).reverse().join(' & ')}.`;
   }
   el.historicalSeasonGroup.innerHTML = '';
-  for (const id of ids) {
+  for (const id of [...ids].reverse()) { // render oldest -> newest (left to right), chronological
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toggle-btn';
@@ -226,15 +228,21 @@ function populateHistoricalSeasonGroup() {
 }
 
 /** Current Season's one unified view: the upcoming season
- *  (upcomingSeasonId()) — shown as a pure preseason model
- *  (buildProjectedSeason(), projections.js) until it has any real
- *  recorded games, then AUTOMATICALLY as a live rest-of-season blend
- *  (buildRestOfSeasonProjection() — real results so far + a modeled
- *  rate for the rest, updating every time more games are played) once
- *  it does. Same 4 historical seasons feed either mode (the ones
- *  immediately before the season being shown). Sets
- *  state.currentIsLive so updateSeasonLabel() can say which one is
- *  showing. */
+ *  (upcomingSeasonId()). Until it has any real recorded games, this is
+ *  just a placeholder (see syncControlVisibility()) — no projection
+ *  fetch happens at all, only the one lightweight stats call needed to
+ *  check whether the season has started. Once it does have real games,
+ *  AUTOMATICALLY switches to a live rest-of-season blend
+ *  (buildRestOfSeasonProjection(), projections.js — real results so far
+ *  + a modeled rate for the rest, updating every time more games are
+ *  played). Sets state.currentIsLive so updateSeasonLabel()/
+ *  syncControlVisibility() know which one applies.
+ *
+ *  The preseason model (buildProjectedSeason()) is intentionally not
+ *  called here anymore — per direct feedback, showing modeled numbers
+ *  before the season starts read as "messy" rather than useful, so a
+ *  plain placeholder replaces it for now. buildProjectedSeason() itself
+ *  is untouched in projections.js if this is ever revisited. */
 async function loadCurrentSeasonView() {
   const seasonId = upcomingSeasonId();
   const cacheKey = `current:${seasonId}`;
@@ -248,26 +256,28 @@ async function loadCurrentSeasonView() {
     }
     const isLive = currentRaw.skaters.length > 0; // has the season actually started yet?
 
-    const histIds = historicalSeasonIds(seasonId); // projections.js — 4 seasons immediately before `seasonId`, same set either mode
-    const historicalData = await Promise.all(histIds.map(async (histId) => {
-      let cached = state.seasonDataCache.get(histId);
-      if (!cached) {
-        const data = await loadSeasonStatsFor(histId, state.teamMeta);
-        cached = { skaters: data.skaters, goalies: data.goalies };
-        state.seasonDataCache.set(histId, cached);
-      }
-      const toiByPlayer = await loadSkaterTimeOnIce(histId);
-      return { seasonId: histId, skaters: cached.skaters, goalies: cached.goalies, toiByPlayer };
-    }));
+    if (!isLive) {
+      raw = { skaters: [], goalies: [], isLive: false };
+    } else {
+      const histIds = historicalSeasonIds(seasonId); // projections.js — 4 seasons immediately before `seasonId`
+      const historicalData = await Promise.all(histIds.map(async (histId) => {
+        let cached = state.seasonDataCache.get(histId);
+        if (!cached) {
+          const data = await loadSeasonStatsFor(histId, state.teamMeta);
+          cached = { skaters: data.skaters, goalies: data.goalies };
+          state.seasonDataCache.set(histId, cached);
+        }
+        const toiByPlayer = await loadSkaterTimeOnIce(histId);
+        return { seasonId: histId, skaters: cached.skaters, goalies: cached.goalies, toiByPlayer };
+      }));
 
-    const [bioPool, configRes] = await Promise.all([
-      loadPlayerBioPool(state.teamMeta),
-      fetch(`/api/fantasy/public-config?season=${encodeURIComponent(seasonLabel(seasonId))}`).then((r) => r.json()),
-    ]);
-    if (!configRes.ok) throw new Error(configRes.message || 'could not load projection settings');
+      const [bioPool, configRes] = await Promise.all([
+        loadPlayerBioPool(state.teamMeta),
+        fetch(`/api/fantasy/public-config?season=${encodeURIComponent(seasonLabel(seasonId))}`).then((r) => r.json()),
+      ]);
+      if (!configRes.ok) throw new Error(configRes.message || 'could not load projection settings');
 
-    const built = isLive
-      ? buildRestOfSeasonProjection({ // projections.js
+      const built = buildRestOfSeasonProjection({ // projections.js
         currentSeasonId: seasonId,
         currentRaw,
         historicalData,
@@ -275,17 +285,9 @@ async function loadCurrentSeasonView() {
         teamMeta: state.teamMeta,
         deployment: configRes.deployment,
         settings: configRes.settings,
-      })
-      : buildProjectedSeason({ // projections.js
-        projectedSeasonId: seasonId,
-        historicalData,
-        bioPool,
-        teamMeta: state.teamMeta,
-        deployment: configRes.deployment,
-        settings: configRes.settings,
       });
-
-    raw = { skaters: built.skaters, goalies: built.goalies, isLive };
+      raw = { skaters: built.skaters, goalies: built.goalies, isLive: true };
+    }
     state.seasonDataCache.set(cacheKey, raw);
   }
   state.rawSkaters = raw.skaters;
@@ -339,6 +341,11 @@ async function activateView(period) {
 
 function syncControlVisibility() {
   el.historicalSeasonGroup.hidden = state.period !== 'historical';
+  // Current Season, before it has any real games, shows a placeholder
+  // instead of the search/filters/table — nothing to look through yet.
+  const showPlaceholder = state.period === 'current' && !state.currentIsLive;
+  el.currentPlaceholder.hidden = !showPlaceholder;
+  el.statsListArea.hidden = showPlaceholder;
 }
 
 function updateActiveStates() {
@@ -367,7 +374,7 @@ function updateSeasonLabel() {
   const seasonId = upcomingSeasonId();
   el.seasonLabel.textContent = state.currentIsLive
     ? `${seasonLabel(seasonId)} · Current Season · ${statModeLabel} — real results so far blended with a modeled rate for the rest of the season — updates as more games are played. Tune under Admin → Projections.`
-    : `${seasonLabel(seasonId)} · Current Season (Projected) · ${statModeLabel} — actual stats will be shown here automatically once the season starts; for now this is a preseason model. Tune under Admin → Projections.`;
+    : `${seasonLabel(seasonId)} · Current Season — hasn't started yet. Stats will appear here automatically once real games are played.`;
 }
 
 /* ------------------------------ init ------------------------------ */

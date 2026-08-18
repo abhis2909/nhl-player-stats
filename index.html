@@ -44,7 +44,7 @@
       <button type="button" class="period-card" data-period="current" role="tab" aria-selected="false">
         <span class="period-card-icon" aria-hidden="true">🚀</span>
         <h2>Current Season</h2>
-        <p>Projected for now — real results blend in automatically once the season starts.</p>
+        <p>2026–27 — stats will appear here automatically once the season starts.</p>
         <span class="period-card-cta">View →</span>
       </button>
     </div>
@@ -52,65 +52,73 @@
   </div>
 
   <div id="statsContent" hidden>
-    <div class="cards-search-bar">
-      <label class="visually-hidden" for="searchInput">Search players</label>
-      <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
+    <div id="currentPlaceholder" class="current-placeholder" hidden>
+      <span class="current-placeholder-icon" aria-hidden="true">🕒</span>
+      <h2>2026–27 season hasn't started yet</h2>
+      <p>Stats will appear here automatically once real games are played.</p>
     </div>
 
-    <div class="controls filter-bar">
-      <div class="toggle-group" role="tablist" aria-label="Player type">
-        <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
-        <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+    <div id="statsListArea">
+      <div class="cards-search-bar">
+        <label class="visually-hidden" for="searchInput">Search players</label>
+        <input id="searchInput" type="search" placeholder="Search player…" aria-label="Search players" autocomplete="off">
       </div>
-      <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
-        <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
-        <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
-        <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
-        <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
+
+      <div class="controls filter-bar">
+        <div class="toggle-group" role="tablist" aria-label="Player type">
+          <button class="toggle-btn active" data-mode="skaters" role="tab" aria-selected="true">Skaters</button>
+          <button class="toggle-btn" data-mode="goalies" role="tab" aria-selected="false">Goalies</button>
+        </div>
+        <div class="toggle-group" role="tablist" aria-label="Position" id="posToggleGroup">
+          <button class="toggle-btn active" data-pos="ALL" role="tab" aria-selected="true">All</button>
+          <button class="toggle-btn" data-pos="C" role="tab" aria-selected="false">C</button>
+          <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
+          <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
+        </div>
+        <div class="toggle-group" role="tablist" aria-label="Total or per-game">
+          <button class="toggle-btn active" data-statmode="total" role="tab" aria-selected="true">Total</button>
+          <button class="toggle-btn" data-statmode="perGame" role="tab" aria-selected="false">Per Game</button>
+        </div>
+        <div class="toggle-group" role="tablist" aria-label="Games-played qualification">
+          <button class="toggle-btn" id="qualifiedToggleBtn" role="tab" aria-selected="false" title="Hide players under 20% of the season's max games played — same eligibility rule Player Ratings uses">Qualified only</button>
+        </div>
+        <label class="visually-hidden" for="teamSelect">Filter by team</label>
+        <select id="teamSelect" aria-label="Filter by team">
+          <option value="ALL">All Teams</option>
+        </select>
       </div>
-      <div class="toggle-group" role="tablist" aria-label="Total or per-game">
-        <button class="toggle-btn active" data-statmode="total" role="tab" aria-selected="true">Total</button>
-        <button class="toggle-btn" data-statmode="perGame" role="tab" aria-selected="false">Per Game</button>
+
+      <div class="table-wrap">
+        <table id="skatersTable" class="stats-table">
+          <caption class="visually-hidden">Skater statistics</caption>
+          <thead>
+            <tr id="skatersHeadRow">
+              <th scope="col" class="col-rank">#</th>
+              <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
+              <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
+            </tr>
+          </thead>
+          <tbody id="skatersBody"></tbody>
+        </table>
+
+        <table id="goaliesTable" class="stats-table" hidden>
+          <caption class="visually-hidden">Goalie statistics</caption>
+          <thead>
+            <tr id="goaliesHeadRow">
+              <th scope="col" class="col-rank">#</th>
+              <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
+              <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
+            </tr>
+          </thead>
+          <tbody id="goaliesBody"></tbody>
+        </table>
+
+        <div id="skeleton" class="skeleton" aria-hidden="true"></div>
+        <p id="emptyState" class="empty-state" hidden>No players match your filters.</p>
       </div>
-      <div class="toggle-group" role="tablist" aria-label="Games-played qualification">
-        <button class="toggle-btn" id="qualifiedToggleBtn" role="tab" aria-selected="false" title="Hide players under 20% of the season's max games played — same eligibility rule Player Ratings uses">Qualified only</button>
-      </div>
-      <label class="visually-hidden" for="teamSelect">Filter by team</label>
-      <select id="teamSelect" aria-label="Filter by team">
-        <option value="ALL">All Teams</option>
-      </select>
+
+      <p id="resultCount" class="result-count"></p>
     </div>
-
-    <div class="table-wrap">
-      <table id="skatersTable" class="stats-table">
-        <caption class="visually-hidden">Skater statistics</caption>
-        <thead>
-          <tr id="skatersHeadRow">
-            <th scope="col" class="col-rank">#</th>
-            <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
-            <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
-          </tr>
-        </thead>
-        <tbody id="skatersBody"></tbody>
-      </table>
-
-      <table id="goaliesTable" class="stats-table" hidden>
-        <caption class="visually-hidden">Goalie statistics</caption>
-        <thead>
-          <tr id="goaliesHeadRow">
-            <th scope="col" class="col-rank">#</th>
-            <th scope="col" class="col-player sortable" data-key="name" data-type="string">Player</th>
-            <th scope="col" class="col-team sortable" data-key="team" data-type="string">Team</th>
-          </tr>
-        </thead>
-        <tbody id="goaliesBody"></tbody>
-      </table>
-
-      <div id="skeleton" class="skeleton" aria-hidden="true"></div>
-      <p id="emptyState" class="empty-state" hidden>No players match your filters.</p>
-    </div>
-
-    <p id="resultCount" class="result-count"></p>
   </div>
 </main>
 
