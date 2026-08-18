@@ -2460,6 +2460,12 @@ a.mg-game-card:hover {
 
 .mg-game-card h2 { margin: 0; font-size: 18px; }
 
+.mg-game-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .mg-game-card p {
   margin: 0;
   color: var(--text-dim);

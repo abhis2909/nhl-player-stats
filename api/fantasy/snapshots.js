@@ -34,6 +34,13 @@ async function upsertTodaySnapshot(prisma, source) {
 
    GET, no auth        -> just returns saved snapshots (most recent
                            MAX_SNAPSHOTS_RETURNED), for the client sync.
+   GET ?date=YYYY-MM-DD, no auth -> lightweight existence check for ONE
+                           date ({ ok, exists }), select:{date:true} only
+                           — never pulls that date's full stats blob.
+                           Fantasy Hub's Team of the Week box badge uses
+                           this to check "did today's snapshot land yet"
+                           without downloading everyone's season stats
+                           just to show a NEW pill.
    GET, cron-authenticated (Authorization: Bearer $CRON_SECRET — Vercel
    auto-attaches this to its own cron invocations, see vercel.json's
    crons entry) -> ALSO fetches + upserts today's snapshot first
@@ -51,6 +58,13 @@ module.exports = async function handler(req, res) {
     const prisma = getPrisma();
 
     if (req.method === 'GET') {
+      const dateParam = typeof req.query?.date === 'string' ? req.query.date.trim() : '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        const row = await prisma.statsSnapshot.findUnique({ where: { date: dateParam }, select: { date: true } });
+        res.status(200).json({ ok: true, exists: Boolean(row) });
+        return;
+      }
+
       const cronSecret = process.env.CRON_SECRET;
       const authHeader = req.headers.authorization || '';
       const isCronCall = cronSecret && authHeader === `Bearer ${cronSecret}`;

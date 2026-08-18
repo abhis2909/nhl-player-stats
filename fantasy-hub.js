@@ -4,12 +4,14 @@
    Fantasy Hub page — the hub itself: a Tools box grid (Trade Analyzer,
    Power Rankings, Schedule, Team of the Week — each its own page now,
    see trade-analyzer.js/power-rankings.js), Recent Transactions, and
-   My Avatar. This file only owns the latter two — Trade Analyzer and
-   Power Rankings used to live here but were split into their own pages
-   so they could become clickable boxes here, same as Schedule/TOTW
-   already were. No data.js/columns.js/ratings.js needed on this page
+   My Avatar. This file only owns the latter two, plus the Team of the
+   Week box's NEW badge (see checkTotwNewBadge() below) — Trade Analyzer
+   and Power Rankings used to live here but were split into their own
+   pages so they could become clickable boxes here, same as Schedule/
+   TOTW already were. columns.js/ratings.js aren't needed on this page
    anymore as a result — Recent Transactions and My Avatar don't touch
-   the rating engine at all.
+   the rating engine at all. data.js IS still loaded, just for its
+   todayISO()/mondayOf() date helpers, not loadSeasonData().
    ====================================================================== */
 
 const el = {
@@ -38,6 +40,34 @@ function showBanner(message) {
   el.statusBanner.hidden = false;
 }
 
+/* -------------------------- Team of the Week NEW badge -------------------------- */
+/* Shows a "NEW" pill on the Team of the Week box exactly on the one
+   calendar day a fresh week becomes available: the daily snapshot cron
+   (api/fantasy/snapshots.js) writes a StatsSnapshot dated every day,
+   including every Monday — and totw.js treats "a snapshot exists at
+   THIS Monday" as "last week is now finished and computable". So
+   "today is Monday AND today's snapshot has actually landed" is exactly
+   the trigger the user asked for ("when the data is updated for the
+   entire previous week"), and since that's only ever true on a single
+   calendar day, it also naturally satisfies "have it there for 1 day"
+   — no separate expiry timer needed, tomorrow it's just false again.
+   Uses the lightweight ?date= existence check (see that file's doc
+   comment) rather than the full snapshot-sync endpoint, so this never
+   downloads anyone's actual season stats just to show a pill. */
+async function checkTotwNewBadge() {
+  const badge = document.getElementById('totwBoxNewBadge');
+  if (!badge) return;
+  const today = todayISO(); // data.js
+  if (mondayOf(today) !== today) return; // not Monday — stays hidden, no network call needed
+  try {
+    const res = await fetch(`/api/fantasy/snapshots?date=${today}`);
+    const data = await res.json();
+    badge.hidden = !(data.ok && data.exists);
+  } catch {
+    // Non-fatal — badge just stays hidden, same as any other day.
+  }
+}
+
 /* ------------------------------ init ------------------------------ */
 
 async function init() {
@@ -51,6 +81,7 @@ async function init() {
   } finally {
     toggleSkeleton(false);
   }
+  checkTotwNewBadge(); // independent of the try/catch above — never blocks the rest of the page
 }
 
 /* -------------------------- Recent Transactions -------------------------- */
