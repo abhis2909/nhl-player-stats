@@ -14,8 +14,8 @@
      1. WEIGHTED HISTORY: a recency-weighted average of the player's
         own per-game rate over their qualifying seasons among the 4
         immediately before the projected one (qualifying = met
-        ratings.js's MIN_GP_FRACTION that season, same eligibility bar
-        used everywhere else on the site). Weights come from admin-
+        ratings.js's MIN_GAMES_PLAYED_SKATERS/GOALIES that season, same
+        eligibility bar used everywhere else on the site). Weights come from admin-
         tunable ProjectionSettings.seasonWeights and are RENORMALIZED
         over just the seasons the player actually qualified in, so a
         shorter track record doesn't get deflated toward zero — it's
@@ -143,8 +143,8 @@ const ROOKIE_GP_CURVE_KEY = '__rookieGamesPlayed';
  *  every skater column, plus a single 'G' group for goalie columns —
  *  fit from every qualifying player-season across the 4 pooled
  *  historical seasons (see buildProjectedSeason()). `seasonsPooled` is
- *  [{ seasonId, skaters, goalies }, ...] (already MIN_GP_FRACTION-
- *  filtered), `bioMap` is playerId -> birthDate. */
+ *  [{ seasonId, skaters, goalies }, ...] (already MIN_GAMES_PLAYED_
+ *  SKATERS/GOALIES-filtered), `bioMap` is playerId -> birthDate. */
 function fitAgeCurves(seasonsPooled, bioMap) {
   const curves = { C: {}, W: {}, D: {}, G: {} };
   const pointsByGroupStat = {};
@@ -168,7 +168,7 @@ function fitAgeCurves(seasonsPooled, bioMap) {
       // played is set FROM this curve (see computeProjection()'s
       // ROOKIE_GP_CURVE_KEY use), not from the per-stat rate curves
       // above, since "games played per game played" is meaningless.
-      // Fit only on the same MIN_GP_FRACTION-eligible pool everything
+      // Fit only on the same MIN_GAMES_PLAYED-eligible pool everything
       // else uses, so it still reflects a real NHL role, not a cup of
       // coffee — but young ages naturally pull it below a full season,
       // which a flat league-max default never could.
@@ -387,10 +387,8 @@ function buildProjectionContext(historicalData, bioPool) {
   const bioMap = new Map(bioPool.map((p) => [p.playerId, p.birthDate]));
 
   const eligible = historicalData.map(({ seasonId, skaters, goalies, toiByPlayer }) => {
-    const skaterMinGP = Math.ceil(seasonGameCount(skaters) * MIN_GP_FRACTION);
-    const goalieMinGP = Math.ceil(seasonGameCount(goalies) * MIN_GP_FRACTION);
-    const eligSkaters = skaters.filter((p) => p.gamesPlayed >= skaterMinGP);
-    const eligGoalies = goalies.filter((p) => p.gamesPlayed >= goalieMinGP);
+    const eligSkaters = skaters.filter((p) => p.gamesPlayed >= MIN_GAMES_PLAYED_SKATERS);
+    const eligGoalies = goalies.filter((p) => p.gamesPlayed >= MIN_GAMES_PLAYED_GOALIES);
     return {
       seasonId,
       skaters: eligSkaters,

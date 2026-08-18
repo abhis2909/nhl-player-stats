@@ -8,8 +8,9 @@ const { getPrisma } = require('../_lib/db');
 // produces normal behavior instead of forcing every caller to
 // special-case "no settings saved yet". The rating defaults are an
 // exact copy of ratings.js's own hardcoded constants (POSITION_WEIGHTS/
-// GOALIE_WEIGHTS/MIN_GP_FRACTION/RATING_FLOOR..CEIL/RATING_PREMIUM/
-// tierFor() thresholds) — keep the two in sync if either ever changes.
+// GOALIE_WEIGHTS/MIN_GAMES_PLAYED_SKATERS/GOALIES/RATING_FLOOR..CEIL/
+// RATING_PREMIUM/tierFor() thresholds) — keep the two in sync if either
+// ever changes.
 const DEFAULT_PROJECTION_SETTINGS = {
   seasonWeights: [0.4, 0.3, 0.2, 0.1],
   ageCurveEnabled: true,
@@ -44,7 +45,8 @@ const DEFAULT_RATING_SETTINGS = {
     saves: 0.8, shutouts: 1.1, gamesPlayed: 0.6, gamesStarted: 0.7,
     goalsAgainst: 0.8, shotsAgainst: 0.5,
   },
-  minGpFraction: 0.2,
+  minGamesPlayedSkaters: 20,
+  minGamesPlayedGoalies: 15,
   ratingFloor: 25,
   ratingCeil: 99,
   ratingPremium: 1.04,
@@ -92,7 +94,8 @@ module.exports = async function handler(req, res) {
       ? {
         positionWeights: ratingRow.positionWeights,
         goalieWeights: ratingRow.goalieWeights,
-        minGpFraction: ratingRow.minGpFraction,
+        minGamesPlayedSkaters: ratingRow.minGamesPlayedSkaters,
+        minGamesPlayedGoalies: ratingRow.minGamesPlayedGoalies,
         ratingFloor: ratingRow.ratingFloor,
         ratingCeil: ratingRow.ratingCeil,
         ratingPremium: ratingRow.ratingPremium,

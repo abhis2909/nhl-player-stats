@@ -57,7 +57,7 @@ const state = {
   currentIsLive: false,    // true once the upcoming season has any real recorded games — set by loadCurrentSeasonView()
   seasonDataCache: new Map(), // seasonId (or a synthetic string key for the current-season view) -> { skaters, goalies } raw totals — avoids refetching something already looked at
   statMode: 'total',       // 'total' | 'perGame' — see applyStatMode()
-  qualifiedOnly: false,    // when true, hide players under MIN_GP_FRACTION (ratings.js) of the pool's max games played
+  qualifiedOnly: false,    // when true, hide players under MIN_GAMES_PLAYED (ratings.js) games played
   ratingConfig: null,      // admin-tuned RatingSettings override (public-config.js) for the Power Ranking column — null falls back to ratings.js's own defaults
   teamMeta: new Map(),   // abbrev -> { name, logo, conference, division }
   rawSkaters: [],  // selected season's totals, as fetched — untouched by statMode
@@ -199,8 +199,9 @@ function ratedPoolFor(rawList, mode) {
   // Ineligible players just show "—" (formatStatValue's null check,
   // and buildCard()'s own null-safe OVR badge) rather than a
   // real-looking-but-meaningless number.
-  const minGpFraction = state.ratingConfig?.minGpFraction ?? MIN_GP_FRACTION;
-  const minGp = Math.ceil(seasonGameCount(rawList) * minGpFraction);
+  const minGp = mode === 'goalies'
+    ? (state.ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES)
+    : (state.ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS);
   const eligible = rawList.filter((p) => p.gamesPlayed >= minGp);
   const rated = ratePool(eligible, mode, state.ratingConfig); // ratings.js
   return new Map(rated.map((p) => [p.playerId, p]));
@@ -654,11 +655,15 @@ function onSortClick(mode, key, type) {
 function getFiltered() {
   const list = state.mode === 'skaters' ? state.skaters : state.goalies;
   const q = state.search.trim().toLowerCase();
-  // Same eligibility rule Player Ratings uses (MIN_GP_FRACTION, from
-  // ratings.js) — computed once per call, not per player, since
-  // seasonGameCount() is an O(n) scan. gamesPlayed itself is untouched
-  // by Per-Game mode (see toPerGame()), so this works in either stat mode.
-  const minGP = state.qualifiedOnly ? Math.ceil(seasonGameCount(list) * MIN_GP_FRACTION) : 0;
+  // Same eligibility rule Player Ratings uses (MIN_GAMES_PLAYED_SKATERS/
+  // GOALIES, from ratings.js) — a flat count, not scaled to the season
+  // length. gamesPlayed itself is untouched by Per-Game mode (see
+  // toPerGame()), so this works in either stat mode.
+  const minGP = state.qualifiedOnly
+    ? (state.mode === 'goalies'
+      ? (state.ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES)
+      : (state.ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS))
+    : 0;
   return list.filter((p) => {
     // Compare against the player's current team only (same value shown in the
     // Team column), so the filter never shows someone under a team other than

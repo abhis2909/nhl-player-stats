@@ -120,17 +120,12 @@ function computeRoster(fromData, toData) {
 
 /** Placeholder for whenever no real weekly delta is computable yet (e.g.
  *  before the first couple of weekly snapshots exist) — same rating
- *  engine and eligibility rule (MIN_GP_FRACTION of the season's game
- *  count) Player Cards uses for its season-to-date ratings, just applied
- *  directly to the full season instead of a one-week window. */
+ *  engine and eligibility rule (MIN_GAMES_PLAYED_SKATERS/GOALIES, flat
+ *  counts) Player Cards uses for its season-to-date ratings, just
+ *  applied directly to the full season instead of a one-week window. */
 function computeSeasonRoster(liveData) {
-  const skaterMaxGP = seasonGameCount(liveData.skaters);
-  const skaterMinGP = Math.ceil(skaterMaxGP * MIN_GP_FRACTION);
-  const eligibleSkaters = liveData.skaters.filter((p) => p.gamesPlayed >= skaterMinGP);
-
-  const goalieMaxGP = seasonGameCount(liveData.goalies);
-  const goalieMinGP = Math.ceil(goalieMaxGP * MIN_GP_FRACTION);
-  const eligibleGoalies = liveData.goalies.filter((p) => p.gamesPlayed >= goalieMinGP);
+  const eligibleSkaters = liveData.skaters.filter((p) => p.gamesPlayed >= MIN_GAMES_PLAYED_SKATERS);
+  const eligibleGoalies = liveData.goalies.filter((p) => p.gamesPlayed >= MIN_GAMES_PLAYED_GOALIES);
 
   const ratedSkaters = ratePool(eligibleSkaters, 'skaters').sort((a, b) => b.overall - a.overall);
   const ratedGoalies = ratePool(eligibleGoalies, 'goalies').sort((a, b) => b.overall - a.overall);

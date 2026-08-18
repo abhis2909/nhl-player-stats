@@ -8,8 +8,8 @@
    using this needs: data.js, columns.js, snapshots.js, ratings.js
    loaded first (for getJSON/seasonLabel/loadSeasonStatsFor/etc.,
    activeColumns/formatColumnValue, listSnapshots/getSnapshotByKey, and
-   ratePool/buildCard/deltaValue/RATING_FLOOR/MIN_GP_FRACTION/
-   INVERT_STATS respectively) — and the modalRoot/modalOverlay/
+   ratePool/buildCard/deltaValue/RATING_FLOOR/MIN_GAMES_PLAYED_SKATERS/
+   MIN_GAMES_PLAYED_GOALIES/INVERT_STATS respectively) — and the modalRoot/modalOverlay/
    modalClose/modalContent + compareModalRoot/compareModalOverlay/
    compareModalClose/compareModalContent markup in its HTML (see
    cards.html or index.html for the exact shape).
@@ -445,9 +445,10 @@ function buildGameLogTable(games, categories, isGoalie) {
  *  snapshots (see snapshots.js), NOT from the game log — this is a trend
  *  of "what would this player's overall rating have been at each
  *  snapshot", not a per-game breakdown. Each snapshot is re-rated
- *  independently against its OWN eligibility pool (same MIN_GP_FRACTION
- *  rule as the live pool) so the comparison is always fair for that
- *  point in time. Only snapshots from pmCtx.seasonId are included. The
+ *  independently against its OWN eligibility pool (same
+ *  MIN_GAMES_PLAYED_SKATERS/GOALIES rule as the live pool) so the
+ *  comparison is always fair for that point in time. Only snapshots
+ *  from pmCtx.seasonId are included. The
  *  final "Live" point always comes from pmCtx.currentSeasonRated* (NOT
  *  whatever the host page's own grid/table happens to be displaying) —
  *  otherwise viewing a past season elsewhere on the page would leak
@@ -455,6 +456,9 @@ function buildGameLogTable(games, categories, isGoalie) {
 function buildSnapshotTrendPoints(player) {
   const isGoalie = player.pos === 'G';
   const mode = isGoalie ? 'goalies' : 'skaters';
+  const minGP = isGoalie
+    ? (pmCtx.ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES)
+    : (pmCtx.ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS);
   const points = [];
 
   const chronological = listSnapshots().slice().reverse(); // listSnapshots() is newest-first
@@ -463,8 +467,6 @@ function buildSnapshotTrendPoints(player) {
     if (!full || full.data.seasonId !== pmCtx.seasonId) continue;
 
     const rawPool = isGoalie ? full.data.goalies : full.data.skaters;
-    const maxGP = seasonGameCount(rawPool);
-    const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
     const eligible = rawPool.filter((p) => p.gamesPlayed >= minGP);
 
     const rated = ratePool(eligible, mode, pmCtx.ratingConfig);
@@ -510,13 +512,14 @@ async function buildHistoricalTrendPoints(player) {
     pmCtx.seasonDataCache.set(id, { skaters: data.skaters, goalies: data.goalies });
   }));
 
+  const minGP = isGoalie
+    ? (pmCtx.ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES)
+    : (pmCtx.ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS);
   const points = [];
   for (const id of seasons) {
     const raw = pmCtx.seasonDataCache.get(id);
     if (!raw) continue;
     const pool = isGoalie ? raw.goalies : raw.skaters;
-    const maxGP = seasonGameCount(pool);
-    const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
     const eligible = pool.filter((p) => p.gamesPlayed >= minGP);
     const rated = ratePool(eligible, mode, pmCtx.ratingConfig);
     const found = rated.find((p) => p.playerId === player.playerId);

@@ -2,8 +2,8 @@
 
 /* Admin page — Rating Methodology sub-tab: lets you tune the
    percentile-rating engine (ratings.js's POSITION_WEIGHTS/
-   GOALIE_WEIGHTS/MIN_GP_FRACTION/RATING_FLOOR..CEIL/RATING_PREMIUM/
-   tierFor() thresholds) without a code change — same rating engine
+   GOALIE_WEIGHTS/MIN_GAMES_PLAYED_SKATERS/GOALIES/RATING_FLOOR..CEIL/
+   RATING_PREMIUM/tierFor() thresholds) without a code change — same rating engine
    Player Ratings, Range Ratings, Team of the Week, and the Stats
    page's Power Ranking column all read. Lazy-loaded
    (window.__adminRatingTab.ensureLoaded()), same pattern as the other
@@ -15,7 +15,8 @@
   const errorEl = document.getElementById('ratingError');
   const formEl = document.getElementById('ratingForm');
   const weightGroupsEl = document.getElementById('ratingWeightGroups');
-  const minGpEl = document.getElementById('ratingMinGp');
+  const minGpSkatersEl = document.getElementById('ratingMinGpSkaters');
+  const minGpGoaliesEl = document.getElementById('ratingMinGpGoalies');
   const floorEl = document.getElementById('ratingFloor');
   const ceilEl = document.getElementById('ratingCeil');
   const premiumEl = document.getElementById('ratingPremium');
@@ -59,7 +60,8 @@
       saves: 0.8, shutouts: 1.1, gamesPlayed: 0.6, gamesStarted: 0.7,
       goalsAgainst: 0.8, shotsAgainst: 0.5,
     },
-    minGpFraction: 0.2,
+    minGamesPlayedSkaters: 20,
+    minGamesPlayedGoalies: 15,
     ratingFloor: 25,
     ratingCeil: 99,
     ratingPremium: 1.04,
@@ -151,7 +153,8 @@
       const input = document.getElementById(weightInputId('G', col.id));
       if (input) input.value = (s.goalieWeights || {})[col.id] ?? 1;
     }
-    minGpEl.value = s.minGpFraction;
+    minGpSkatersEl.value = s.minGamesPlayedSkaters;
+    minGpGoaliesEl.value = s.minGamesPlayedGoalies;
     floorEl.value = s.ratingFloor;
     ceilEl.value = s.ratingCeil;
     premiumEl.value = s.ratingPremium;
@@ -183,7 +186,8 @@
       type: 'rating',
       positionWeights,
       goalieWeights,
-      minGpFraction: Number(minGpEl.value),
+      minGamesPlayedSkaters: Number(minGpSkatersEl.value),
+      minGamesPlayedGoalies: Number(minGpGoaliesEl.value),
       ratingFloor: Number(floorEl.value),
       ratingCeil: Number(ceilEl.value),
       ratingPremium: Number(premiumEl.value),

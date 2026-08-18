@@ -22,7 +22,12 @@
    - Overall maps to one of six gem tiers (tierFor()).
    ====================================================================== */
 
-const MIN_GP_FRACTION = 0.2; // must have played >=20% of the pool's max games to be rated
+// Must have played at least this many games (flat counts, not scaled to
+// the season length or either group's own max games played) to be
+// rated — separate bars since goalies play far fewer games than
+// skaters over a season.
+const MIN_GAMES_PLAYED_SKATERS = 20;
+const MIN_GAMES_PLAYED_GOALIES = 15;
 const RATING_FLOOR = 25;
 const RATING_CEIL = 99;
 const RATING_PREMIUM = 1.04; // flat +4% applied to every rating (category and overall), capped at RATING_CEIL
@@ -134,17 +139,17 @@ function toCardRating(percentile, cfg) {
  *  two snapshots (range.js) — it only ever compares players within the
  *  pool it's given.
  *
- *  Percentiles are POSITION-RELATIVE for skaters (2026-08-16, user
- *  feedback: fantasy rosters draft/start by position slot, so a
- *  defenseman's rating should reflect how they stack up against other
- *  defensemen, not against wingers' shot/goal totals — league-wide
- *  percentiles previously buried every D's SHO/VOL categories near the
- *  floor regardless of how good they were for the position). Each
- *  player's percentile for a stat is computed within their own
- *  `positionGroup()` (C / W [L+R combined] / D) — same three groups
- *  `POSITION_WEIGHTS` already uses — rather than the full skater pool.
- *  Goalies are already a single homogeneous group, so this is a no-op
- *  for them (one group either way).
+ *  Percentiles are LEAGUE-WIDE for skaters (2026-08-18, reverted back
+ *  from the position-relative grouping tried on 2026-08-16 — see git
+ *  history if that's ever worth reviving). Every skater's percentile
+ *  for a stat is computed against the FULL skater pool, not just their
+ *  own position group — a center, winger, and defenseman with the same
+ *  raw total get the same percentile. `POSITION_WEIGHTS` still applies
+ *  when blending category percentiles into the overall score (a
+ *  separate step, further down) — only the percentile-ranking POOL
+ *  itself is no longer position-scoped. Goalies remain their own
+ *  separate group, as always (mixing them with skaters' stat pools
+ *  wouldn't mean anything).
  *
  *  Percentiles are on each stat's RAW TOTAL (2026-08-16: a per-game
  *  version was tried, then reverted per direct follow-up feedback —
@@ -169,7 +174,11 @@ function ratePool(pool, mode, cfg) {
   // feeds the rating/overall score, regardless of whether it's active.
   const categories = activeColumns(mode).filter((c) => !c.synthetic && c.id !== 'gamesPlayed');
   const isGoalie = mode === 'goalies';
-  const groupKey = (player) => (isGoalie ? 'G' : positionGroup(player.pos));
+  // League-wide for skaters (one shared 'SKATER' key regardless of
+  // position) — goalies stay their own separate pool. This only
+  // controls what the PERCENTILE is computed against; POSITION_WEIGHTS
+  // below still blends categories into overall per-position.
+  const groupKey = (player) => (isGoalie ? 'G' : 'SKATER');
   const positionWeights = cfg?.positionWeights || POSITION_WEIGHTS;
   const goalieWeights = cfg?.goalieWeights || GOALIE_WEIGHTS;
 

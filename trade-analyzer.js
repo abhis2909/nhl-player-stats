@@ -75,9 +75,8 @@ async function init() {
     // Same eligibility pre-filter Player Ratings/the Stats page's Power
     // Ranking column use — a long tail of 1-2-game callups otherwise
     // compresses the percentile range for everyone else.
-    const minGpFraction = ratingConfig?.minGpFraction ?? MIN_GP_FRACTION; // ratings.js
-    const skaterMinGp = Math.ceil(seasonGameCount(seasonData.skaters) * minGpFraction); // data.js
-    const goalieMinGp = Math.ceil(seasonGameCount(seasonData.goalies) * minGpFraction);
+    const skaterMinGp = ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS; // ratings.js
+    const goalieMinGp = ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES;
     const eligibleSkaters = seasonData.skaters.filter((p) => p.gamesPlayed >= skaterMinGp);
     const eligibleGoalies = seasonData.goalies.filter((p) => p.gamesPlayed >= goalieMinGp);
 

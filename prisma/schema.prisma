@@ -365,16 +365,22 @@ model ProjectionSettings {
 
 // ---------- Stats page: rating methodology ----------
 // Admin-tunable version of ratings.js's hardcoded constants
-// (POSITION_WEIGHTS/GOALIE_WEIGHTS/MIN_GP_FRACTION/RATING_FLOOR..CEIL/
-// RATING_PREMIUM/tierFor() thresholds) — same singular-row spirit as
-// ProjectionSettings above. ratings.js's own constants remain the
-// DEFAULTS (used as-is if this row never gets saved), so nothing
-// changes in production until an admin actually edits this.
+// (POSITION_WEIGHTS/GOALIE_WEIGHTS/MIN_GAMES_PLAYED_SKATERS/GOALIES/
+// RATING_FLOOR..CEIL/RATING_PREMIUM/tierFor() thresholds) — same
+// singular-row spirit as ProjectionSettings above. ratings.js's own
+// constants remain the DEFAULTS (used as-is if this row never gets
+// saved), so nothing changes in production until an admin actually
+// edits this.
 model RatingSettings {
   id              String   @id @default("singleton")
   positionWeights Json // { C: {...}, W: {...}, D: {...} }, mirrors ratings.js's POSITION_WEIGHTS shape exactly
   goalieWeights   Json // mirrors GOALIE_WEIGHTS
-  minGpFraction   Float    @default(0.2)
+  // Flat minimum games played to be rated at all — NOT a fraction of
+  // the season's game count (that's the pre-2026-08-18 behavior; see
+  // git history if it's ever worth reviving). Separate bars since
+  // goalies play far fewer games than skaters over a season.
+  minGamesPlayedSkaters Int @default(20)
+  minGamesPlayedGoalies Int @default(15)
   ratingFloor     Int      @default(25)
   ratingCeil      Int      @default(99)
   ratingPremium   Float    @default(1.04)

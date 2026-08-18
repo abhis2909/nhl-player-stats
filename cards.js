@@ -12,12 +12,10 @@
    same-tab-open-elsewhere case).
 
    Rating methodology (full detail in ratings.js's header comment):
-   - Eligibility pool here = players with gamesPlayed >= MIN_GP_FRACTION
-     of that position group's own season game count (skaters and goalies
-     are counted separately — goalies play far fewer games than skaters,
-     so a goalie-specific max keeps the bar meaningful). Derived from the
-     data itself (seasonGameCount() in data.js), not hardcoded, so this
-     keeps working once 2026-27 stats replace these.
+   - Eligibility pool here = players with gamesPlayed >= MIN_GAMES_PLAYED_
+     SKATERS/GOALIES (flat counts, not scaled to the season length or
+     either group's own max games played — goalies get a lower bar
+     since they play far fewer games than skaters).
    - ratePool() (ratings.js) turns that pool into percentile-based
      ratings; buildCard() (ratings.js) renders the gem-tier card HTML.
 
@@ -186,9 +184,10 @@ function populateSeasonSelect() {
 
 /** Fetches (or reuses a cached copy of) `seasonId`'s stats, rates them,
  *  and stores the result in state.ratedSkaters/ratedGoalies — same
- *  eligibility rule as always (MIN_GP_FRACTION of THAT season's own
- *  game count). Keeps everyone who played that season, retired or not —
- *  a past season's ratings reflect who was good THAT year. */
+ *  eligibility rule as always (MIN_GAMES_PLAYED_SKATERS/GOALIES, flat
+ *  counts, not scaled to the season length). Keeps everyone who played
+ *  that season, retired or not — a past season's ratings reflect who
+ *  was good THAT year. */
 async function loadAndRateSeason(seasonId) {
   let raw = state.seasonDataCache.get(seasonId);
   if (!raw) {
@@ -198,11 +197,11 @@ async function loadAndRateSeason(seasonId) {
   }
 
   state.skaterMaxGP = seasonGameCount(raw.skaters);
-  state.skaterMinGP = Math.ceil(state.skaterMaxGP * MIN_GP_FRACTION);
+  state.skaterMinGP = state.ratingConfig?.minGamesPlayedSkaters ?? MIN_GAMES_PLAYED_SKATERS;
   state.rawSkaters = raw.skaters.filter((p) => p.gamesPlayed >= state.skaterMinGP);
 
   state.goalieMaxGP = seasonGameCount(raw.goalies);
-  state.goalieMinGP = Math.ceil(state.goalieMaxGP * MIN_GP_FRACTION);
+  state.goalieMinGP = state.ratingConfig?.minGamesPlayedGoalies ?? MIN_GAMES_PLAYED_GOALIES;
   state.rawGoalies = raw.goalies.filter((p) => p.gamesPlayed >= state.goalieMinGP);
 
   rateAllPlayers();
@@ -254,10 +253,9 @@ function updateEligibilityNote() {
   const isGoalie = state.mode === 'goalies';
   const pool = isGoalie ? state.rawGoalies : state.rawSkaters;
   const minGP = isGoalie ? state.goalieMinGP : state.skaterMinGP;
-  const maxGP = isGoalie ? state.goalieMaxGP : state.skaterMaxGP;
   el.eligibilityNote.textContent =
     `Showing the ${pool.length.toLocaleString()} ${state.mode} who've played at least ${minGP} games ` +
-    `in ${seasonLabel(state.selectedSeasonId)} (${Math.round(MIN_GP_FRACTION * 100)}% of ${maxGP}). ` +
+    `in ${seasonLabel(state.selectedSeasonId)}. ` +
     `Categories match your ⚙ Columns selection for ${state.mode} — change it there and these update too. ` +
     `Ratings (including overall) are percentile ranks scaled to ${RATING_FLOOR}` +
     `–${RATING_CEIL}; overall is a weighted average of the category percentiles.`;

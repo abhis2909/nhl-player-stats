@@ -19,7 +19,7 @@ const WEIGHT_SUM_TOLERANCE = 0.01; // floats — don't demand an exact 1.0
    GET  ?type=projection (default) -> { ok, settings } (ProjectionSettings)
    GET  ?type=rating               -> { ok, settings } (RatingSettings)
    POST { type: 'projection', seasonWeights, ageCurveEnabled, multiplierClipMin, multiplierClipMax, restOfSeasonShrinkageGames }
-   POST { type: 'rating', positionWeights, goalieWeights, minGpFraction, ratingFloor, ratingCeil, ratingPremium, tierThresholds } */
+   POST { type: 'rating', positionWeights, goalieWeights, minGamesPlayedSkaters, minGamesPlayedGoalies, ratingFloor, ratingCeil, ratingPremium, tierThresholds } */
 module.exports = async function handler(req, res) {
   try {
     const prisma = getPrisma();
@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
       const type = body.type === 'rating' ? 'rating' : 'projection';
 
       if (type === 'rating') {
-        const { positionWeights, goalieWeights, minGpFraction, ratingFloor, ratingCeil, ratingPremium, tierThresholds } = body;
+        const { positionWeights, goalieWeights, minGamesPlayedSkaters, minGamesPlayedGoalies, ratingFloor, ratingCeil, ratingPremium, tierThresholds } = body;
 
         const isWeightMap = (obj) => obj && typeof obj === 'object'
           && Object.values(obj).every((v) => typeof v === 'number' && Number.isFinite(v));
@@ -56,9 +56,10 @@ module.exports = async function handler(req, res) {
           res.status(400).json({ ok: false, error: 'invalid_input', message: 'goalieWeights must be a numeric weight map.' });
           return;
         }
-        const gp = Number(minGpFraction);
-        if (!Number.isFinite(gp) || gp < 0 || gp > 1) {
-          res.status(400).json({ ok: false, error: 'invalid_input', message: 'minGpFraction must be between 0 and 1.' });
+        const minGpSkaters = Number(minGamesPlayedSkaters);
+        const minGpGoalies = Number(minGamesPlayedGoalies);
+        if (!Number.isInteger(minGpSkaters) || minGpSkaters < 0 || !Number.isInteger(minGpGoalies) || minGpGoalies < 0) {
+          res.status(400).json({ ok: false, error: 'invalid_input', message: 'minGamesPlayedSkaters/Goalies must be non-negative whole numbers.' });
           return;
         }
         const floor = Number(ratingFloor);
@@ -83,7 +84,7 @@ module.exports = async function handler(req, res) {
           return;
         }
 
-        const data = { positionWeights, goalieWeights, minGpFraction: gp, ratingFloor: floor, ratingCeil: ceil, ratingPremium: premium, tierThresholds };
+        const data = { positionWeights, goalieWeights, minGamesPlayedSkaters: minGpSkaters, minGamesPlayedGoalies: minGpGoalies, ratingFloor: floor, ratingCeil: ceil, ratingPremium: premium, tierThresholds };
         const row = await prisma.ratingSettings.upsert({
           where: { id: SETTINGS_ID },
           create: { id: SETTINGS_ID, ...data },
