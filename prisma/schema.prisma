@@ -51,6 +51,14 @@ model User {
   yahooTeamKey String?  @unique // e.g. "453.l.12345.t.4" — unused in Phase 1, kept for future Yahoo linking
   createdAt    DateTime @default(now())
 
+  // Fantasy Hub page: a pixel-art avatar image, commissioner-managed —
+  // not a live upload feature. The site owner sends Claude a photo/PNG
+  // per manager, Claude saves it under /avatars and points this at it
+  // (fantasy-hub/scripts/set-avatar.js), swappable over the season the
+  // same way. Null renders as a placeholder silhouette (avatar.js's
+  // buildAvatarImg()) until one is set.
+  avatarUrl String?
+
   transactions CreditTransaction[] // unused in Phase 1
   betEntries   BetEntry[]          // unused in Phase 1
   faceoffsA    Faceoff[]     @relation("FaceoffUserA") // unused in Phase 1
@@ -59,6 +67,7 @@ model User {
   gridEntries  GridEntry[]         // unused in Phase 1
   cards        UserCard[]          // unused in Phase 1
   packOpenings PackOpening[]       // unused in Phase 1
+  trades       Trade[]             // ACTIVE — Fantasy Hub page's Trade Analyzer
 }
 
 // The SINGLE site administrator — a completely separate concept from
@@ -265,6 +274,28 @@ model PackOpening {
   pack          Pack     @relation(fields: [packId], references: [id])
   pulledCardIds Json // array of Card IDs pulled this opening — drives the reveal animation + history
   createdAt     DateTime @default(now())
+}
+
+// ---------- Fantasy Hub page: Trade Analyzer ----------
+// A lightweight "grade this trade" tool — deliberately NOT tied to real
+// fantasy rosters/leagues (no Team/Roster model exists). sideA/sideB are
+// point-in-time snapshots of whichever players the user picked (not live
+// FKs to any roster), so a logged trade always renders the same way even
+// as real stats keep changing. sideAOverall/sideBOverall are the average
+// ratePool() `.overall` across each side, computed client-side against
+// the full current-season pool (never against just the 2-6 traded
+// players — see ratings.js's percentileRank() small-N caveat) and sent
+// up alongside the snapshot rather than recomputed server-side.
+model Trade {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  sideA        Json // [{ playerId, name, team, pos, overall }, ...]
+  sideB        Json
+  sideAOverall Float
+  sideBOverall Float
+  winner       String // "A" | "B" | "even"
+  createdAt    DateTime @default(now())
 }
 
 // ---------- Stats page projections ----------

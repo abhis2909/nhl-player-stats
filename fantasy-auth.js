@@ -188,8 +188,13 @@
     if (!slot) return;
     if (state.user) {
       const name = escapeHtml(state.user.displayName || state.user.username);
+      // buildAvatarImg() comes from avatar.js — loaded before this
+      // script on every page (see each page's <script> order). Falls
+      // back to the plain 👤 glyph if it's missing for any reason
+      // rather than erroring the whole header.
+      const avatar = typeof buildAvatarImg === 'function' ? buildAvatarImg(state.user.avatarUrl, 22) : '👤';
       slot.innerHTML = `
-        <span class="fh-auth-name">👤 ${name}</span>
+        <span class="fh-auth-name">${avatar} ${name}</span>
         <button type="button" class="ghost-btn" id="fhLogoutBtn">Log out</button>
       `;
       slot.querySelector('#fhLogoutBtn').addEventListener('click', logout);

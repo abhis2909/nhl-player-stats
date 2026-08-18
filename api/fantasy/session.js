@@ -25,16 +25,24 @@ module.exports = async function handler(req, res) {
   res.status(405).json({ ok: false, error: 'method_not_allowed' });
 };
 
+function toUserPayload(user) {
+  return {
+    username: user.username,
+    displayName: user.displayName || user.username,
+    // Commissioner-managed, not self-serve — see
+    // fantasy-hub/scripts/set-avatar.js. Null renders as a placeholder
+    // (avatar.js's buildAvatarImg()) until one's been assigned.
+    avatarUrl: user.avatarUrl || null,
+  };
+}
+
 /* GET — always 200. { user: null } means "logged out," a normal
    state, not an error. Drives the login-UI's initial render. */
 async function handleMe(req, res) {
   try {
     const prisma = getPrisma();
     const user = await getSessionUser(req, prisma);
-    res.status(200).json({
-      ok: true,
-      user: user ? { username: user.username, displayName: user.displayName || user.username } : null,
-    });
+    res.status(200).json({ ok: true, user: user ? toUserPayload(user) : null });
   } catch (err) {
     // Fail open to "logged out" rather than error the page — this is
     // just a UI-state check, not a security gate (guesswho-sync.js
@@ -110,10 +118,7 @@ async function handleLogin(req, res) {
       });
       const token = signSession(user.id);
       res.setHeader('Set-Cookie', buildSessionCookie(token));
-      res.status(200).json({
-        ok: true,
-        user: { username: user.username, displayName: user.displayName || user.username },
-      });
+      res.status(200).json({ ok: true, user: toUserPayload({ ...user, ...extraData }) });
     }
 
     // Not set up yet: passwordHash is null.

@@ -162,7 +162,12 @@ function ratePool(pool, mode, cfg) {
   // that quietly skews the real result for everyone equally. Filter it
   // out regardless of whether it happens to be one of the active
   // display columns (it usually is, now that it's in the default set).
-  const categories = activeColumns(mode).filter((c) => !c.synthetic);
+  //
+  // gamesPlayed is excluded too, per direct request — it stays a normal
+  // visible column on the Stats table/cards (activeColumns() elsewhere
+  // is untouched), it's just never one of the percentile inputs that
+  // feeds the rating/overall score, regardless of whether it's active.
+  const categories = activeColumns(mode).filter((c) => !c.synthetic && c.id !== 'gamesPlayed');
   const isGoalie = mode === 'goalies';
   const groupKey = (player) => (isGoalie ? 'G' : positionGroup(player.pos));
   const positionWeights = cfg?.positionWeights || POSITION_WEIGHTS;
