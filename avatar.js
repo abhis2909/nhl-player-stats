@@ -37,9 +37,12 @@ const PLACEHOLDER_SVG = `<svg viewBox="0 0 16 20" style="display:block" role="im
 </svg>`;
 
 // How far to zoom in for the 'bust' crop, anchored at top-center — tuned
-// against these full-body chibi portraits (head+shoulders occupy
-// roughly the top ~40% of the source image, centered horizontally).
-const BUST_SCALE = 2.2;
+// against these full-body chibi portraits AND the circular mask applied
+// on top of the square crop (a circle inscribed in a square clips the
+// corners, so the square crop needs real margin around the head or the
+// circle cuts into hair/chin/cheeks — confirmed visually: 2.2 cropped
+// into the face, 1.4 leaves comfortable room for the full head+shoulders).
+const BUST_SCALE = 1.4;
 
 function escapeAttr(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({
