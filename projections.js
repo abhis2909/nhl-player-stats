@@ -51,6 +51,16 @@
 
 const PROJECTION_SEASONS_BACK = 4;
 
+// The real scheduled length of the season being projected — 2026-27 is an
+// 84-game season (not the usual 82). Caps the DEFAULT (historical-average)
+// games-played projection so it can never exceed a real full season, which
+// a weighted average or an outlier historical game count could otherwise
+// do. An explicit per-player admin override (PlayerDeployment.gamesProjected,
+// Admin -> Deployment) is trusted as-is and NOT clamped — this only guards
+// the fallback every unconfigured player uses. Update this if a future
+// season's schedule length changes again.
+const SEASON_GAME_COUNT = 84;
+
 /** Age as of Oct 1 of `seasonId`'s starting year (e.g. 20262027 -> Oct 1
  *  2026) — a fixed reference date, unlike data.js's ageFromBirthDate()
  *  which uses "today". Needed so every player-season in the age-curve
@@ -287,7 +297,7 @@ function computeProjection({
     out[col.id] = modeledRate; // still a per-game rate here — scaled to a total below, once gamesPlayed is finalized
   }
 
-  const fullSeasonGames = deployRow?.gamesProjected ?? historicalGP;
+  const fullSeasonGames = deployRow?.gamesProjected ?? Math.min(historicalGP, SEASON_GAME_COUNT);
 
   if (isRestOfSeason) {
     const remainingGames = Math.max(0, Math.round(fullSeasonGames) - g);
