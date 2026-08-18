@@ -34,7 +34,7 @@
         4-season sample gets thin at the young/old tails.
      3. DEPLOYMENT: if the admin entered a projected toiPerGame /
         ppToiPerGame / gamesProjected for this player (PlayerDeployment,
-        via /api/fantasy/projection-config), scale by
+        via /api/fantasy/public-config), scale by
         projected ÷ their own weighted-historical average of that same
         metric. Optional per player — no override means multiplier 1.
      4. ROOKIES (0 qualifying seasons): no personal baseline to weight,
@@ -191,17 +191,39 @@ function clip(value, min, max) {
 
 /** Core per-player, per-stat math described in the file header. `mode`
  *  is 'skaters' | 'goalies'. `deployRow` is this player's
- *  PlayerDeployment row from /api/fantasy/projection-config, or
+ *  PlayerDeployment row from /api/fantasy/public-config, or
  *  undefined if the admin never entered one. `groupToiAvg` is the
- *  position group's average TOI/game (rookie deployment fallback). */
+ *  position group's average TOI/game (rookie deployment fallback).
+ *
+ *  Pass `ytdRow` (this player's REAL row from the season actually being
+ *  played, i.e. state.seasonId itself — see buildRestOfSeasonProjection())
+ *  plus `shrinkageGames` to switch into REST-OF-SEASON mode instead of
+ *  the default preseason mode: every rate gets BLENDED with the
+ *  player's real year-to-date rate before being scaled, using
+ *  regression-to-a-prior shrinkage —
+ *    blended = g/(g+K)*ytdRate + K/(g+K)*modeledRate
+ *  (g = real games played so far, K = shrinkageGames) — small g trusts
+ *  the model more, large g trusts real results more, which is what
+ *  makes this "update as games played changes" automatically: it's
+ *  just a live recompute against however many real games exist right
+ *  now, no separate update mechanism needed. Counting-stat totals
+ *  become actualYtdTotal + blendedRate * remainingGames instead of
+ *  blendedRate * a full assumed season — the anchor-to-real-results
+ *  step preseason mode has no equivalent of. */
 function computeProjection({
   playerId, currentInfo, history, mode, ageCurves, settings,
   projectedAge, deployRow, groupToiAvg, defaultGamesPlayed,
+  ytdRow, shrinkageGames,
 }) {
   const catalog = mode === 'goalies' ? GOALIE_COLUMNS : SKATER_COLUMNS;
   const group = mode === 'goalies' ? 'G' : positionGroup(currentInfo.pos);
   const qualified = qualifyingHistory(history, settings.seasonWeights);
   const isRookie = qualified.length === 0;
+
+  const g = ytdRow?.gamesPlayed || 0;
+  const isRestOfSeason = Boolean(ytdRow) && g > 0;
+  const K = shrinkageGames || 20;
+  const credibility = g / (g + K); // weight on the real YTD side of the blend
 
   // Historical TOI/game (skaters only) — weighted avg over the same
   // qualifying seasons, used as the deployment comparison baseline.
@@ -236,6 +258,10 @@ function computeProjection({
         rate = qualified.reduce((s, h) => s + h.weight * (h.row[col.id] || 0), 0);
         rate *= ageMultiplier(ageCurves, group, col.id, settings, projectedAge, mostRecentAge(qualified));
       }
+      if (isRestOfSeason) {
+        const ytdRate = ytdRow[col.id] || 0; // already per-instance, no /g needed
+        rate = credibility * ytdRate + (1 - credibility) * rate;
+      }
       out[col.id] = rate;
       continue;
     }
@@ -252,16 +278,30 @@ function computeProjection({
     }
 
     const deployMult = deploymentMultiplier(col, mode, deployRow, historicalToi, historicalPpToi);
-    out[col.id] = ratePerGame * deployMult;
+    let modeledRate = ratePerGame * deployMult;
+
+    if (isRestOfSeason) {
+      const ytdRate = (ytdRow[col.id] || 0) / g;
+      modeledRate = credibility * ytdRate + (1 - credibility) * modeledRate;
+    }
+    out[col.id] = modeledRate; // still a per-game rate here — scaled to a total below, once gamesPlayed is finalized
   }
 
-  const projectedGP = deployRow?.gamesProjected ?? historicalGP;
-  out.gamesPlayed = Math.max(0, Math.round(projectedGP));
+  const fullSeasonGames = deployRow?.gamesProjected ?? historicalGP;
 
-  // Counting stats were computed as a rate; scale to a season total now
-  // that gamesPlayed is finalized (rate stats were already left as-is above).
-  for (const col of catalog) {
-    if (isCountingColumn(col)) out[col.id] = Math.round(out[col.id] * out.gamesPlayed);
+  if (isRestOfSeason) {
+    const remainingGames = Math.max(0, Math.round(fullSeasonGames) - g);
+    for (const col of catalog) {
+      if (!isCountingColumn(col)) continue;
+      const ytdTotal = ytdRow[col.id] || 0;
+      out[col.id] = Math.round(ytdTotal + out[col.id] * remainingGames);
+    }
+    out.gamesPlayed = g + remainingGames; // real games so far + projected rest = full-season total
+  } else {
+    out.gamesPlayed = Math.max(0, Math.round(fullSeasonGames));
+    for (const col of catalog) {
+      if (isCountingColumn(col)) out[col.id] = Math.round(out[col.id] * out.gamesPlayed);
+    }
   }
 
   return out;
@@ -298,20 +338,18 @@ function deploymentMultiplier(col, mode, deployRow, historicalToi, historicalPpT
 // Orchestrator
 // ---------------------------------------------------------------------
 
-/** Builds the full projected season. `historicalData` is
- *  [{ seasonId, skaters, goalies, toiByPlayer }, ...] for the 4 seasons
- *  (newest first) — toiByPlayer from loadSkaterTimeOnIce(). `bioPool`
- *  is loadPlayerBioPool()'s current-roster array (supplies age, current
- *  team/position — every current-roster player gets a projected row,
- *  with the rookie fallback for anyone with no qualifying history).
- *  `deployment`/`settings` come from GET /api/fantasy/projection-config. */
-function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, teamMeta, deployment, settings }) {
+/** Shared setup for both orchestrators below (preseason and rest-of-
+ *  season): the eligibility-filtered pool per historical season (age-
+ *  curve fit input + each player's own qualifying-seasons check),
+ *  position-group average TOI (rookie deployment fallback), the
+ *  "assume a healthy full season" games-played default, and a
+ *  per-player history lookup. `historicalData` is [{ seasonId, skaters,
+ *  goalies, toiByPlayer }, ...] for the 4 seasons (newest first) —
+ *  toiByPlayer from loadSkaterTimeOnIce(). `bioPool` supplies age
+ *  (birthDate) for the age-curve fit's player-seasons. */
+function buildProjectionContext(historicalData, bioPool) {
   const bioMap = new Map(bioPool.map((p) => [p.playerId, p.birthDate]));
-  const deployMap = new Map(deployment.map((d) => [d.nhlPlayerId, d]));
 
-  // Eligibility-filtered pool per season (same MIN_GP_FRACTION rule as
-  // the rest of the site), used both for the age-curve fit and for
-  // each player's own qualifying-seasons check.
   const eligible = historicalData.map(({ seasonId, skaters, goalies, toiByPlayer }) => {
     const skaterMinGP = Math.ceil(seasonGameCount(skaters) * MIN_GP_FRACTION);
     const goalieMinGP = Math.ceil(seasonGameCount(goalies) * MIN_GP_FRACTION);
@@ -323,7 +361,7 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
       goalies: eligGoalies,
       // O(1) per-player lookup for historyFor() below, instead of an
       // O(n) .find() per player per season (this runs once per player
-      // in the whole bio pool, ~700+ times, so the difference matters).
+      // in the whole pool, ~700+ times, so the difference matters).
       skatersById: new Map(eligSkaters.map((p) => [p.playerId, p])),
       goaliesById: new Map(eligGoalies.map((p) => [p.playerId, p])),
       toiByPlayer,
@@ -332,14 +370,13 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
 
   const ageCurves = fitAgeCurves(eligible, bioMap);
 
-  // Position-group average TOI (rookie deployment baseline).
   const groupToiTotals = { C: [0, 0, 0], W: [0, 0, 0], D: [0, 0, 0] }; // [toiSum, ppToiSum, n]
   for (const { skaters, toiByPlayer } of eligible) {
     for (const p of skaters) {
       const toi = toiByPlayer.get(p.playerId);
       if (!toi) continue;
-      const g = groupToiTotals[positionGroup(p.pos)];
-      g[0] += toi.toiPerGame; g[1] += toi.ppToiPerGame; g[2] += 1;
+      const gTotals = groupToiTotals[positionGroup(p.pos)];
+      gTotals[0] += toi.toiPerGame; gTotals[1] += toi.ppToiPerGame; gTotals[2] += 1;
     }
   }
   const groupToiAvg = {};
@@ -361,6 +398,18 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
       };
     });
   }
+
+  return { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor };
+}
+
+/** Builds the full preseason-projected season (the Next-Season Preview
+ *  option). `bioPool` is loadPlayerBioPool()'s current-roster array —
+ *  every current-roster player gets a projected row, with the rookie
+ *  fallback for anyone with no qualifying history. `deployment`/
+ *  `settings` come from GET /api/fantasy/public-config. */
+function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, teamMeta, deployment, settings }) {
+  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor } = buildProjectionContext(historicalData, bioPool);
+  const deployMap = new Map(deployment.map((d) => [d.nhlPlayerId, d]));
 
   const skaters = [];
   const goalies = [];
@@ -394,4 +443,51 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
   }
 
   return { seasonId: projectedSeasonId, teamMeta, skaters, goalies };
+}
+
+/** Builds the Rest-of-Season projection: real year-to-date stats for
+ *  the season actually being played (`currentSeasonId`/`currentRaw`)
+ *  blended with a modeled rate for the remaining games — see
+ *  computeProjection()'s doc comment for the blend math. Iterates the
+ *  CURRENT season's real raw pool (not bioPool) — only players who've
+ *  actually played this season have a YTD row to anchor to; anyone who
+ *  hasn't played yet has nothing meaningful to blend and just isn't
+ *  part of this view (they'd show up fine on Year to Date once they do
+ *  play). `historicalData` is still the 4 seasons BEFORE the current
+ *  one (same age-curve/weighted-history inputs preseason mode uses),
+ *  `bioPool` supplies age. `settings.restOfSeasonShrinkageGames` is the
+ *  shrinkage constant K. */
+function buildRestOfSeasonProjection({ currentSeasonId, currentRaw, historicalData, bioPool, teamMeta, deployment, settings }) {
+  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor } = buildProjectionContext(historicalData, bioPool);
+  const deployMap = new Map(deployment.map((d) => [d.nhlPlayerId, d]));
+  const shrinkageGames = settings.restOfSeasonShrinkageGames || 20;
+
+  function project(ytdRow, isGoalie) {
+    const bio = { name: ytdRow.name, pos: ytdRow.pos, team: ytdRow.team, teamsRaw: ytdRow.teamsRaw };
+    const birthDate = bioMap.get(ytdRow.playerId);
+    if (!birthDate) return null; // can't age-project without a birth date, skip
+    const currentAge = ageAsOfSeasonStart(birthDate, currentSeasonId);
+    if (currentAge == null) return null;
+    const mode = isGoalie ? 'goalies' : 'skaters';
+
+    return computeProjection({
+      playerId: ytdRow.playerId,
+      currentInfo: bio,
+      history: historyFor(ytdRow.playerId, isGoalie),
+      mode,
+      ageCurves,
+      settings,
+      projectedAge: currentAge,
+      deployRow: deployMap.get(ytdRow.playerId),
+      groupToiAvg: isGoalie ? null : groupToiAvg[positionGroup(ytdRow.pos)],
+      defaultGamesPlayed,
+      ytdRow,
+      shrinkageGames,
+    });
+  }
+
+  const skaters = currentRaw.skaters.map((p) => project(p, false)).filter(Boolean);
+  const goalies = currentRaw.goalies.map((p) => project(p, true)).filter(Boolean);
+
+  return { seasonId: currentSeasonId, teamMeta, skaters, goalies };
 }

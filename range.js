@@ -236,12 +236,21 @@ el.deleteFromBtn.addEventListener('click', () => {
   refreshRange();
 });
 
+// This page lives under Admin now, so "Retrieve Latest Stats" writes to
+// the shared database (api/fantasy/snapshots.js, admin-gated POST) —
+// not just this browser's localStorage — so it shows up for every
+// visitor once they next sync, same as the daily cron's own snapshots.
+// See snapshots.js's syncServerSnapshots(), called here to pull the
+// server-confirmed copy back down immediately after saving.
 el.retrieveBtn.addEventListener('click', async () => {
   const original = el.retrieveBtn.textContent;
   el.retrieveBtn.disabled = true;
   el.retrieveBtn.textContent = 'Retrieving…';
   try {
-    await retrieveAndSaveSnapshot();
+    const res = await fetch('/api/fantasy/snapshots', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    await syncServerSnapshots();
     populateEndpointSelects();
     refreshRange();
   } catch (err) {
@@ -419,6 +428,7 @@ async function init() {
   el.statusBanner.hidden = true;
   el.skeleton.hidden = false;
   el.grid.innerHTML = '';
+  await snapshotsReady; // snapshots.js — server-synced snapshots for the From/To pickers
 
   try {
     const data = await loadSeasonData();

@@ -1,32 +1,34 @@
 'use strict';
 
 /* ======================================================================
-   Weekly stats snapshots, shared by the Stats page and Player Cards.
+   Stats snapshots, shared by the Stats page, Player Cards, Range
+   Ratings, and Team of the Week.
 
-   This is a static site with no database, so snapshots live in this
-   browser's localStorage — they will NOT show up on a different device
-   or browser. That's a real limitation: if you check the site from your
-   phone and your laptop, each has its own snapshot history. Fine for a
-   single-user workflow ("I refresh this once a week from my laptop"),
-   not fine if you need everyone in the league to see the same frozen
-   week. Say if you need that — it'd mean adding real server-side storage
-   (Vercel KV/Postgres), which needs your Vercel account to provision.
+   Storage is a two-layer thing now: the database is the real source of
+   truth (api/fantasy/snapshots.js — a daily cron plus the admin's
+   manual "Retrieve Latest Stats" button both write there), and this
+   browser's localStorage is a SYNCED CACHE of it (syncServerSnapshots(),
+   below) — every function in this file below that line
+   (listSnapshots/getSnapshotByKey/snapshotsForSeason/
+   pickSnapshotClosestToDate/etc) still just reads localStorage exactly
+   like before the database existed, so none of them needed to change;
+   they're just populated automatically now instead of only by a manual
+   click in that specific browser. A manual Retrieve still works too —
+   it writes to the database (not just locally), so it shows up for
+   every visitor once they next sync, not just the browser that clicked
+   it.
 
    Model: "Live" is always available (fetches straight from the NHL API,
-   nothing saved). Clicking Retrieve Latest Stats fetches live data once
-   and freezes it as a snapshot for THAT CALENDAR WEEK (Monday-Sunday,
-   same week boundary the Schedule page uses — see retrieveAndSaveSnapshot()),
-   which becomes the active view. Switching the dropdown just changes
-   which already-fetched data the Stats/Cards/Range pages compute from —
-   no network call. Retrieving again later in the same week updates that
-   week's snapshot rather than adding a new one, so one retrieval a week
-   is exactly enough — matches the intended workflow of building a Range
-   Ratings "team of the week" week over week.
+   nothing saved). Snapshots are one per CALENDAR DAY (server-side) —
+   see retrieveAndSaveSnapshot() for the (now legacy but still
+   functional) local-only weekly-key version cards.html's own data-bar
+   still uses. Switching the dropdown just changes which already-synced
+   data the Stats/Cards/Range pages compute from — no network call.
    ====================================================================== */
 
 const SNAPSHOT_STORAGE_KEY = 'nhlStats.snapshots.v1';
 const ACTIVE_SNAPSHOT_KEY = 'nhlStats.activeSnapshot.v1';
-const MAX_SNAPSHOTS = 30; // ~30 weeks (more than a full season) before the oldest get pruned
+const MAX_SNAPSHOTS = 120; // ~4 months of daily snapshots (more than a full season) before the oldest get pruned — matches the server's own MAX_SNAPSHOTS_RETURNED
 const LIVE_SENTINEL = 'live';
 
 function readSnapshotStore() {
@@ -257,3 +259,43 @@ function wireDataBar(onDataChanged, onError) {
 
   refreshControls();
 }
+
+/** Pulls server-stored snapshots (api/fantasy/snapshots.js) down into
+ *  this browser's own localStorage store, in the exact shape every
+ *  other function in this file already reads — so nothing else needed
+ *  to change to benefit from server-backed snapshots existing. Skips a
+ *  server row whose date is already stored locally with an equal-or-
+ *  newer `savedAt`, so this is a cheap no-op on repeat page loads once
+ *  a browser is caught up. Never throws — a failed sync just means the
+ *  page falls back to whatever was already local (possibly nothing),
+ *  same as the pre-database behavior. */
+async function syncServerSnapshots() {
+  try {
+    const res = await fetch('/api/fantasy/snapshots');
+    const body = await res.json();
+    if (!body.ok) return;
+
+    const store = readSnapshotStore();
+    let changed = false;
+    for (const row of body.snapshots) {
+      const existing = store[row.date];
+      if (existing && existing.savedAt >= row.createdAt) continue;
+      store[row.date] = {
+        savedAt: row.createdAt,
+        label: formatDateRange(row.date, row.date), // data.js — single-day label, e.g. "Aug 17, 2026"
+        data: row.data, // already { teamMeta: [[abbrev, meta], ...], skaters, goalies } — same shape serializeSeasonData() produces
+      };
+      changed = true;
+    }
+    if (changed) writeSnapshotStore(store);
+  } catch {
+    // Non-fatal, see doc comment above.
+  }
+}
+
+/** Resolves once syncServerSnapshots() has run once. Pages that touch
+ *  snapshot data early in their init() should `await snapshotsReady`
+ *  first — mirrors fantasy-auth.js's `.ready` promise pattern. Fired
+ *  eagerly at script-load time (same spirit as that file's
+ *  `const ready = checkSession();`), not lazily on first use. */
+const snapshotsReady = syncServerSnapshots();

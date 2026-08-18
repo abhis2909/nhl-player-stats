@@ -187,6 +187,7 @@
     users: document.getElementById('subtabUsers'),
     deployment: document.getElementById('subtabDeployment'),
     projection: document.getElementById('subtabProjection'),
+    rating: document.getElementById('subtabRating'),
   };
 
   function showSubtab(name) {
@@ -202,6 +203,7 @@
     if (name === 'users' && window.__adminUsersTab) window.__adminUsersTab.ensureLoaded();
     if (name === 'deployment' && window.__adminDeploymentTab) window.__adminDeploymentTab.ensureLoaded();
     if (name === 'projection' && window.__adminProjectionTab) window.__adminProjectionTab.ensureLoaded();
+    if (name === 'rating' && window.__adminRatingTab) window.__adminRatingTab.ensureLoaded();
   }
 
   subtabButtons.forEach((btn) => {

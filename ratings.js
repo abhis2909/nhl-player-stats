@@ -85,12 +85,13 @@ function positionGroup(pos) {
  *  sheen strength, glow, pulse, sparkles, stat-tile shape) scales with
  *  tier via CSS in style.css (.tier-silver..diamond) — this function is
  *  the single source of truth for the thresholds. */
-function tierFor(overall) {
-  if (overall >= 92) return 'diamond';
-  if (overall >= 87) return 'amethyst';
-  if (overall >= 82) return 'ruby';
-  if (overall >= 77) return 'emerald';
-  if (overall >= 70) return 'gold';
+function tierFor(overall, cfg) {
+  const t = cfg?.tierThresholds || { diamond: 92, amethyst: 87, ruby: 82, emerald: 77, gold: 70 };
+  if (overall >= t.diamond) return 'diamond';
+  if (overall >= t.amethyst) return 'amethyst';
+  if (overall >= t.ruby) return 'ruby';
+  if (overall >= t.emerald) return 'emerald';
+  if (overall >= t.gold) return 'gold';
   return 'silver';
 }
 
@@ -112,9 +113,18 @@ function percentileRank(value, pool) {
   return (below / (n - 1)) * 100;
 }
 
-function toCardRating(percentile) {
-  const raw = RATING_FLOOR + (percentile / 100) * (RATING_CEIL - RATING_FLOOR);
-  return Math.max(RATING_FLOOR, Math.min(RATING_CEIL, Math.round(raw * RATING_PREMIUM)));
+/** `cfg` is an optional admin-tuned RatingSettings override (see
+ *  public-config.js's `ratingSettings`, fetched and threaded through by
+ *  callers that want it — cards.js/range.js/totw.js/app.js). Omitted or
+ *  partial `cfg` falls back to this module's own hardcoded defaults
+ *  field by field, so every EXISTING call site with no cfg at all keeps
+ *  behaving exactly as before this existed. */
+function toCardRating(percentile, cfg) {
+  const floor = cfg?.ratingFloor ?? RATING_FLOOR;
+  const ceil = cfg?.ratingCeil ?? RATING_CEIL;
+  const premium = cfg?.ratingPremium ?? RATING_PREMIUM;
+  const raw = floor + (percentile / 100) * (ceil - floor);
+  return Math.max(floor, Math.min(ceil, Math.round(raw * premium)));
 }
 
 /** Rates one pool (skaters or goalies) against itself, using whichever
@@ -140,10 +150,16 @@ function toCardRating(percentile) {
  *  version was tried, then reverted per direct follow-up feedback —
  *  keep the position-relative grouping above, but rank on accumulated
  *  season/window production, not rate). */
-function ratePool(pool, mode) {
+/** `cfg` (optional) — an admin-tuned RatingSettings override; see
+ *  toCardRating()'s doc comment for the fallback contract. Only
+ *  `cfg.positionWeights`/`cfg.goalieWeights` matter here directly;
+ *  floor/ceil/premium/tiers are handled inside toCardRating()/tierFor(). */
+function ratePool(pool, mode, cfg) {
   const categories = activeColumns(mode);
   const isGoalie = mode === 'goalies';
   const groupKey = (player) => (isGoalie ? 'G' : positionGroup(player.pos));
+  const positionWeights = cfg?.positionWeights || POSITION_WEIGHTS;
+  const goalieWeights = cfg?.goalieWeights || GOALIE_WEIGHTS;
 
   const groups = new Map(); // groupKey -> players in that group
   for (const player of pool) {
@@ -165,9 +181,9 @@ function ratePool(pool, mode) {
       const value = player[cat.id] ?? 0;
       let pct = percentileRank(value, statPools[cat.id]);
       if (INVERT_STATS.has(cat.id)) pct = 100 - pct;
-      return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct), pct };
+      return { id: cat.id, short: cat.short, label: cat.label, fmt: cat.fmt, value, rating: toCardRating(pct, cfg), pct };
     });
-    const weights = isGoalie ? GOALIE_WEIGHTS : POSITION_WEIGHTS[positionGroup(player.pos)];
+    const weights = isGoalie ? goalieWeights : positionWeights[positionGroup(player.pos)];
     let weightedSum = 0;
     let weightTotal = 0;
     for (const r of ratings) {
@@ -176,7 +192,7 @@ function ratePool(pool, mode) {
       weightTotal += w;
     }
     const compositePct = weightTotal ? weightedSum / weightTotal : 50;
-    return { ...player, ratings, overall: toCardRating(compositePct) };
+    return { ...player, ratings, overall: toCardRating(compositePct, cfg) };
   });
 }
 
@@ -260,9 +276,9 @@ function buildDeltaPool(fromData, toData, mode) {
  *  data.js's buildTeamMeta() (for the logo). `onOpen(player)`, if given,
  *  is called on click/Enter/Space — pass a function that opens whatever
  *  detail view makes sense for the calling page. */
-function buildCard(player, teamMeta, onOpen) {
+function buildCard(player, teamMeta, onOpen, cfg) {
   const isGoalie = player.pos === 'G';
-  const tier = tierFor(player.overall);
+  const tier = tierFor(player.overall, cfg);
   const headshot = `https://assets.nhle.com/mugs/nhl/latest/${player.playerId}.png`;
   const meta = teamMeta?.get(player.team);
   const [first, ...rest] = player.name.split(' ');

@@ -33,22 +33,13 @@
 <main>
   <div id="statusBanner" class="status-banner" hidden></div>
 
-  <div class="range-bar">
-    <div class="range-quick">
-      <button type="button" id="quickWeekBtn" class="ghost-btn">Past Week</button>
-      <button type="button" id="quickMonthBtn" class="ghost-btn">Past Month</button>
+  <div class="controls filter-bar">
+    <div class="toggle-group" role="tablist" aria-label="Time period" id="periodToggleGroup">
+      <button class="toggle-btn" data-period="historical" role="tab" aria-selected="false">Historical</button>
+      <button class="toggle-btn active" data-period="current" role="tab" aria-selected="true">Current Season</button>
     </div>
-    <div class="range-field">
-      <label for="statsFromDate">From</label>
-      <input type="date" id="statsFromDate">
-    </div>
-    <div class="range-field">
-      <label for="statsToDate">To</label>
-      <input type="date" id="statsToDate" placeholder="Live (now)">
-    </div>
-    <button type="button" id="statsRangeClearBtn" class="ghost-btn" hidden>✕ Back to season view</button>
+    <div class="toggle-group" role="tablist" aria-label="Historical season" id="historicalSeasonGroup" hidden></div>
   </div>
-  <p class="range-note" id="statsRangeNote"></p>
 
   <div class="cards-search-bar">
     <label class="visually-hidden" for="searchInput">Search players</label>
@@ -66,7 +57,6 @@
       <button class="toggle-btn" data-pos="W" role="tab" aria-selected="false">W</button>
       <button class="toggle-btn" data-pos="D" role="tab" aria-selected="false">D</button>
     </div>
-    <div class="toggle-group" role="tablist" aria-label="Season" id="seasonToggleGroup"></div>
     <div class="toggle-group" role="tablist" aria-label="Total or per-game">
       <button class="toggle-btn active" data-statmode="total" role="tab" aria-selected="true">Total</button>
       <button class="toggle-btn" data-statmode="perGame" role="tab" aria-selected="false">Per Game</button>
@@ -132,7 +122,6 @@
 
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
-<script src="snapshots.js" defer></script>
 <script src="ratings.js" defer></script>
 <script src="projections.js" defer></script>
 <script src="fantasy-auth.js" defer></script>

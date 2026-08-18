@@ -85,6 +85,7 @@ const state = {
   pos: 'ALL',
   visibleCount: BATCH_SIZE,
   compareSelections: new Map(), // playerId -> rated player, max 2, same mode only
+  ratingConfig: null, // admin-tuned RatingSettings override (public-config.js) — null falls back to ratings.js's own defaults, see toCardRating()'s doc comment
 };
 
 // How far back the season selector goes — 2021-22 is the earliest
@@ -124,14 +125,20 @@ function debounce(fn, ms) {
 }
 
 function rateAllPlayers() {
-  state.ratedSkaters = ratePool(state.rawSkaters, 'skaters');
-  state.ratedGoalies = ratePool(state.rawGoalies, 'goalies');
+  state.ratedSkaters = ratePool(state.rawSkaters, 'skaters', state.ratingConfig);
+  state.ratedGoalies = ratePool(state.rawGoalies, 'goalies', state.ratingConfig);
 }
 
 async function init() {
   el.statusBanner.hidden = true;
   el.skeleton.hidden = false;
   el.grid.innerHTML = '';
+  await snapshotsReady; // snapshots.js — the rating-trend chart reads snapshot history
+  // Admin-tuned rating weights/floor/ceil/premium/tiers (Admin -> Rating
+  // Methodology) — null (fetch failure, or nothing saved yet) falls back
+  // to ratings.js's own hardcoded defaults everywhere below.
+  state.ratingConfig = await fetch('/api/fantasy/public-config')
+    .then((r) => r.json()).then((d) => (d.ok ? d.ratingSettings : null)).catch(() => null);
 
   try {
     // Always fetch the CURRENT season (live, or the active local snapshot)
@@ -304,7 +311,7 @@ function render(reset) {
  *  itself since Range Ratings/Team of the Week reuse that function and
  *  don't want any of this. */
 function buildCardWithCompare(player) {
-  const card = buildCard(player, state.teamMeta, openPlayerModal);
+  const card = buildCard(player, state.teamMeta, openPlayerModal, state.ratingConfig);
 
   const scaleBox = document.createElement('div');
   scaleBox.className = 'pr-card-scale';
@@ -561,9 +568,9 @@ async function openCompareModal(a, b) {
 
   el.compareModalContent.innerHTML = `
     <div class="compare-heads">
-      <div class="compare-head">${buildCard(a, state.teamMeta).outerHTML}</div>
+      <div class="compare-head">${buildCard(a, state.teamMeta, null, state.ratingConfig).outerHTML}</div>
       <div class="compare-vs">VS</div>
-      <div class="compare-head">${buildCard(b, state.teamMeta).outerHTML}</div>
+      <div class="compare-head">${buildCard(b, state.teamMeta, null, state.ratingConfig).outerHTML}</div>
     </div>
     <div class="stats-window-bar">
       <label for="compareViewSelect">Stats</label>
@@ -691,7 +698,7 @@ function renderModalShell(player, landing) {
   el.modalContent.innerHTML = `
     <div class="pcard-modal-body">
       <div class="pcard-modal-left">
-        ${buildCard(player, state.teamMeta).outerHTML}
+        ${buildCard(player, state.teamMeta, null, state.ratingConfig).outerHTML}
         ${buildBioSection(player, landing)}
       </div>
       <div class="pcard-modal-right">
@@ -964,7 +971,7 @@ function buildSnapshotTrendPoints(player) {
     const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
     const eligible = rawPool.filter((p) => p.gamesPlayed >= minGP);
 
-    const rated = ratePool(eligible, mode);
+    const rated = ratePool(eligible, mode, state.ratingConfig);
     const found = rated.find((p) => p.playerId === player.playerId);
     if (found) points.push({ label: snap.label, value: found.overall });
   }
@@ -1015,7 +1022,7 @@ async function buildHistoricalTrendPoints(player) {
     const maxGP = seasonGameCount(pool);
     const minGP = Math.ceil(maxGP * MIN_GP_FRACTION);
     const eligible = pool.filter((p) => p.gamesPlayed >= minGP);
-    const rated = ratePool(eligible, mode);
+    const rated = ratePool(eligible, mode, state.ratingConfig);
     const found = rated.find((p) => p.playerId === player.playerId);
     if (found) points.push({ label: seasonLabel(id), value: found.overall });
   }

@@ -104,6 +104,16 @@ a { color: var(--accent); }
   flex-wrap: wrap;
 }
 
+/* Current Season's 4-option sub-view toggle (Year to Date / Rest-of-
+   Season Projected / Custom Range / Next Season Preview) — long labels
+   push this past mobile's viewport width same as .admin-subtabs did
+   (confirmed: 552px needed vs 375px available, real page-level
+   horizontal scroll). Same fix: wrap to more than one row instead of
+   forcing one line. */
+#currentSeasonSubGroup {
+  flex-wrap: wrap;
+}
+
 .toggle-group {
   display: inline-flex;
   background: var(--bg-elevated);

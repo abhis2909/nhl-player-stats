@@ -59,7 +59,8 @@
       <button class="toggle-btn" data-subtab="range" role="tab" aria-selected="false">📅 Range Ratings</button>
       <button class="toggle-btn" data-subtab="users" role="tab" aria-selected="false">👥 Users</button>
       <button class="toggle-btn" data-subtab="deployment" role="tab" aria-selected="false">🎯 Deployment</button>
-      <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Methodology</button>
+      <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Projections</button>
+      <button class="toggle-btn" data-subtab="rating" role="tab" aria-selected="false">🏅 Ratings</button>
     </div>
 
     <!-- ---------------- Columns ---------------- -->
@@ -266,11 +267,14 @@
           <h2>Projection Methodology</h2>
         </div>
         <p class="admin-hint">
-          Controls how the Stats page's "Projected" season is computed — see the Season toggle's
-          note there for the plain-language version. Season weights are how much each of the 4
-          seasons before the projected one counts toward a player's weighted-history baseline
-          (must sum to 1). The clip range bounds how far the age curve is allowed to move that
-          baseline up or down, in case a thin sample at the young/old tails overreacts.
+          Controls how the Stats page's Next-Season Preview and Rest-of-Season projections are
+          computed. Season weights are how much each of the 4 seasons before the projected one
+          counts toward a player's weighted-history baseline (must sum to 1). The clip range
+          bounds how far the age curve is allowed to move that baseline up or down, in case a
+          thin sample at the young/old tails overreacts. Shrinkage controls the Rest-of-Season
+          view specifically: how many real games it takes before this season's own actual rate
+          starts outweighing the modeled one — lower trusts a hot/cold start sooner, higher
+          waits longer for a bigger sample.
         </p>
         <div id="projLoading" class="save-status">Loading…</div>
         <p id="projError" class="warn-text" hidden></p>
@@ -309,11 +313,88 @@
               <label for="projClipMax">Multiplier clip — maximum</label>
               <input id="projClipMax" type="number" step="0.01" min="0.01">
             </div>
+            <div class="fh-field">
+              <label for="projShrinkage">Rest-of-Season shrinkage (games)</label>
+              <input id="projShrinkage" type="number" step="1" min="1">
+            </div>
           </div>
 
           <div class="admin-buttons">
             <button type="button" id="projSaveBtn" class="primary-btn">Save methodology</button>
             <span id="projSaveStatus" class="save-status" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------------- Rating Methodology ---------------- -->
+    <div id="subtabRating" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Rating Methodology</h2>
+        </div>
+        <p class="admin-hint">
+          Controls the percentile-based "overall" rating engine behind Player Ratings, Range
+          Ratings, Team of the Week, and the Stats page's Power Ranking column — all four read
+          this same configuration. Position weights control how much each stat counts toward a
+          skater's overall (goalies use one shared profile). Eligibility is the minimum fraction
+          of the pool's max games played to be rated at all. Tier thresholds must stay strictly
+          descending (Diamond &gt; Amethyst &gt; Ruby &gt; Emerald &gt; Gold).
+        </p>
+        <div id="ratingLoading" class="save-status">Loading…</div>
+        <p id="ratingError" class="warn-text" hidden></p>
+        <div id="ratingForm" hidden>
+          <div id="ratingWeightGroups"></div>
+
+          <div class="checkbox-grid">
+            <div class="fh-field">
+              <label for="ratingMinGp">Eligibility (fraction of max games played)</label>
+              <input id="ratingMinGp" type="number" step="0.01" min="0" max="1">
+            </div>
+            <div class="fh-field">
+              <label for="ratingFloor">Rating floor</label>
+              <input id="ratingFloor" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="ratingCeil">Rating ceiling</label>
+              <input id="ratingCeil" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="ratingPremium">Rating premium (e.g. 1.04 = +4%)</label>
+              <input id="ratingPremium" type="number" step="0.01" min="0.5">
+            </div>
+          </div>
+
+          <div class="admin-section-head" style="margin-top: 16px;">
+            <h2 style="font-size: 13.5px;">Gem Tier Thresholds</h2>
+          </div>
+          <div class="checkbox-grid">
+            <div class="fh-field">
+              <label for="tierDiamond">Diamond ≥</label>
+              <input id="tierDiamond" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="tierAmethyst">Amethyst ≥</label>
+              <input id="tierAmethyst" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="tierRuby">Ruby ≥</label>
+              <input id="tierRuby" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="tierEmerald">Emerald ≥</label>
+              <input id="tierEmerald" type="number" step="1" min="0" max="100">
+            </div>
+            <div class="fh-field">
+              <label for="tierGold">Gold ≥</label>
+              <input id="tierGold" type="number" step="1" min="0" max="100">
+            </div>
+          </div>
+
+          <div class="admin-buttons">
+            <button type="button" id="ratingSaveBtn" class="primary-btn">Save methodology</button>
+            <button type="button" id="ratingResetBtn" class="ghost-btn">Reset to defaults</button>
+            <span id="ratingSaveStatus" class="save-status" aria-live="polite"></span>
           </div>
         </div>
       </section>
@@ -344,5 +425,6 @@
 <script src="admin-users.js" defer></script>
 <script src="admin-deployment.js" defer></script>
 <script src="admin-projection.js" defer></script>
+<script src="admin-rating.js" defer></script>
 </body>
 </html>

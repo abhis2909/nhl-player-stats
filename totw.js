@@ -503,6 +503,7 @@ el.skipBtn.addEventListener('click', () => {
 
 async function init() {
   el.statusBanner.hidden = true;
+  await snapshotsReady; // snapshots.js — needs a week's snapshots to compute a rated roster
   try {
     const data = await loadSeasonData();
     state.liveData = data;

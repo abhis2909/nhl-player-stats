@@ -5,7 +5,7 @@ const { getSessionAdmin, readJsonBody } = require('../_lib/fantasyAuth');
 
 /* /api/fantasy/admin-deployment — admin-only read/write of PlayerDeployment
    rows, edited from admin.html's Deployment sub-tab. The public read side
-   (everyone's Stats page) is the separate GET-only projection-config.js —
+   (everyone's Stats page) is the separate GET-only public-config.js —
    this endpoint is never called by anyone but the logged-in admin.
 
    GET  ?season=2026-27              -> { ok, deployment: [...] } (all rows for that season)

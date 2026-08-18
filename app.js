@@ -18,15 +18,10 @@ const el = {
   modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
   posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
-  seasonToggleGroup: document.getElementById('seasonToggleGroup'),
+  periodButtons: Array.from(document.querySelectorAll('.toggle-btn[data-period]')),
+  historicalSeasonGroup: document.getElementById('historicalSeasonGroup'),
   statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   qualifiedToggleBtn: document.getElementById('qualifiedToggleBtn'),
-  quickWeekBtn: document.getElementById('quickWeekBtn'),
-  quickMonthBtn: document.getElementById('quickMonthBtn'),
-  statsFromDate: document.getElementById('statsFromDate'),
-  statsToDate: document.getElementById('statsToDate'),
-  statsRangeClearBtn: document.getElementById('statsRangeClearBtn'),
-  statsRangeNote: document.getElementById('statsRangeNote'),
   teamSelect: document.getElementById('teamSelect'),
   searchInput: document.getElementById('searchInput'),
   statusBanner: document.getElementById('statusBanner'),
@@ -50,13 +45,14 @@ const state = {
   team: 'ALL',
   pos: 'ALL',
   search: '',
-  seasonId: null,          // the CURRENT (live/active-snapshot) season — always fetched, regardless of which season is selected below
-  selectedSeasonId: null,  // whichever season the table is actually showing
-  seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw totals — avoids refetching a season already looked at
+  seasonId: null,          // the CURRENT (live) season, as the NHL API sees it right now — treated as historical (the season has effectively been played)
+  period: 'current',       // 'historical' | 'current' — the whole toggle
+  historicalSeasonId: null, // whichever of the 2 historical seasons is showing, when period === 'historical'
+  currentIsLive: false,    // true once the upcoming season has any real recorded games — set by loadCurrentSeasonView()
+  seasonDataCache: new Map(), // seasonId (or a synthetic string key for the current-season view) -> { skaters, goalies } raw totals — avoids refetching something already looked at
   statMode: 'total',       // 'total' | 'perGame' — see applyStatMode()
   qualifiedOnly: false,    // when true, hide players under MIN_GP_FRACTION (ratings.js) of the pool's max games played
-  viewMode: 'season',      // 'season' | 'range' — range means the date-range picker is driving the table, not the Season toggle
-  activeRange: null,       // { fromLabel, toLabel } for whichever range is currently shown, set by loadDateRange()
+  ratingConfig: null,      // admin-tuned RatingSettings override (public-config.js) for the Power Ranking column — null falls back to ratings.js's own defaults
   teamMeta: new Map(),   // abbrev -> { name, logo, conference, division }
   rawSkaters: [],  // selected season's totals, as fetched — untouched by statMode
   rawGoalies: [],
@@ -69,20 +65,28 @@ const state = {
   },
 };
 
-// How far back the season toggle goes: current, and the season before it.
-// (Used to go back 2 seasons — dropped the older one per explicit
-// request, "kinda useless"; the date-range picker covers recent-history
-// use cases better anyway.) NHL season ids follow a YYYYYYYY+1 pattern,
-// so stepping back one season is always -10001 (see cards.js's
-// identical convention).
-function seasonOffsets() {
-  return [state.seasonId - 10001, state.seasonId];
+// Historical is kept to exactly the 2 most recent completed seasons —
+// state.seasonId itself (the last season the NHL API has a full
+// complement of games for) and the one before it. NHL season ids follow
+// a YYYYYYYY+1 pattern, so stepping back one season is always -10001.
+function historicalSeasonIdsUI() {
+  return [state.seasonId, state.seasonId - 10001]; // newest -> oldest
 }
 
-// The 4th, projected season — one season ahead of "current". Its
-// historical inputs (the 4 seasons feeding the projection) are computed
+// The season one ahead of "current" — the Current Season view's target,
+// shown as a preseason projection until it has real games (see
+// loadCurrentSeasonView()), then as a live rest-of-season blend. Its
+// historical inputs (the 4 seasons feeding either version) are computed
 // by projections.js's historicalSeasonIds(), independently of this.
-function projectedSeasonId() {
+//
+// CAVEAT worth knowing if this ever looks wrong right at a season
+// rollover: this is always state.seasonId + 1, and state.seasonId is
+// itself whatever /v1/standings/now currently calls "current" — if the
+// NHL API ever flips state.seasonId over to the new season BEFORE (or
+// well after) that season's stats actually start populating, there
+// could be a short mismatched window. Not observable until an actual
+// rollover happens; revisit if it ever looks off then.
+function upcomingSeasonId() {
   return state.seasonId + 10001;
 }
 
@@ -127,7 +131,6 @@ async function loadStatsForSeason(seasonId) {
   }
   state.rawSkaters = raw.skaters;
   state.rawGoalies = raw.goalies;
-  state.selectedSeasonId = seasonId;
   applyStatMode();
 }
 
@@ -143,16 +146,43 @@ function toPerGame(list, catalog) {
     const gp = p.gamesPlayed || 0;
     const out = { ...p };
     for (const col of catalog) {
-      if (col.fmt || col.id === 'gamesPlayed') continue;
+      if (col.fmt || col.id === 'gamesPlayed' || col.synthetic) continue;
       out[col.id] = gp > 0 ? p[col.id] / gp : 0;
     }
     return out;
   });
 }
 
+/** Computes the Power Ranking ("overall") column via ratings.js's
+ *  ratePool() — the exact same percentile-blend engine Player Ratings
+ *  cards use, admin-tunable under Admin -> Rating Methodology
+ *  (state.ratingConfig, fetched once in init()) — and merges the result
+ *  onto `list` by playerId. Always computed from RAW totals (ratePool's
+ *  documented convention), never the per-game-divided view — so this
+ *  runs on state.raw* before toPerGame(), and the merge-on step after
+ *  is keyed by playerId rather than array position so it's correct
+ *  regardless of stat mode. Skipped entirely (cheap early-out) unless
+ *  the "overall" column is actually enabled — no reason to pay for an
+ *  extra O(n) ratePool() pass otherwise. */
+function attachPowerRankings(rawList, displayList, mode) {
+  if (!state.columns[mode]?.includes('overall')) return displayList;
+  // Same eligibility pre-filter cards.js applies before rating — not
+  // just to avoid a misleadingly extreme percentile for a 1-game
+  // callup, but because a long tail of near-zero-total depth players
+  // in the pool compresses the percentile range for everyone else.
+  // Ineligible players just show "—" (formatStatValue's null check)
+  // rather than a real-looking-but-meaningless number.
+  const minGpFraction = state.ratingConfig?.minGpFraction ?? MIN_GP_FRACTION;
+  const minGp = Math.ceil(seasonGameCount(rawList) * minGpFraction);
+  const eligible = rawList.filter((p) => p.gamesPlayed >= minGp);
+  const rated = ratePool(eligible, mode, state.ratingConfig); // ratings.js
+  const overallById = new Map(rated.map((p) => [p.playerId, p.overall]));
+  return displayList.map((p) => ({ ...p, overall: overallById.get(p.playerId) ?? null }));
+}
+
 function applyStatMode() {
-  state.skaters = toPerGame(state.rawSkaters, SKATER_COLUMNS);
-  state.goalies = toPerGame(state.rawGoalies, GOALIE_COLUMNS);
+  state.skaters = attachPowerRankings(state.rawSkaters, toPerGame(state.rawSkaters, SKATER_COLUMNS), 'skaters');
+  state.goalies = attachPowerRankings(state.rawGoalies, toPerGame(state.rawGoalies, GOALIE_COLUMNS), 'goalies');
 }
 
 /** Same as columns.js's formatColumnValue(), except a per-game counting
@@ -161,56 +191,59 @@ function applyStatMode() {
  *  0.8181818181818182). Rate columns and Games Played are unaffected —
  *  same values in both stat modes, so they format the same way too. */
 function formatStatValue(col, value) {
-  if (state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed') {
+  if (value == null) return '—'; // Power Ranking before it's computed, or a player ratePool() didn't rate (shouldn't normally happen, but don't show "0")
+  if (state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed' && !col.synthetic) {
     return (typeof value === 'number' ? value : Number(value) || 0).toFixed(2);
   }
   return formatColumnValue(col, value);
 }
 
-/** Rebuilds the 4-button Season toggle (the 2 seasons before current,
- *  current, and the projected season ahead of it) — dynamic, not static
- *  markup, since the actual years depend on what "current" resolves to.
- *  Re-run on every init() so a season rollover picks up automatically. */
-function populateSeasonToggle() {
-  const projId = projectedSeasonId();
-  const ids = [...seasonOffsets(), projId]; // oldest -> newest -> projected, left to right
-  el.seasonToggleGroup.innerHTML = '';
+/** Rebuilds the Historical season picker (current-1 back to
+ *  MIN_HISTORICAL_SEASON_ID) — dynamic, not static markup, since the
+ *  actual years depend on what "current" resolves to. Re-run on every
+ *  init() so a season rollover picks up automatically. Keeps whatever
+ *  season was already selected if it's still in range, else defaults
+ *  to the newest historical season. */
+function populateHistoricalSeasonGroup() {
+  const ids = historicalSeasonIdsUI();
+  el.historicalSeasonGroup.innerHTML = '';
   for (const id of ids) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toggle-btn';
     btn.setAttribute('role', 'tab');
     btn.dataset.season = String(id);
-    const suffix = id === state.seasonId ? ' (Current)' : id === projId ? ' (Projected)' : '';
-    btn.textContent = seasonLabel(id) + suffix;
-    btn.setAttribute('aria-selected', id === state.selectedSeasonId ? 'true' : 'false');
-    btn.classList.toggle('active', id === state.selectedSeasonId);
-    btn.addEventListener('click', () => onSeasonToggleClick(id));
-    el.seasonToggleGroup.appendChild(btn);
+    btn.textContent = seasonLabel(id);
+    btn.addEventListener('click', () => selectHistoricalSeason(id));
+    el.historicalSeasonGroup.appendChild(btn);
   }
+  if (!ids.includes(state.historicalSeasonId)) state.historicalSeasonId = ids[0] ?? null;
 }
 
-/** Dispatches to the right loader for whichever season was picked —
- *  the projected season needs a much heavier build (loadProjectedSeason),
- *  every other season is a plain historical fetch (loadStatsForSeason). */
-async function loadSelectedSeason(seasonId) {
-  if (seasonId === projectedSeasonId()) return loadProjectedSeason(seasonId);
-  return loadStatsForSeason(seasonId);
-}
-
-/** Builds (or reuses a cached copy of) the projected season — fetches
- *  the 4 historical seasons feeding it (data.js's loadSeasonStatsFor +
- *  loadSkaterTimeOnIce, cache-aware so a season already viewed via the
- *  plain Season toggle isn't re-fetched), the current-roster bio pool
- *  (for age — data.js's loadPlayerBioPool), and the admin's deployment
- *  overrides + methodology settings (GET /api/fantasy/projection-config),
- *  then hands it all to projections.js's buildProjectedSeason(). Heavy
- *  on first call in a session; every call after is instant from
- *  state.seasonDataCache, same caching pattern as loadStatsForSeason(). */
-async function loadProjectedSeason(seasonId) {
-  let raw = state.seasonDataCache.get(seasonId);
+/** Current Season's one unified view: the upcoming season
+ *  (upcomingSeasonId()) — shown as a pure preseason model
+ *  (buildProjectedSeason(), projections.js) until it has any real
+ *  recorded games, then AUTOMATICALLY as a live rest-of-season blend
+ *  (buildRestOfSeasonProjection() — real results so far + a modeled
+ *  rate for the rest, updating every time more games are played) once
+ *  it does. Same 4 historical seasons feed either mode (the ones
+ *  immediately before the season being shown). Sets
+ *  state.currentIsLive so updateSeasonLabel() can say which one is
+ *  showing. */
+async function loadCurrentSeasonView() {
+  const seasonId = upcomingSeasonId();
+  const cacheKey = `current:${seasonId}`;
+  let raw = state.seasonDataCache.get(cacheKey);
   if (!raw) {
-    const histIds = historicalSeasonIds(seasonId); // projections.js
+    let currentRaw = state.seasonDataCache.get(seasonId);
+    if (!currentRaw) {
+      const data = await loadSeasonStatsFor(seasonId, state.teamMeta);
+      currentRaw = { skaters: data.skaters, goalies: data.goalies };
+      state.seasonDataCache.set(seasonId, currentRaw);
+    }
+    const isLive = currentRaw.skaters.length > 0; // has the season actually started yet?
+
+    const histIds = historicalSeasonIds(seasonId); // projections.js — 4 seasons immediately before `seasonId`, same set either mode
     const historicalData = await Promise.all(histIds.map(async (histId) => {
       let cached = state.seasonDataCache.get(histId);
       if (!cached) {
@@ -224,168 +257,109 @@ async function loadProjectedSeason(seasonId) {
 
     const [bioPool, configRes] = await Promise.all([
       loadPlayerBioPool(state.teamMeta),
-      fetch(`/api/fantasy/projection-config?season=${encodeURIComponent(seasonLabel(seasonId))}`).then((r) => r.json()),
+      fetch(`/api/fantasy/public-config?season=${encodeURIComponent(seasonLabel(seasonId))}`).then((r) => r.json()),
     ]);
     if (!configRes.ok) throw new Error(configRes.message || 'could not load projection settings');
 
-    const built = buildProjectedSeason({ // projections.js
-      projectedSeasonId: seasonId,
-      historicalData,
-      bioPool,
-      teamMeta: state.teamMeta,
-      deployment: configRes.deployment,
-      settings: configRes.settings,
-    });
-    raw = { skaters: built.skaters, goalies: built.goalies };
-    state.seasonDataCache.set(seasonId, raw);
+    const built = isLive
+      ? buildRestOfSeasonProjection({ // projections.js
+        currentSeasonId: seasonId,
+        currentRaw,
+        historicalData,
+        bioPool,
+        teamMeta: state.teamMeta,
+        deployment: configRes.deployment,
+        settings: configRes.settings,
+      })
+      : buildProjectedSeason({ // projections.js
+        projectedSeasonId: seasonId,
+        historicalData,
+        bioPool,
+        teamMeta: state.teamMeta,
+        deployment: configRes.deployment,
+        settings: configRes.settings,
+      });
+
+    raw = { skaters: built.skaters, goalies: built.goalies, isLive };
+    state.seasonDataCache.set(cacheKey, raw);
   }
   state.rawSkaters = raw.skaters;
   state.rawGoalies = raw.goalies;
-  state.selectedSeasonId = seasonId;
+  state.currentIsLive = raw.isLive;
   applyStatMode();
 }
 
-function markActiveSeasonButton() {
-  el.seasonToggleGroup.querySelectorAll('.toggle-btn').forEach((btn) => {
-    const active = state.viewMode === 'season' && Number(btn.dataset.season) === state.selectedSeasonId;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
+async function selectHistoricalSeason(seasonId) {
+  if (state.period === 'historical' && state.historicalSeasonId === seasonId) return;
+  state.historicalSeasonId = seasonId;
+  await activateView('historical');
 }
 
-async function onSeasonToggleClick(seasonId) {
-  if (state.viewMode === 'season' && seasonId === state.selectedSeasonId) return;
+/** The one loader dispatch for whichever period is active — both the
+ *  top-level toggle and the Historical season picker ultimately call
+ *  activateView(), which calls this. */
+async function loadForView(period) {
+  if (period === 'historical') {
+    const seasonId = state.historicalSeasonId ?? historicalSeasonIdsUI()[0];
+    state.historicalSeasonId = seasonId;
+    if (seasonId != null) await loadStatsForSeason(seasonId);
+    return;
+  }
+  await loadCurrentSeasonView();
+}
+
+/** Central dispatch for the period control surface (top-level
+ *  Historical/Current Season toggle + the Historical season picker) —
+ *  sets state, loads the right data, and refreshes every dependent bit
+ *  of UI (control visibility/active states, the header label, sort
+ *  validity, the table itself). */
+async function activateView(period) {
   toggleSkeleton(true);
   hideBanner();
   try {
-    state.viewMode = 'season';
-    await loadSelectedSeason(seasonId);
-    clearDateInputs();
-    markActiveSeasonButton();
+    state.period = period;
+    await loadForView(period);
+    syncControlVisibility();
+    updateActiveStates();
     updateSeasonLabel();
     ensureValidSort();
     render();
   } catch (err) {
-    showBanner(`Couldn't load ${seasonLabel(seasonId)} stats (${err.message}).`);
+    showBanner(`Couldn't load stats (${err.message}).`);
   } finally {
     toggleSkeleton(false);
   }
+}
+
+function syncControlVisibility() {
+  el.historicalSeasonGroup.hidden = state.period !== 'historical';
+}
+
+function updateActiveStates() {
+  el.periodButtons.forEach((b) => {
+    const active = b.dataset.period === state.period;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  el.historicalSeasonGroup.querySelectorAll('.toggle-btn').forEach((b) => {
+    const active = state.period === 'historical' && Number(b.dataset.season) === state.historicalSeasonId;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
 }
 
 function updateSeasonLabel() {
   const statModeLabel = state.statMode === 'perGame' ? 'Per Game' : 'Total';
 
-  if (state.viewMode === 'range') {
-    const { fromLabel, toLabel } = state.activeRange;
-    el.seasonLabel.textContent =
-      `Custom range: ${fromLabel} → ${toLabel} · Regular Season stats · ${statModeLabel} — ` +
-      'showing whoever played at least one game in this window, resolved to the nearest saved snapshots.';
+  if (state.period === 'historical') {
+    el.seasonLabel.textContent = `${seasonLabel(state.historicalSeasonId)} (Historical) · Regular Season stats · ${statModeLabel}`;
     return;
   }
 
-  const current = state.selectedSeasonId === state.seasonId;
-  const projected = state.selectedSeasonId === projectedSeasonId();
-  let text = `${seasonLabel(state.selectedSeasonId)}${current ? ' (Current)' : projected ? ' (Projected)' : ''} · Regular Season stats · ${statModeLabel}`;
-  if (projected) {
-    text += ' · Projection: weighted recent seasons + age curve + deployment input — not real stats, tune the methodology under Admin → Projection Methodology.';
-  }
-  el.seasonLabel.textContent = text;
-}
-
-/* ------------------------------ date range ------------------------------ */
-/* "Last 30 Days" / "Previous Week" / a custom calendar range — computed
-   from saved snapshots via the exact same delta engine Range Ratings
-   uses (buildDeltaPool, ratings.js), so this is bounded by the same
-   real constraint that page has: the NHL stats API only exposes
-   season-cumulative totals, not "stats as of an arbitrary date", so any
-   date picked here resolves to whichever SAVED SNAPSHOT is closest to
-   it (pickSnapshotClosestToDate(), snapshots.js) — not an exact value.
-   Snapshots are created from Admin → Range Ratings' own "Retrieve
-   Latest Stats" button now that this page's own copy of that control
-   is gone; both read/write the same localStorage snapshot store. */
-
-/** Builds the { seasonId, teamMeta, skaters, goalies } shape
- *  buildDeltaPool() expects for the CURRENT season's live/cached data —
- *  used as the "to" side whenever no explicit To date is given. */
-function currentSeasonDataObject() {
-  const cur = state.seasonDataCache.get(state.seasonId);
-  return { seasonId: state.seasonId, teamMeta: state.teamMeta, skaters: cur.skaters, goalies: cur.goalies };
-}
-
-/** Loads (or reuses a cached copy of) the delta between whichever
- *  snapshot is closest to `fromDate` and whichever is closest to
- *  `toDate` (or live current data if `toDate` is falsy). Throws with a
- *  clear message if there's no saved snapshot for the current season
- *  at all yet, so the caller's catch block can show it as a banner. */
-async function loadDateRange(fromDate, toDate) {
-  const cacheKey = `range:${fromDate}:${toDate || 'live'}`;
-  let raw = state.seasonDataCache.get(cacheKey);
-  if (!raw) {
-    const fromSnap = pickSnapshotClosestToDate(fromDate, state.seasonId); // snapshots.js
-    if (!fromSnap) {
-      throw new Error('no saved snapshot for this season yet — retrieve one from Admin → Range Ratings first');
-    }
-    let toDataObj, toLabel;
-    if (toDate) {
-      const toSnap = pickSnapshotClosestToDate(toDate, state.seasonId);
-      if (!toSnap) throw new Error('no saved snapshot for this season yet — retrieve one from Admin → Range Ratings first');
-      toDataObj = toSnap.full.data;
-      toLabel = toSnap.label;
-    } else {
-      toDataObj = currentSeasonDataObject();
-      toLabel = 'Live (now)';
-    }
-    const deltaSkaters = buildDeltaPool(fromSnap.full.data, toDataObj, 'skaters'); // ratings.js
-    const deltaGoalies = buildDeltaPool(fromSnap.full.data, toDataObj, 'goalies');
-    raw = { skaters: deltaSkaters, goalies: deltaGoalies, fromLabel: fromSnap.label, toLabel };
-    state.seasonDataCache.set(cacheKey, raw);
-  }
-  state.rawSkaters = raw.skaters;
-  state.rawGoalies = raw.goalies;
-  state.activeRange = { fromLabel: raw.fromLabel, toLabel: raw.toLabel };
-  state.viewMode = 'range';
-  applyStatMode();
-}
-
-function clearDateInputs() {
-  el.statsFromDate.value = '';
-  el.statsToDate.value = '';
-  el.statsRangeClearBtn.hidden = true;
-  el.statsRangeNote.textContent = '';
-}
-
-async function applyDateRange(fromDate, toDate) {
-  toggleSkeleton(true);
-  hideBanner();
-  try {
-    await loadDateRange(fromDate, toDate);
-    el.statsRangeClearBtn.hidden = false;
-    el.statsRangeNote.textContent =
-      `Resolved to the nearest saved snapshots: ${state.activeRange.fromLabel} → ${state.activeRange.toLabel}.`;
-    markActiveSeasonButton(); // clears any season button's active state
-    updateSeasonLabel();
-    ensureValidSort();
-    render();
-  } catch (err) {
-    showBanner(`Couldn't build that range (${err.message}).`);
-  } finally {
-    toggleSkeleton(false);
-  }
-}
-
-async function exitRangeView() {
-  clearDateInputs();
-  toggleSkeleton(true);
-  try {
-    state.viewMode = 'season';
-    await loadSelectedSeason(state.selectedSeasonId ?? state.seasonId);
-    markActiveSeasonButton();
-    updateSeasonLabel();
-    ensureValidSort();
-    render();
-  } finally {
-    toggleSkeleton(false);
-  }
+  const seasonId = upcomingSeasonId();
+  el.seasonLabel.textContent = state.currentIsLive
+    ? `${seasonLabel(seasonId)} · Current Season · ${statModeLabel} — real results so far blended with a modeled rate for the rest of the season — updates as more games are played. Tune under Admin → Projections.`
+    : `${seasonLabel(seasonId)} · Current Season (Projected) · ${statModeLabel} — actual stats will be shown here automatically once the season starts; for now this is a preseason model. Tune under Admin → Projections.`;
 }
 
 /* ------------------------------ init ------------------------------ */
@@ -393,31 +367,25 @@ async function exitRangeView() {
 async function init() {
   toggleSkeleton(true);
   hideBanner();
+  // Admin-tuned rating weights for the Power Ranking column (Admin ->
+  // Rating Methodology) — null (fetch failure, or nothing saved yet)
+  // falls back to ratings.js's own hardcoded defaults. Fetched once
+  // here rather than per-view since it applies identically everywhere.
+  state.ratingConfig = await fetch('/api/fantasy/public-config')
+    .then((r) => r.json()).then((d) => (d.ok ? d.ratingSettings : null)).catch(() => null);
   try {
-    // Always live — this page no longer has its own snapshot-vs-live
-    // switcher (removed; Admin → Range Ratings already has the
-    // equivalent "Retrieve Latest Stats" control and both read/write
-    // the same snapshot store, so nothing was lost, just de-duplicated).
     const { seasonId, teamMeta, skaters, goalies } = await loadSeasonData(); // data.js
     state.seasonId = seasonId;
     state.teamMeta = teamMeta;
     state.seasonDataCache.set(seasonId, { skaters, goalies });
 
     populateTeamSelect();
-    populateSeasonToggle();
-
-    const targetSeason = new Set(seasonOffsets()).has(state.selectedSeasonId) || state.selectedSeasonId === projectedSeasonId()
-      ? state.selectedSeasonId
-      : seasonId;
-    state.viewMode = 'season';
-    await loadSelectedSeason(targetSeason); // no-op network-wise when targetSeason === seasonId (just cached above), or cached if Projected was already built this session
-    markActiveSeasonButton();
-
-    updateSeasonLabel();
-    ensureValidSort();
+    populateHistoricalSeasonGroup();
     renderTableHeaders();
-    toggleSkeleton(false);
-    render();
+
+    // First (only) load — period is still at its default ('current'),
+    // so this builds Current Season's view straight away (and renders it).
+    await activateView('current');
   } catch (err) {
     toggleSkeleton(false);
     showBanner(`Couldn't load NHL data (${err.message}). Make sure the local server is running, then retry.`);
@@ -491,7 +459,7 @@ function renderTableHeaders() {
       th.className = 'sortable is-numeric';
       th.dataset.key = col.id;
       th.dataset.type = 'number';
-      const perGame = state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed';
+      const perGame = state.statMode === 'perGame' && !col.fmt && col.id !== 'gamesPlayed' && !col.synthetic;
       th.title = perGame ? `${col.label} per game` : col.label;
       th.textContent = col.short;
       th.addEventListener('click', () => onSortClick(mode, col.id, 'number'));
@@ -859,29 +827,13 @@ el.qualifiedToggleBtn.addEventListener('click', () => {
   render();
 });
 
-el.quickWeekBtn.addEventListener('click', () => {
-  const from = addDays(todayISO(), -7); // data.js
-  el.statsFromDate.value = from;
-  el.statsToDate.value = '';
-  applyDateRange(from, null);
+el.periodButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const period = btn.dataset.period;
+    if (state.period === period) return;
+    activateView(period);
+  });
 });
-
-el.quickMonthBtn.addEventListener('click', () => {
-  const from = addDays(todayISO(), -30); // data.js
-  el.statsFromDate.value = from;
-  el.statsToDate.value = '';
-  applyDateRange(from, null);
-});
-
-function onDateInputChange() {
-  const from = el.statsFromDate.value;
-  if (!from) return; // From is required; To alone does nothing yet
-  applyDateRange(from, el.statsToDate.value || null);
-}
-el.statsFromDate.addEventListener('change', onDateInputChange);
-el.statsToDate.addEventListener('change', onDateInputChange);
-
-el.statsRangeClearBtn.addEventListener('click', exitRangeView);
 
 el.teamSelect.addEventListener('change', () => {
   state.team = el.teamSelect.value;
@@ -903,6 +855,7 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('storage', (e) => {
   if (e.key !== COLUMN_STORAGE_KEY) return;
   state.columns = loadColumnConfig();
+  applyStatMode(); // re-derive — Power Ranking may have just been turned on/off
   ensureValidSort();
   renderTableHeaders();
   render();

@@ -10,6 +10,14 @@
 const COLUMN_STORAGE_KEY = 'nhlStats.columnConfig.v1';
 
 const SKATER_COLUMNS = [
+  // Synthetic — not one of data.js's raw fields. Computed at render time
+  // (app.js's attachPowerRankings(), via ratings.js's ratePool() — the
+  // exact same percentile-blend "overall" Player Ratings cards show,
+  // admin-tunable under Admin -> Rating Methodology) and merged onto
+  // each player object under this id, same shape as every other column
+  // from there on. Never divided by games played (see app.js's
+  // toPerGame()/formatStatValue() — treated like gamesPlayed itself).
+  { id: 'overall', short: 'PWR', label: 'Power Ranking (Card Rating)', synthetic: true },
   { id: 'goals', short: 'G', label: 'Goals' },
   { id: 'assists', short: 'A', label: 'Assists' },
   { id: 'points', short: 'PTS', label: 'Points' },
@@ -32,6 +40,7 @@ const SKATER_COLUMNS = [
 ];
 
 const GOALIE_COLUMNS = [
+  { id: 'overall', short: 'PWR', label: 'Power Ranking (Card Rating)', synthetic: true },
   { id: 'wins', short: 'W', label: 'Wins' },
   { id: 'losses', short: 'L', label: 'Losses' },
   { id: 'otLosses', short: 'OTL', label: 'Overtime Losses' },

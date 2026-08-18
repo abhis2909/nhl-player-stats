@@ -301,10 +301,53 @@ model PlayerDeployment {
 // projection's weighting/age-curve behavior can be tuned from
 // admin.html without a code change.
 model ProjectionSettings {
-  id                String   @id @default("singleton")
-  seasonWeights     Json // [w1, w2, w3, w4], newest season first, sums to 1
-  ageCurveEnabled   Boolean  @default(true)
-  multiplierClipMin Float    @default(0.85)
-  multiplierClipMax Float    @default(1.15)
-  updatedAt         DateTime @updatedAt
+  id                        String   @id @default("singleton")
+  seasonWeights             Json // [w1, w2, w3, w4], newest season first, sums to 1
+  ageCurveEnabled           Boolean  @default(true)
+  multiplierClipMin         Float    @default(0.85)
+  multiplierClipMax         Float    @default(1.15)
+  // Shrinkage constant (games) for the Rest-of-Season live projection —
+  // blendedRate = g/(g+K)*actualYtdRate + K/(g+K)*modeledRate, where g
+  // is the player's real games played so far this season. Small g
+  // trusts the model more; large g trusts real results more. See
+  // projections.js's buildRestOfSeasonProjection().
+  restOfSeasonShrinkageGames Int     @default(20)
+  updatedAt                 DateTime @updatedAt
+}
+
+// ---------- Stats page: rating methodology ----------
+// Admin-tunable version of ratings.js's hardcoded constants
+// (POSITION_WEIGHTS/GOALIE_WEIGHTS/MIN_GP_FRACTION/RATING_FLOOR..CEIL/
+// RATING_PREMIUM/tierFor() thresholds) — same singular-row spirit as
+// ProjectionSettings above. ratings.js's own constants remain the
+// DEFAULTS (used as-is if this row never gets saved), so nothing
+// changes in production until an admin actually edits this.
+model RatingSettings {
+  id              String   @id @default("singleton")
+  positionWeights Json // { C: {...}, W: {...}, D: {...} }, mirrors ratings.js's POSITION_WEIGHTS shape exactly
+  goalieWeights   Json // mirrors GOALIE_WEIGHTS
+  minGpFraction   Float    @default(0.2)
+  ratingFloor     Int      @default(25)
+  ratingCeil      Int      @default(99)
+  ratingPremium   Float    @default(1.04)
+  tierThresholds  Json // { diamond, amethyst, ruby, emerald, gold } — silver is "anything below gold", no threshold needed
+  updatedAt       DateTime @updatedAt
+}
+
+// ---------- Stats page: server-side snapshots ----------
+// One row per calendar date, upserted — the shared, database-backed
+// replacement for what used to be purely a per-browser localStorage
+// snapshot (still described that way in snapshots.js's header comment;
+// this is what actually populates it now, via api/fantasy/snapshots.js
+// and snapshots.js's syncServerSnapshots()). Written either by the
+// daily cron (source "cron") or the admin's manual "Retrieve Latest
+// Stats" button under Range Ratings (source "admin") — same upsert
+// path either way, so retrieving manually mid-day just updates today's
+// row instead of creating a duplicate.
+model StatsSnapshot {
+  date      String   @id // "2026-08-17"
+  seasonId  Int
+  data      Json // { teamMeta: [[abbrev, meta], ...], skaters: [...], goalies: [...] } — same shape snapshots.js's serializeSeasonData() produces
+  source    String // "cron" | "admin"
+  createdAt DateTime @default(now())
 }

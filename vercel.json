@@ -2,5 +2,8 @@
   "rewrites": [
     { "source": "/api/web/:path*", "destination": "/api/web-proxy?upstreamPath=:path*" },
     { "source": "/api/stats/:path*", "destination": "/api/stats-proxy?upstreamPath=:path*" }
+  ],
+  "crons": [
+    { "path": "/api/fantasy/snapshots", "schedule": "0 9 * * *" }
   ]
 }
