@@ -155,7 +155,14 @@ function toCardRating(percentile, cfg) {
  *  `cfg.positionWeights`/`cfg.goalieWeights` matter here directly;
  *  floor/ceil/premium/tiers are handled inside toCardRating()/tierFor(). */
 function ratePool(pool, mode, cfg) {
-  const categories = activeColumns(mode);
+  // Synthetic columns (currently just 'overall'/Power Ranking) are
+  // computed BY this function, never an input to it — including one in
+  // `categories` would rate every player on their own (always-absent,
+  // so always-0) overall value, a meaningless self-referential category
+  // that quietly skews the real result for everyone equally. Filter it
+  // out regardless of whether it happens to be one of the active
+  // display columns (it usually is, now that it's in the default set).
+  const categories = activeColumns(mode).filter((c) => !c.synthetic);
   const isGoalie = mode === 'goalies';
   const groupKey = (player) => (isGoalie ? 'G' : positionGroup(player.pos));
   const positionWeights = cfg?.positionWeights || POSITION_WEIGHTS;
@@ -264,7 +271,7 @@ function buildDeltaPool(fromData, toData, mode) {
 
     const player = { playerId: toP.playerId, name: toP.name, pos: toP.pos, team: toP.team, gamesPlayed: gpDelta };
     for (const cat of catalog) {
-      if (cat.id === 'gamesPlayed') continue;
+      if (cat.id === 'gamesPlayed' || cat.synthetic) continue; // synthetic (overall) isn't a real stat to delta — ratePool() computes it fresh
       player[cat.id] = deltaValue(cat.id, fromP, toP, isGoalie);
     }
     out.push(player);

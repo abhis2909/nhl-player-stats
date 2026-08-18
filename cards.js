@@ -433,7 +433,9 @@ function statsWindowOptionsHtml() {
  *     capture) — subtracted via the shared deltaValue() (ratings.js). */
 async function statsWindowFor(player, viewKey) {
   const isGoalie = player.pos === 'G';
-  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  // Synthetic columns (Power Ranking) are excluded here — a card already
+  // shows that number as its own OVR badge, so it'd be a redundant tile.
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters').filter((c) => !c.synthetic);
   const perGame = viewKey.endsWith('PerGame');
 
   if (viewKey === 'currentTotal' || viewKey === 'currentPerGame') {
@@ -532,7 +534,9 @@ async function renderCompareTable(a, b, viewKey) {
   }
 
   const isGoalie = a.pos === 'G';
-  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  // Synthetic columns (Power Ranking) are excluded here — a card already
+  // shows that number as its own OVR badge, so it'd be a redundant tile.
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters').filter((c) => !c.synthetic);
 
   const overallRow = `
     <tr class="cmp-overall-row">
@@ -761,7 +765,9 @@ async function renderPlayerStatsWindow(player, viewKey) {
   }
 
   const isGoalie = player.pos === 'G';
-  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  // Synthetic columns (Power Ranking) are excluded here — a card already
+  // shows that number as its own OVR badge, so it'd be a redundant tile.
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters').filter((c) => !c.synthetic);
   wrap.innerHTML = `
     <div class="ph-stats">
       ${categories.map((c) => `
@@ -852,7 +858,9 @@ async function loadGameLog(player, season, gameType) {
   gameLogWrap.innerHTML = '<div class="gamelog-loading">Loading…</div>';
 
   const isGoalie = player.pos === 'G';
-  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters');
+  // Synthetic columns (Power Ranking) are excluded here — a card already
+  // shows that number as its own OVR badge, so it'd be a redundant tile.
+  const categories = activeColumns(isGoalie ? 'goalies' : 'skaters').filter((c) => !c.synthetic);
 
   try {
     const logData = await getJSON(`${API_WEB}/v1/player/${player.playerId}/game-log/${season}/${gameType}`);

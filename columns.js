@@ -55,8 +55,8 @@ const GOALIE_COLUMNS = [
 ];
 
 const DEFAULT_COLUMN_CONFIG = {
-  skaters: ['goals', 'assists', 'ppPoints', 'shPoints', 'pim', 'hits', 'blocks', 'sog'],
-  goalies: ['wins', 'gaa', 'saves', 'shutouts'],
+  skaters: ['overall', 'goals', 'assists', 'ppPoints', 'shPoints', 'pim', 'gamesPlayed', 'hits', 'blocks', 'sog'],
+  goalies: ['overall', 'wins', 'gaa', 'saves', 'shutouts', 'gamesPlayed'],
 };
 
 function columnCatalog(mode) {
