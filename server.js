@@ -108,6 +108,13 @@ function augmentResponse(res) {
 
 async function handleFantasyApi(req, res, name) {
   augmentResponse(res);
+  // Vercel's Node runtime parses the URL's query string onto req.query
+  // for us; Node's raw http.IncomingMessage doesn't, so this reproduces
+  // just that piece locally (same spirit as augmentResponse() above) —
+  // needed by anything using ?param= dispatch (admin-settings.js,
+  // admin-users.js's per-user detail view).
+  const queryString = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : '';
+  req.query = Object.fromEntries(new URLSearchParams(queryString));
   let handler;
   try {
     // Fresh require each time (bypass the module cache) so edits to a

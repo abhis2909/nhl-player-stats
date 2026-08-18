@@ -423,6 +423,47 @@
   </div>
 </div>
 
+<div id="userManageModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="userManageModalOverlay"></div>
+  <div class="modal-panel fh-auth-modal-panel um-modal-panel" role="dialog" aria-modal="true" aria-label="Manage user">
+    <button class="modal-close" id="userManageModalClose" aria-label="Close">✕</button>
+    <h2 id="umHeading">Manage user</h2>
+    <div id="umLoading" class="save-status">Loading…</div>
+    <p id="umError" class="warn-text" hidden></p>
+
+    <div id="umBody" hidden>
+      <section class="um-section">
+        <h3>Avatar</h3>
+        <div class="um-avatar-row">
+          <div id="umAvatarPreview"></div>
+          <div class="um-avatar-controls">
+            <input type="file" id="umAvatarFile" accept="image/*">
+            <button type="button" id="umAvatarSaveBtn" class="ghost-btn" disabled>Set avatar</button>
+            <p id="umAvatarStatus" class="save-status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div id="umPendingRequest" class="um-pending-request" hidden></div>
+      </section>
+
+      <section class="um-section">
+        <h3>Credits — <span id="umCreditBalance">0</span> 💰</h3>
+        <div class="range-field-inline">
+          <input type="number" id="umCreditAmount" placeholder="e.g. 50 or -25" style="max-width: 140px;">
+          <input type="text" id="umCreditNote" placeholder="Reason (optional)" style="flex: 1;">
+          <button type="button" id="umCreditApplyBtn" class="primary-btn">Apply</button>
+        </div>
+        <p id="umCreditStatus" class="save-status" aria-live="polite"></p>
+      </section>
+
+      <section class="um-section">
+        <h3>Credit history</h3>
+        <div id="umHistoryList" class="fh-transactions-list"></div>
+        <p id="umHistoryEmpty" class="admin-hint" hidden>No credit activity yet.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
 <footer class="site-footer">
   <p>Data via the unofficial <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.</p>
 </footer>

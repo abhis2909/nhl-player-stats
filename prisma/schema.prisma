@@ -117,9 +117,14 @@ model CreditTransaction {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   amount    Int // positive = credit in, negative = debit out
-  reason    String // "season_seed" | "bet_stake" | "bet_payout" | "daily_reward" | "faceoff_stake" | "faceoff_payout" | "grid_reward"
+  reason    String // "season_seed" | "bet_stake" | "bet_payout" | "daily_reward" | "faceoff_stake" | "faceoff_payout" | "grid_reward" | "admin_adjustment"
   refType   String? // "Bet" | "Faceoff" | "DailyGuess" | "GridEntry"
   refId     String?
+  // Free-text context for a manual admin_adjustment ("prize for trivia
+  // night", "correcting a sync bug") — null for every system-generated
+  // reason, where reason/refType/refId already say enough. See
+  // api/fantasy/admin-users.js's adjustCredits action.
+  note      String?
   createdAt DateTime @default(now())
 }
 

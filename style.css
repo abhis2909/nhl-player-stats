@@ -2881,6 +2881,62 @@ a.mg-game-card:hover {
   font-size: 19px;
 }
 
+/* Admin -> Users -> Manage modal. Reuses .fh-auth-modal-panel's base
+   look (h2 spacing etc) but needs to be wider/taller than the 360px
+   login modal — avatar preview + credit form + a scrollable history
+   list add up fast. */
+.um-modal-panel {
+  max-width: 520px;
+  max-height: 84vh;
+  overflow-y: auto;
+}
+
+.um-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.um-section:first-of-type {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.um-section h3 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+.um-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.um-avatar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.um-avatar-controls input[type="file"] {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.um-pending-request {
+  margin-top: 12px;
+}
+
+#umHistoryList {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .fh-login-sub {
   margin: 0 0 18px;
   color: var(--text-dim);
