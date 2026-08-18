@@ -3288,6 +3288,12 @@ a.mg-game-card:hover {
   color: var(--accent);
 }
 
+.trade-delete-btn {
+  flex-shrink: 0;
+  font-size: 15px;
+  padding: 2px 4px;
+}
+
 .fh-tx-time {
   color: var(--text-faint);
   font-size: 11px;

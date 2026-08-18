@@ -1,7 +1,7 @@
 'use strict';
 
 const { getPrisma } = require('../_lib/db');
-const { getSessionUser, readJsonBody } = require('../_lib/fantasyAuth');
+const { getSessionUser, getSessionAdmin, readJsonBody } = require('../_lib/fantasyAuth');
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -27,10 +27,17 @@ const WINNERS = new Set(['A', 'B', 'even']);
      recomputing server-side, since recomputing would need the full
      rated player pool available here too for no real benefit (nothing
      here is adversarial/competitive — a wrong number just means a
-     wrong-looking log entry, not an unfair advantage). */
+     wrong-looking log entry, not an unfair advantage).
+
+   DELETE (ADMIN session required, not a user session) -> { ok, id }
+     ?id=<tradeId>. Admin -> Trades' own moderation tool (a submitter
+     can't delete their own trade — deliberately admin-only, see the
+     "who can delete" decision this feature shipped with). 404
+     not_found if the id doesn't exist (or was already deleted). */
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') return handleList(req, res);
   if (req.method === 'POST') return handleSubmit(req, res);
+  if (req.method === 'DELETE') return handleDelete(req, res);
   res.status(405).json({ ok: false, error: 'method_not_allowed' });
 };
 
@@ -97,6 +104,42 @@ async function handleSubmit(req, res) {
     res.status(200).json({ ok: true, trade });
   } catch (err) {
     console.error('fantasy/trades (POST) error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+}
+
+async function handleDelete(req, res) {
+  try {
+    const prisma = getPrisma();
+    const admin = await getSessionAdmin(req, prisma);
+    if (!admin) {
+      res.status(401).json({ ok: false, error: 'not_authenticated' });
+      return;
+    }
+
+    const url = new URL(req.url, 'http://localhost');
+    const id = url.searchParams.get('id');
+    if (!id) {
+      res.status(400).json({ ok: false, error: 'invalid_input', message: 'id is required.' });
+      return;
+    }
+
+    try {
+      await prisma.trade.delete({ where: { id } });
+    } catch (err) {
+      // Prisma's "record to delete does not exist" — already gone
+      // (double-click, already deleted elsewhere) rather than a real
+      // server error.
+      if (err.code === 'P2025') {
+        res.status(404).json({ ok: false, error: 'not_found', message: 'No trade with that id.' });
+        return;
+      }
+      throw err;
+    }
+
+    res.status(200).json({ ok: true, id });
+  } catch (err) {
+    console.error('fantasy/trades (DELETE) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 }

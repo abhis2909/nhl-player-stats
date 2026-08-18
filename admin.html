@@ -59,6 +59,7 @@
       <button class="toggle-btn active" data-subtab="columns" role="tab" aria-selected="true">🔧 Columns</button>
       <button class="toggle-btn" data-subtab="range" role="tab" aria-selected="false">📅 Range Ratings</button>
       <button class="toggle-btn" data-subtab="users" role="tab" aria-selected="false">👥 Users</button>
+      <button class="toggle-btn" data-subtab="trades" role="tab" aria-selected="false">🤝 Trades</button>
       <button class="toggle-btn" data-subtab="deployment" role="tab" aria-selected="false">🎯 Deployment</button>
       <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Projections</button>
       <button class="toggle-btn" data-subtab="rating" role="tab" aria-selected="false">🏅 Ratings</button>
@@ -237,6 +238,27 @@
           <p class="admin-hint">Most recent results across everyone — 25 credits per fresh solve, once per person per day.</p>
           <div id="dailyActivityList" class="fh-transactions-list"></div>
         </div>
+      </section>
+    </div>
+
+    <!-- ---------------- Trades ---------------- -->
+    <div id="subtabTrades" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Fantasy Hub Trades</h2>
+          <div class="admin-section-actions">
+            <button type="button" class="link-btn" id="refreshTradesBtn">Refresh</button>
+          </div>
+        </div>
+        <p class="admin-hint">
+          Trades logged from the Fantasy Hub's Trade Analyzer — this is the same feed shown in
+          Recent Transactions there. Deleting one here removes it everywhere.
+        </p>
+
+        <div id="tradesLoading" class="save-status">Loading…</div>
+        <p id="tradesError" class="warn-text" hidden></p>
+        <p id="tradesEmpty" class="admin-hint" hidden>No trades logged yet.</p>
+        <div id="tradesList" class="fh-transactions-list"></div>
       </section>
     </div>
 
@@ -478,6 +500,7 @@
 <script src="admin.js" defer></script>
 <script src="range.js" defer></script>
 <script src="admin-users.js" defer></script>
+<script src="admin-trades.js" defer></script>
 <script src="admin-deployment.js" defer></script>
 <script src="admin-projection.js" defer></script>
 <script src="admin-rating.js" defer></script>

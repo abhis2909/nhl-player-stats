@@ -185,6 +185,7 @@
     columns: document.getElementById('subtabColumns'),
     range: document.getElementById('subtabRange'),
     users: document.getElementById('subtabUsers'),
+    trades: document.getElementById('subtabTrades'),
     deployment: document.getElementById('subtabDeployment'),
     projection: document.getElementById('subtabProjection'),
     rating: document.getElementById('subtabRating'),
@@ -201,6 +202,7 @@
       btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     if (name === 'users' && window.__adminUsersTab) window.__adminUsersTab.ensureLoaded();
+    if (name === 'trades' && window.__adminTradesTab) window.__adminTradesTab.ensureLoaded();
     if (name === 'deployment' && window.__adminDeploymentTab) window.__adminDeploymentTab.ensureLoaded();
     if (name === 'projection' && window.__adminProjectionTab) window.__adminProjectionTab.ensureLoaded();
     if (name === 'rating' && window.__adminRatingTab) window.__adminRatingTab.ensureLoaded();
