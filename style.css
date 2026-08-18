@@ -661,14 +661,18 @@ td.stat-num {
 }
 
 .ph-stats {
-  display: flex;
+  /* Grid, not flex-wrap — a flex row with flex-grow:1 stretches a
+     lone leftover item (e.g. a 9th stat wrapping alone) to fill the
+     ENTIRE row width, which looked like a giant misshapen tile. Grid's
+     column tracks are shared across every row, so a wrapped item just
+     takes its own column's width instead. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
   margin-bottom: 18px;
 }
 
 .stat-chip {
-  flex: 1 1 70px;
   background: var(--bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
