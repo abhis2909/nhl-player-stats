@@ -193,8 +193,15 @@
       // back to the plain 👤 glyph if it's missing for any reason
       // rather than erroring the whole header.
       const avatar = typeof buildAvatarImg === 'function' ? buildAvatarImg(state.user.avatarUrl, 22, 'bust') : '👤';
+      // creditBalance is always a number by the time it reaches here
+      // (api/fantasy/session.js's toUserPayload sums CreditTransaction
+      // rows, defaulting to 0) — Phase 1 of the credits system, earned
+      // via the daily guesser (see guesswho.js's win-modal toast for
+      // where a fresh 25 actually lands).
+      const credits = Number.isFinite(state.user.creditBalance) ? state.user.creditBalance : 0;
       slot.innerHTML = `
         <span class="fh-auth-name">${avatar} ${name}</span>
+        <span class="fh-auth-credits" title="Credits">💰 ${credits}</span>
         <button type="button" class="ghost-btn" id="fhLogoutBtn">Log out</button>
       `;
       slot.querySelector('#fhLogoutBtn').addEventListener('click', logout);

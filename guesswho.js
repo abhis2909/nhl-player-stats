@@ -59,6 +59,7 @@ const el = {
   winModalImg: document.getElementById('gwWinModalImg'),
   winModalName: document.getElementById('gwWinModalName'),
   winModalTries: document.getElementById('gwWinModalTries'),
+  winModalCredits: document.getElementById('gwWinModalCredits'),
   winShareBtn: document.getElementById('gwWinShareBtn'),
   winShareMsg: document.getElementById('gwWinShareMsg'),
   divisionsBtn: document.getElementById('gwDivisionsBtn'),
@@ -324,7 +325,22 @@ function openWinModal(guess) {
   el.winModalName.textContent = guess.name;
   el.winModalTries.textContent = `Solved in ${state.guesses.length} of ${MAX_GUESSES} guesses!`;
   el.winShareMsg.textContent = '';
+  // Filled in (if at all) once syncToAccountIfLoggedIn()'s response
+  // comes back — anonymous play, or a resync of an already-solved day,
+  // never sets this, so it stays hidden.
+  el.winModalCredits.hidden = true;
+  el.winModalCredits.textContent = '';
   el.winModalRoot.hidden = false;
+}
+
+/** Reveals "+25 💰 credits!" in the win modal once a fresh award comes
+ *  back from the server — a no-op if the modal isn't showing (e.g. the
+ *  sync response arrives after the player already closed it, or this
+ *  was a resync rather than the live win). */
+function showCreditsToast(amount) {
+  if (el.winModalRoot.hidden || !amount) return;
+  el.winModalCredits.textContent = `+${amount} 💰 credits!`;
+  el.winModalCredits.hidden = false;
 }
 
 function closeWinModal() {
@@ -494,6 +510,17 @@ function syncToAccountIfLoggedIn() {
       gameOver: state.gameOver,
       won: state.won,
     }),
+  }).then(async (res) => {
+    const data = await res.json();
+    if (!data.ok || !data.creditsAwarded) return;
+    showCreditsToast(data.creditsAwarded);
+    // Reflect the new balance in the header immediately rather than
+    // waiting for the next full session check — same pattern as
+    // fantasy-hub.js's avatar-request submit updating the cached user.
+    const user = window.fantasyAuth.getUser();
+    if (user) {
+      window.fantasyAuth.setUser({ ...user, creditBalance: (user.creditBalance || 0) + data.creditsAwarded });
+    }
   }).catch(() => {
     // Non-fatal — the local game is already saved via saveState() above;
     // this is purely a best-effort mirror to the account.

@@ -34,7 +34,19 @@ module.exports = async function handler(req, res) {
   res.status(405).json({ ok: false, error: 'method_not_allowed' });
 };
 
-function toUserPayload(user) {
+// Balance is never stored on User itself — see prisma/schema.prisma's
+// CreditTransaction model. Summed fresh on every session payload rather
+// than cached, same "no separate balance to drift out of sync" reasoning
+// as the model's own doc comment.
+async function creditBalanceFor(prisma, userId) {
+  const result = await prisma.creditTransaction.aggregate({
+    where: { userId },
+    _sum: { amount: true },
+  });
+  return result._sum.amount || 0;
+}
+
+async function toUserPayload(prisma, user) {
   return {
     username: user.username,
     displayName: user.displayName || user.username,
@@ -47,6 +59,9 @@ function toUserPayload(user) {
     // "pending review"), never the request image/note itself over this
     // endpoint; those are for Admin -> Users only (admin-users.js).
     avatarRequestPending: Boolean(user.avatarRequestedAt),
+    // Phase 1 of the credits system — earned via the daily guesser today
+    // (api/fantasy/guesswho-sync.js), spent on nothing yet.
+    creditBalance: await creditBalanceFor(prisma, user.id),
   };
 }
 
@@ -56,7 +71,7 @@ async function handleMe(req, res) {
   try {
     const prisma = getPrisma();
     const user = await getSessionUser(req, prisma);
-    res.status(200).json({ ok: true, user: user ? toUserPayload(user) : null });
+    res.status(200).json({ ok: true, user: user ? await toUserPayload(prisma, user) : null });
   } catch (err) {
     // Fail open to "logged out" rather than error the page — this is
     // just a UI-state check, not a security gate (guesswho-sync.js
@@ -113,7 +128,7 @@ async function handlePatch(req, res) {
       where: { id: user.id },
       data: { avatarRequestUrl, avatarRequestNote, avatarRequestedAt: new Date() },
     });
-    res.status(200).json({ ok: true, user: toUserPayload(updated) });
+    res.status(200).json({ ok: true, user: await toUserPayload(prisma, updated) });
   } catch (err) {
     console.error('fantasy/session (PATCH) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
@@ -178,7 +193,7 @@ async function handleLogin(req, res) {
       });
       const token = signSession(user.id);
       res.setHeader('Set-Cookie', buildSessionCookie(token));
-      res.status(200).json({ ok: true, user: toUserPayload({ ...user, ...extraData }) });
+      res.status(200).json({ ok: true, user: await toUserPayload(prisma, { ...user, ...extraData }) });
     }
 
     // Not set up yet: passwordHash is null.

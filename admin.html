@@ -226,10 +226,16 @@
         <div class="table-wrap" id="usersTableWrap" hidden>
           <table class="stats-table admin-users-table">
             <thead>
-              <tr><th></th><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Username</th><th>Name</th><th>Joined</th><th>Last login</th><th>Credits</th><th>Status</th><th></th></tr>
             </thead>
             <tbody id="usersTbody"></tbody>
           </table>
+        </div>
+
+        <div id="dailyActivityWrap" hidden>
+          <h3 style="font-size: 13.5px; margin: 18px 0 8px;">🎯 Daily Guesser Activity</h3>
+          <p class="admin-hint">Most recent results across everyone — 25 credits per fresh solve, once per person per day.</p>
+          <div id="dailyActivityList" class="fh-transactions-list"></div>
         </div>
       </section>
     </div>

@@ -17,6 +17,8 @@
   const issueStatus = document.getElementById('issueUsernameStatus');
   const requestsWrap = document.getElementById('avatarRequestsWrap');
   const requestsList = document.getElementById('avatarRequestsList');
+  const activityWrap = document.getElementById('dailyActivityWrap');
+  const activityList = document.getElementById('dailyActivityList');
 
   let loaded = false;
 
@@ -58,6 +60,7 @@
             <td>${escapeHtmlLocal(u.displayName || '—')}</td>
             <td>${fmtDate(u.createdAt)}</td>
             <td>${fmtDate(u.lastLoginAt)}</td>
+            <td>💰 ${u.creditBalance ?? 0}</td>
             <td>${statusFor(u)}</td>
             <td><button type="button" class="link-btn user-reset-btn">Reset</button></td>
           </tr>
@@ -66,6 +69,7 @@
       }
 
       renderAvatarRequests(data.users.filter((u) => u.avatarRequestedAt));
+      renderDailyActivity(data.dailyActivity || []);
     } catch (err) {
       errorEl.textContent = `Couldn't load users (${err.message}).`;
       errorEl.hidden = false;
@@ -155,6 +159,26 @@
         <div class="fh-tx-meta" style="flex-direction: row; gap: 8px;">
           <button type="button" class="ghost-btn avatar-request-approve">Approve</button>
           <button type="button" class="ghost-btn avatar-request-reject">Reject</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderDailyActivity(entries) {
+    if (!entries.length) {
+      activityWrap.hidden = true;
+      activityList.innerHTML = '';
+      return;
+    }
+    activityWrap.hidden = false;
+    activityList.innerHTML = entries.map((g) => `
+      <div class="fh-transaction-row">
+        <div class="fh-tx-body">
+          <div class="fh-tx-user">${escapeHtmlLocal(g.displayName || g.username)}</div>
+          <div class="fh-tx-sides">${g.date} — ${g.attempts} guess${g.attempts === 1 ? '' : 'es'}</div>
+        </div>
+        <div class="fh-tx-meta">
+          <span class="fh-tx-winner">${g.solved ? '✅ Solved (+25)' : '❌ Not solved'}</span>
         </div>
       </div>
     `).join('');

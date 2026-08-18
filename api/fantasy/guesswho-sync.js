@@ -6,6 +6,12 @@ const { pickMysteryPlayer, loadServerPlayerBioPool } = require('../_lib/guessWho
 
 const MAX_GUESSES = 8;
 
+// Phase 1 of the credits system — see prisma/schema.prisma's
+// CreditTransaction model. A correct daily-guesser solve is worth a
+// flat 25 credits, once per user per date. Nothing else spends or
+// awards credits yet.
+const DAILY_GUESS_REWARD = 25;
+
 // Cheap same-invocation-lifetime cache — the roster pool doesn't change
 // meaningfully within a warm function instance's life, and this avoids
 // 32 roster fetches on every single guess sync.
@@ -24,7 +30,16 @@ async function getPoolCached() {
    Fire-and-forget from guesswho.js after every local guess. Sends the
    FULL current guesses array each time (not a delta) and always upserts
    the DailyGuess row wholesale — trivially idempotent even if this
-   fires more than once or arrives out of order. */
+   fires more than once or arrives out of order.
+
+   Also where the daily-guesser side of the credits system lives: the
+   FIRST sync of a given date+user that turns up solved (wasSolved false
+   -> solved true) grants DAILY_GUESS_REWARD credits via a
+   CreditTransaction row. Every later sync for that same solved day is a
+   no-op credits-wise, since guesses only ever grow and wasSolved would
+   already be true. Response echoes `creditsAwarded` (0 or
+   DAILY_GUESS_REWARD) so guesswho.js can show a "+25 credits" toast
+   without a second round trip. */
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'method_not_allowed' });
@@ -67,13 +82,37 @@ module.exports = async function handler(req, res) {
     const solved = guesses.includes(dailyPlayer.nhlPlayerId);
     const attempts = guesses.length;
 
-    await prisma.dailyGuess.upsert({
+    // Read the prior state BEFORE upserting so we can tell a fresh solve
+    // (wasSolved false -> solved true, award credits) apart from a
+    // resync of an already-solved day (wasSolved already true, guesses
+    // only ever grow — never award twice for the same date+user).
+    const existing = await prisma.dailyGuess.findUnique({
+      where: { date_userId: { date, userId: user.id } },
+      select: { solved: true },
+    });
+    const wasSolved = existing?.solved ?? false;
+
+    const dailyGuess = await prisma.dailyGuess.upsert({
       where: { date_userId: { date, userId: user.id } },
       create: { date, userId: user.id, guesses, solved, attempts },
       update: { guesses, solved, attempts },
     });
 
-    res.status(200).json({ ok: true, solved, attempts });
+    let creditsAwarded = 0;
+    if (solved && !wasSolved) {
+      await prisma.creditTransaction.create({
+        data: {
+          userId: user.id,
+          amount: DAILY_GUESS_REWARD,
+          reason: 'daily_reward',
+          refType: 'DailyGuess',
+          refId: dailyGuess.id,
+        },
+      });
+      creditsAwarded = DAILY_GUESS_REWARD;
+    }
+
+    res.status(200).json({ ok: true, solved, attempts, creditsAwarded });
   } catch (err) {
     console.error('fantasy/guesswho-sync error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
