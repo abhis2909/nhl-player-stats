@@ -446,11 +446,11 @@
         </div>
         <p class="admin-hint">
           Upload a jersey photo, pick its team and give it a name — the background is removed right
-          here in your browser (nothing uploads anywhere). This tool only <em>prepares</em> the
-          asset — there's no live publish yet (see <code>jerseys/README.md</code>): download the
-          processed PNG and add it to the <code>jerseys/</code> folder on GitHub, then paste the
-          snippet below into <code>packs.js</code>'s <code>JERSEY_ART</code> (or hand both to Claude
-          and it'll do that part).
+          here in your browser (nothing uploads until you click Publish). <strong>Publish to
+          GitHub</strong> commits the processed PNG straight to this repo's <code>jerseys/</code>
+          folder. That's the image only, though — it doesn't wire the team up to it: copy the
+          snippet below into <code>packs.js</code>'s <code>JERSEY_ART</code> yourself (or hand it to
+          Claude) to actually put it in the game. See <code>jerseys/README.md</code>.
         </p>
 
         <div class="fh-field-row">
@@ -490,7 +490,8 @@
 
         <div class="admin-buttons">
           <button type="button" id="jerseyDownloadBtn" class="ghost-btn" disabled>⬇ Download PNG</button>
-          <button type="button" id="jerseyStageBtn" class="primary-btn" disabled>Add to staged list</button>
+          <button type="button" id="jerseyPublishBtn" class="primary-btn" disabled>☁ Publish to GitHub</button>
+          <button type="button" id="jerseyStageBtn" class="ghost-btn" disabled>Add to staged list</button>
           <span id="jerseySaveStatus" class="save-status" aria-live="polite"></span>
         </div>
       </section>

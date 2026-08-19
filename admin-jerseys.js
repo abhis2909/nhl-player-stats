@@ -57,6 +57,7 @@
     originalImg: document.getElementById('jerseyOriginalImg'),
     outCanvas: document.getElementById('jerseyOutCanvas'),
     downloadBtn: document.getElementById('jerseyDownloadBtn'),
+    publishBtn: document.getElementById('jerseyPublishBtn'),
     stageBtn: document.getElementById('jerseyStageBtn'),
     saveStatus: document.getElementById('jerseySaveStatus'),
     stagedEmpty: document.getElementById('jerseyStagedEmpty'),
@@ -246,6 +247,7 @@
     el.processingNote.hidden = false;
     el.previewRow.hidden = true;
     el.downloadBtn.disabled = true;
+    el.publishBtn.disabled = true;
     el.stageBtn.disabled = true;
     el.opaqueWarning.hidden = true;
     processedBlob = null;
@@ -292,6 +294,7 @@
         outCanvas.toBlob((blob) => {
           processedBlob = blob;
           el.downloadBtn.disabled = false;
+          el.publishBtn.disabled = false;
           el.stageBtn.disabled = false;
         }, 'image/png');
 
@@ -330,6 +333,34 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  /** Commits the currently-processed image to jerseys/<filename> on
+   *  GitHub via POST /api/fantasy/admin-settings (type: 'jersey-image'
+   *  — see that file's handleJerseyImagePublish()). Image only: this
+   *  does NOT touch packs.js's JERSEY_ART, so the snippet below still
+   *  needs pasting in by hand (or via Claude) to actually put the
+   *  published jersey in the game — see the tab's intro text. */
+  async function publishToGithub() {
+    if (el.outCanvas.width === 0) return;
+    el.publishBtn.disabled = true;
+    el.saveStatus.textContent = 'Publishing…';
+    try {
+      const dataUrl = el.outCanvas.toDataURL('image/png');
+      const res = await fetch('/api/fantasy/admin-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'jersey-image', filename: downloadFilename(), dataUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      el.saveStatus.textContent = `Published jerseys/${downloadFilename()} to GitHub. Still needs the JERSEY_ART snippet below wired into packs.js.`;
+    } catch (err) {
+      el.saveStatus.textContent = `Couldn't publish: ${err.message}`;
+    } finally {
+      el.publishBtn.disabled = false;
+      setTimeout(() => { el.saveStatus.textContent = ''; }, 8000);
+    }
   }
 
   function loadStaged() {
@@ -386,6 +417,7 @@
       if (file) processFile(file);
     });
     el.downloadBtn.addEventListener('click', downloadProcessed);
+    el.publishBtn.addEventListener('click', publishToGithub);
     el.stageBtn.addEventListener('click', stageCurrent);
     el.clearStagedBtn.addEventListener('click', () => {
       if (!confirm('Clear all staged jersey entries? This only affects this browser.')) return;

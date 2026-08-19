@@ -2,24 +2,34 @@
 
 const { getPrisma } = require('../_lib/db');
 const { getSessionAdmin, readJsonBody } = require('../_lib/fantasyAuth');
+const { putRepoFile } = require('../_lib/github');
 
 const SETTINGS_ID = 'singleton';
 const WEIGHT_SUM_TOLERANCE = 0.01; // floats — don't demand an exact 1.0
 
+// jerseys/<name>.png only — blocks path traversal (no ../, no
+// subdirectories) since this becomes part of a GitHub API path.
+const JERSEY_FILENAME_RE = /^[a-z0-9][a-z0-9-]{0,80}\.png$/i;
+const JERSEY_MAX_BYTES = 3 * 1024 * 1024; // headroom under Vercel's ~4.5MB request body cap
+
 /* /api/fantasy/admin-settings — admin-only read/write of the site's two
-   singular tunable-methodology rows: ProjectionSettings and
-   RatingSettings. One file (was admin-projection-settings.js, before
-   Rating Methodology needed the identical GET/POST/upsert-singleton-row
-   shape) dispatched by a `type` param, same function-count discipline
-   as session.js/admin-session.js merging by HTTP verb — this merges by
-   resource instead, since both methods (GET+POST) apply to either type.
-   The public read side is public-config.js (was projection-config.js;
-   falls back to the same defaults as here if a row doesn't exist yet).
+   singular tunable-methodology rows (ProjectionSettings and
+   RatingSettings) PLUS, as of the `jersey-image` POST type, publishing
+   a processed jersey PNG straight to this repo's jerseys/ folder —
+   an unrelated concern jammed in here for the same reason
+   session.js/admin-session.js merge by HTTP verb and this file already
+   merges by resource: the Hobby-plan 12-function cap leaves no room for
+   a dedicated endpoint. One admin-only auth check up top covers all of
+   it. The public read side (for the two settings types) is
+   public-config.js (was projection-config.js; falls back to the same
+   defaults as here if a row doesn't exist yet).
 
    GET  ?type=projection (default) -> { ok, settings } (ProjectionSettings)
    GET  ?type=rating               -> { ok, settings } (RatingSettings)
    POST { type: 'projection', seasonWeights, ageCurveEnabled, multiplierClipMin, multiplierClipMax, restOfSeasonShrinkageGames }
-   POST { type: 'rating', positionWeights, goalieWeights, minGamesPlayedSkaters, minGamesPlayedGoalies, ratingFloor, ratingCeil, ratingPremium, tierThresholds } */
+   POST { type: 'rating', positionWeights, goalieWeights, minGamesPlayedSkaters, minGamesPlayedGoalies, ratingFloor, ratingCeil, ratingPremium, tierThresholds }
+   POST { type: 'jersey-image', filename, dataUrl } -> commits jerseys/<filename> to GitHub;
+         { ok, commitUrl, path } or { ok: false, error, message } */
 module.exports = async function handler(req, res) {
   try {
     const prisma = getPrisma();
@@ -40,6 +50,12 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = await readJsonBody(req);
+
+      if (body.type === 'jersey-image') {
+        await handleJerseyImagePublish(body, res);
+        return;
+      }
+
       const type = body.type === 'rating' ? 'rating' : 'projection';
 
       if (type === 'rating') {
@@ -139,3 +155,45 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 };
+
+/** POST { type: 'jersey-image', filename, dataUrl } handler — commits
+ *  jerseys/<filename> straight to GitHub (see api/_lib/github.js).
+ *  `dataUrl` is the exact string a <canvas>.toDataURL('image/png')
+ *  call produces client-side (admin-jerseys.js already processes/trims
+ *  the image in the browser; this just lands the result in the repo,
+ *  it doesn't touch pixels). Image-only publish, by design — this does
+ *  NOT also edit packs.js's JERSEY_ART registry, so wiring a published
+ *  image up to a team still needs that one-line addition by hand (or
+ *  ask Claude) — see jerseys/README.md. */
+async function handleJerseyImagePublish(body, res) {
+  const filename = String(body.filename || '');
+  if (!JERSEY_FILENAME_RE.test(filename)) {
+    res.status(400).json({ ok: false, error: 'invalid_filename', message: 'Filename must be lowercase letters/numbers/hyphens ending in .png.' });
+    return;
+  }
+
+  const dataUrl = String(body.dataUrl || '');
+  const match = dataUrl.match(/^data:image\/png;base64,(.+)$/);
+  if (!match) {
+    res.status(400).json({ ok: false, error: 'invalid_image', message: 'Expected a PNG data URL (data:image/png;base64,...).' });
+    return;
+  }
+  const base64Content = match[1];
+  const approxBytes = Math.floor(base64Content.length * 0.75);
+  if (approxBytes > JERSEY_MAX_BYTES) {
+    res.status(400).json({ ok: false, error: 'too_large', message: `Image is too large (${(approxBytes / 1024 / 1024).toFixed(1)}MB, max 3MB).` });
+    return;
+  }
+
+  try {
+    const result = await putRepoFile(
+      `jerseys/${filename}`,
+      base64Content,
+      `Jersey Packs: add ${filename} via admin upload`,
+    );
+    res.status(200).json(result);
+  } catch (err) {
+    const status = err.code === 'no_github_token' ? 501 : 502;
+    res.status(status).json({ ok: false, error: err.code || 'github_error', message: err.message });
+  }
+}
