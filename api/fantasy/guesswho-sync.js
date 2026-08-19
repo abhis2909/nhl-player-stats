@@ -2,7 +2,7 @@
 
 const { getPrisma } = require('../_lib/db');
 const { getSessionUser, readJsonBody } = require('../_lib/fantasyAuth');
-const { pickMysteryPlayer, loadServerPlayerBioPool } = require('../_lib/guessWhoPool');
+const { getOrFreezeDailyPlayer } = require('../_lib/guessWhoPool');
 
 const MAX_GUESSES = 8;
 
@@ -12,69 +12,28 @@ const MAX_GUESSES = 8;
 // awards credits yet.
 const DAILY_GUESS_REWARD = 25;
 
-// Cheap same-invocation-lifetime cache — the roster pool doesn't change
-// meaningfully within a warm function instance's life, and this avoids
-// 32 roster fetches on every single guess sync.
-let cachedPool = null;
-async function getPoolCached() {
-  if (cachedPool) return cachedPool;
-  cachedPool = await loadServerPlayerBioPool();
-  return cachedPool;
-}
-
-/** Get-or-create (or backfill) the frozen DailyPlayer row for `date` —
- *  the ONE place both the GET (client's pool fetch) and POST (guess
- *  sync) handlers below get today's answer+pool from, so they can never
- *  disagree with each other by construction.
- *
- *  Three cases:
- *  - Row exists with a pool already -> return it as-is, no fetch.
- *  - Row doesn't exist at all -> race-safe create (upsert with a no-op
- *    update — a concurrent racer just reads whoever wins the create,
- *    same "first writer wins" semantics as before this had a pool).
- *  - Row exists but predates the `pool` field (legacy) -> backfill the
- *    pool in place WITHOUT touching the existing nhlPlayerId/attributes
- *    — that day's answer already happened and may have real DailyGuess
- *    rows referencing it; changing the answer itself would invalidate
- *    real progress. (2026-08-19's specific known-bad row — frozen from
- *    a corrupted small pool before this fix existed — was deleted by
- *    hand rather than going through this path, since ITS pick was
- *    provably wrong, not just missing a pool.) */
-async function getOrFreezeDailyPlayer(prisma, date) {
-  const existing = await prisma.dailyPlayer.findUnique({ where: { date } });
-  if (existing && existing.pool) return existing;
-
-  const pool = await getPoolCached();
-
-  if (existing) {
-    return prisma.dailyPlayer.update({ where: { date }, data: { pool } });
-  }
-
-  const mystery = pickMysteryPlayer(pool, date);
-  return prisma.dailyPlayer.upsert({
-    where: { date },
-    create: { date, nhlPlayerId: mystery.playerId, attributes: mystery, pool },
-    update: {}, // someone else's concurrent request may have beaten us to it — just read theirs
-  });
-}
-
 /* /api/fantasy/guesswho-sync
 
    GET ?date=YYYY-MM-DD — PUBLIC (no auth; anonymous play must keep
    working). Returns { ok, date, pool } — the SAME frozen roster/bio
-   pool that determined that date's mystery player (get-or-created via
-   getOrFreezeDailyPlayer(), same as the POST side below). guesswho.js
-   fetches this ONCE per page load instead of independently re-fetching
-   all 32 team rosters itself — the real fix for a real bug (2026-08-19):
-   firing 32 parallel roster requests routinely got some 429'd by the
-   NHL API, silently shrinking the pool, so the client's own pick and
-   the server's frozen pick came from different-sized pools and landed
-   on DIFFERENT players — real solves got marked "not solved" server-
-   side. Serving one server-frozen pool to everyone eliminates that by
-   construction: every client runs pickMysteryPlayer() against the
-   literal same array the server used. This doesn't leak anything new —
-   the picking algorithm was already public in guesswho.js's own source,
-   same as before.
+   pool that determined that date's mystery player. getOrFreezeDailyPlayer()
+   (api/_lib/guessWhoPool.js) is USUALLY just a fast DB read here — the
+   daily cron (api/fantasy/snapshots.js) already proactively freezes
+   today's pool once, right alongside the season-stats snapshot it
+   fetches on the same schedule, so by the time real visitors show up
+   there's typically nothing left to fetch. This only falls back to a
+   live NHL API call for a date the cron didn't anticipate (see that
+   function's doc comment). guesswho.js fetches this once per page load
+   instead of independently re-fetching all 32 team rosters itself —
+   the real fix for a real bug (2026-08-19): firing 32 parallel roster
+   requests routinely got some 429'd by the NHL API, silently shrinking
+   the pool, so the client's own pick and the server's frozen pick came
+   from different-sized pools and landed on DIFFERENT players — real
+   solves got marked "not solved" server-side. Serving one server-
+   frozen pool to everyone eliminates that by construction: every
+   client runs pickMysteryPlayer() against the literal same array the
+   server used. This doesn't leak anything new — the picking algorithm
+   was already public in guesswho.js's own source, same as before.
 
    POST — session required.
    Body: { date: "YYYY-MM-DD", guesses: number[], gameOver, won }

@@ -3,6 +3,7 @@
 const { getPrisma } = require('../_lib/db');
 const { getSessionAdmin } = require('../_lib/fantasyAuth');
 const { fetchCurrentSeasonSnapshot } = require('../_lib/snapshotFetch');
+const { getOrFreezeDailyPlayer } = require('../_lib/guessWhoPool');
 
 const MAX_SNAPSHOTS_RETURNED = 120; // ~4 months of daily snapshots — more than a full season needs
 
@@ -26,6 +27,30 @@ async function upsertTodaySnapshot(prisma, source) {
   });
 }
 
+/** Proactively freezes today's guesswho.js roster/bio pool + mystery
+ *  pick (api/_lib/guessWhoPool.js) alongside the season-stats snapshot
+ *  above — same daily cron run, same "fetch once, everyone reads the
+ *  stored copy" idea, just two separate stores (StatsSnapshot vs.
+ *  DailyPlayer) since they hold genuinely different NHL API data (stat
+ *  totals vs. roster/bio) that different pages need — see this
+ *  session's chat for why merging them into one blob was considered
+ *  and rejected (would bloat the season-stats payload, which already
+ *  syncs to every page via snapshots.js, with bio fields ~99% of
+ *  visitors never touch). Best-effort: uses UTC "today", which won't
+ *  always match a given visitor's browser-local date (guesswho.js's
+ *  known, accepted trade-off) — getOrFreezeDailyPlayer() in
+ *  guesswho-sync.js's own GET/POST still falls back to freezing
+ *  on-demand for whatever date a visitor's browser actually asks for.
+ *  Failure here is swallowed (logged, not thrown) so a bad NHL API day
+ *  for ROSTER data doesn't take down the STATS snapshot cron run. */
+async function freezeTodaysGuessWhoPool(prisma) {
+  try {
+    await getOrFreezeDailyPlayer(prisma, todayISO());
+  } catch (err) {
+    console.error('fantasy/snapshots: guesswho pool pre-freeze failed (non-fatal):', err.message);
+  }
+}
+
 /* /api/fantasy/snapshots — the database-backed replacement for what
    used to be a purely-manual, per-browser localStorage snapshot (see
    snapshots.js's syncServerSnapshots(), which pulls this down into the
@@ -47,12 +72,19 @@ async function upsertTodaySnapshot(prisma, source) {
                    (source "cron"), then returns the list. Cron always
                    sends a plain GET, so triggering-on-authenticated-GET
                    is the standard shape for a Vercel-cron-driven write,
-                   not a REST wart.
+                   not a REST wart. ALSO proactively freezes today's
+                   guesswho.js roster pool (freezeTodaysGuessWhoPool()) —
+                   same daily run, a second store (DailyPlayer, not
+                   StatsSnapshot — see that function's doc comment for
+                   why they're kept separate), best-effort/non-fatal.
    POST, admin-gated    -> same fetch + upsert (source "admin") — the
                            manual "Retrieve Latest Stats" button under
                            Admin -> Range Ratings. Same upsert-by-date as
                            the cron path, so retrieving mid-day updates
-                           today's row rather than duplicating it. */
+                           today's row rather than duplicating it. Also
+                           re-attempts the guesswho pool freeze, same as
+                           the cron path — the admin's manual retry path
+                           if that ever needs a nudge. */
 module.exports = async function handler(req, res) {
   try {
     const prisma = getPrisma();
@@ -71,6 +103,7 @@ module.exports = async function handler(req, res) {
 
       if (isCronCall) {
         await upsertTodaySnapshot(prisma, 'cron');
+        await freezeTodaysGuessWhoPool(prisma);
       }
 
       const rows = await prisma.statsSnapshot.findMany({
@@ -88,6 +121,7 @@ module.exports = async function handler(req, res) {
         return;
       }
       const row = await upsertTodaySnapshot(prisma, 'admin');
+      await freezeTodaysGuessWhoPool(prisma);
       res.status(200).json({ ok: true, snapshot: row });
       return;
     }

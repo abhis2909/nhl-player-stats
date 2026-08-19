@@ -37,8 +37,8 @@ const NHL_API = 'https://api-web.nhle.com';
 // set well below that so ordinary roster churn (call-ups, trades) never
 // trips it, but a chunk of teams silently failing does.
 const MIN_HEALTHY_POOL_SIZE = 700;
-const ROSTER_FETCH_CONCURRENCY = 6; // teams in flight at once, not all 32
-const MAX_RETRIES = 3;
+const ROSTER_FETCH_CONCURRENCY = 4; // teams in flight at once, not all 32
+const MAX_RETRIES = 5;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -144,4 +144,61 @@ async function loadServerPlayerBioPool() {
   return pool;
 }
 
-module.exports = { hashStringToInt, pickMysteryPlayer, loadServerPlayerBioPool };
+// Cheap same-invocation-lifetime cache — the roster pool doesn't change
+// meaningfully within a warm function instance's life, and this avoids
+// a redundant 32-roster fetch if both the cron's proactive pre-freeze
+// (api/fantasy/snapshots.js) and a real visitor's request happen to
+// land on the same warm instance.
+let cachedPool = null;
+async function getPoolCached() {
+  if (cachedPool) return cachedPool;
+  cachedPool = await loadServerPlayerBioPool();
+  return cachedPool;
+}
+
+/** Get-or-create (or backfill) the frozen DailyPlayer row for `date` —
+ *  the ONE place anything server-side gets a given date's answer+pool
+ *  from, so nothing can ever disagree with anything else by
+ *  construction. Called from two places: the daily cron
+ *  (api/fantasy/snapshots.js, PROACTIVELY, right alongside the season-
+ *  stats snapshot it already fetches once a day — so by the time real
+ *  visitors show up, this is usually already a fast DB read, not a
+ *  live NHL API call) and api/fantasy/guesswho-sync.js's GET/POST
+ *  handlers (REACTIVELY, as a fallback for any date the cron's UTC
+ *  clock didn't anticipate — e.g. a visitor in a timezone where their
+ *  local "today" hasn't lined up with the cron's yet; see guesswho.js's
+ *  header comment on browser-local dates being a known, accepted
+ *  trade-off of this whole feature).
+ *
+ *  Three cases:
+ *  - Row exists with a pool already -> return it as-is, no fetch.
+ *  - Row doesn't exist at all -> race-safe create (upsert with a no-op
+ *    update — a concurrent racer just reads whoever wins the create,
+ *    same "first writer wins" semantics as before this had a pool).
+ *  - Row exists but predates the `pool` field (legacy) -> backfill the
+ *    pool in place WITHOUT touching the existing nhlPlayerId/attributes
+ *    — that day's answer already happened and may have real DailyGuess
+ *    rows referencing it; changing the answer itself would invalidate
+ *    real progress. (2026-08-19's specific known-bad row — frozen from
+ *    a corrupted small pool before this fix existed — was deleted by
+ *    hand rather than going through this path, since ITS pick was
+ *    provably wrong, not just missing a pool.) */
+async function getOrFreezeDailyPlayer(prisma, date) {
+  const existing = await prisma.dailyPlayer.findUnique({ where: { date } });
+  if (existing && existing.pool) return existing;
+
+  const pool = await getPoolCached();
+
+  if (existing) {
+    return prisma.dailyPlayer.update({ where: { date }, data: { pool } });
+  }
+
+  const mystery = pickMysteryPlayer(pool, date);
+  return prisma.dailyPlayer.upsert({
+    where: { date },
+    create: { date, nhlPlayerId: mystery.playerId, attributes: mystery, pool },
+    update: {}, // someone else's concurrent request may have beaten us to it — just read theirs
+  });
+}
+
+module.exports = { hashStringToInt, pickMysteryPlayer, loadServerPlayerBioPool, getOrFreezeDailyPlayer };
