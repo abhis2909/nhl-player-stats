@@ -3494,18 +3494,128 @@ a.mg-game-card:hover {
    the item eases up with no bounce, then gently hovers once it's
    landed. ---------- */
 
+/* Warm near-black instead of the site's usual cool navy — the tier
+   beams/ring below already carry the rarity color, so the room itself
+   reads as premium venue lighting (warm) rather than competing with
+   them. .pk-stage::before is a fine diagonal grain (same trick as the
+   player-card's brushed-metal texture) for material richness; ::after
+   is a vignette that keeps focus on the center without darkening the
+   piece itself. */
 .pk-stage {
   position: relative;
   height: 460px;
   border-radius: var(--radius);
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 100%, #141a24 0%, #05070a 68%);
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 106%, rgba(255, 196, 120, 0.12) 0%, transparent 62%),
+    radial-gradient(ellipse at 50% 100%, #1b140a 0%, #0a0704 55%, #030201 100%);
   border: 1px solid var(--border);
+}
+
+.pk-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.02) 0px,
+    rgba(255, 255, 255, 0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+}
+
+.pk-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 58%, transparent 42%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* ---- Always-on ambient rig: overhead fixtures + downward cones +
+   drifting haze, independent of tier/pull — the "venue" rather than
+   the spotlight-on-the-prize, which .pk-stage-beams still owns. ---- */
+
+.pk-stage-fixtures {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pk-fixture {
+  position: absolute;
+  top: 8px;
+  width: 34px;
+  height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(160deg, #4a4238, #17130e);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+
+.pk-fixture-1 { left: 4%; transform: rotate(32deg); }
+.pk-fixture-2 { left: 21%; transform: rotate(16deg); }
+.pk-fixture-3 { right: 21%; transform: rotate(-16deg); }
+.pk-fixture-4 { right: 4%; transform: rotate(-32deg); }
+
+.pk-fixture-lens {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff8e6 0%, #ffcf7a 55%, transparent 78%);
+  box-shadow: 0 0 9px 2px rgba(255, 205, 130, 0.85);
+}
+
+.pk-fixture-cone {
+  position: absolute;
+  top: 18px;
+  width: 150px;
+  height: 300px;
+  background: linear-gradient(to bottom, rgba(255, 222, 175, 0.16) 0%, transparent 78%);
+  clip-path: polygon(50% 0%, 14% 100%, 86% 100%);
+  filter: blur(7px);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  transform-origin: top center;
+}
+
+.pk-fixture-cone-1 { left: -12%; transform: rotate(32deg); }
+.pk-fixture-cone-2 { left: 8%; transform: rotate(16deg); }
+.pk-fixture-cone-3 { right: 8%; transform: rotate(-16deg); }
+.pk-fixture-cone-4 { right: -12%; transform: rotate(-32deg); }
+
+.pk-haze {
+  position: absolute;
+  width: 240px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 224, 180, 0.1) 0%, transparent 70%);
+  filter: blur(20px);
+  animation: pk-haze-drift 26s ease-in-out infinite;
+}
+
+.pk-haze-1 { top: 12%; left: 6%; animation-duration: 27s; }
+.pk-haze-2 { top: 38%; right: 4%; animation-duration: 33s; animation-delay: -9s; }
+.pk-haze-3 { bottom: 6%; left: 32%; animation-duration: 21s; animation-delay: -4s; opacity: 0.75; }
+
+@keyframes pk-haze-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(22px, -14px) scale(1.08); }
 }
 
 .pk-stage-beams {
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
@@ -3595,6 +3705,7 @@ a.mg-game-card:hover {
 .pk-stage-piece {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -3675,7 +3786,20 @@ a.mg-game-card:hover {
   width: 250px;
   border-radius: 22px;
   padding: 3px;
-  box-shadow: 0 30px 55px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 34px 60px rgba(10, 6, 2, 0.65), 0 0 46px rgba(255, 180, 90, 0.12);
+}
+
+/* Contact shadow grounding the slab against the floor — separate from
+   the tier-colored light-ring glow beneath it, this is just weight. */
+.jp-float-wrap::after {
+  content: "";
+  order: 2;
+  width: 170px;
+  height: 26px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, transparent 72%);
+  filter: blur(3px);
 }
 
 .jp-slab::before {
