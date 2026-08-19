@@ -3905,75 +3905,6 @@ a.mg-game-card:hover {
   z-index: 1;
 }
 
-/* Small decorative flourishes flanking the jersey at its base — a
-   glove and an equipment bag, echoing a graded-slab display without
-   trying to be full illustrations. Sized to stay inside .jp-slab-panel's
-   overflow:hidden bounds. */
-.jp-glove {
-  position: absolute;
-  z-index: 2;
-  bottom: -4px;
-  left: -15px;
-  width: 28px;
-  height: 24px;
-  background: linear-gradient(160deg, #c98f3e, #6b4718);
-  border-radius: 12px 12px 8px 8px;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-}
-
-.jp-glove::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  top: 8px;
-  width: 11px;
-  height: 13px;
-  background: inherit;
-  border-radius: 7px;
-}
-
-.jp-glove::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 7px;
-  background: var(--t1);
-  border-radius: 0 0 8px 8px;
-}
-
-.jp-bag {
-  position: absolute;
-  z-index: 2;
-  bottom: -6px;
-  right: -15px;
-  width: 30px;
-  height: 22px;
-  background: linear-gradient(160deg, var(--team1, var(--t1)), var(--team2, var(--t2)));
-  border-radius: 7px;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.jp-bag::before {
-  content: "";
-  position: absolute;
-  top: -7px;
-  left: 50%;
-  width: 15px;
-  height: 9px;
-  border: 3px solid #2a2a2a;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  transform: translateX(-50%);
-}
-
-.jp-bag img { width: 16px; height: 16px; object-fit: contain; }
-
 .jp-sparkle {
   display: none;
   position: absolute;
@@ -4019,61 +3950,36 @@ a.mg-game-card:hover {
   border-radius: 20px;
 }
 
-/* One shared jersey template, recolored per team via --team1/--team2 —
-   deliberately not a bespoke asset per team (32 of those is its own
-   project); a real jersey silhouette (solid body + shoulder yoke +
-   waist stripes, like every NHL sweater actually looks) reads as
-   "a jersey" much better than a flat two-tone split did. Overflow on
-   .jp-jersey isn't set explicitly — clip-path already crops
-   .jp-jersey-yoke/.jp-jersey-stripes to this exact silhouette since
-   clip-path clips a box's whole contents, same as overflow:hidden
-   would for a rectangle. */
-.jp-jersey {
+/* The one sample jersey image (jerseys/borr-transparent.png, background
+   already removed — see packs.js's SAMPLE_JERSEY_IMG) standing in for
+   every pull until real per-team art exists. Since it's a raster image
+   now, not a colorable CSS shape, tier rarity comes through as a glow
+   wrapped around its actual alpha silhouette (filter: drop-shadow
+   follows transparency, unlike box-shadow) plus a sheen sweep clipped
+   to that same silhouette via mask-image using the image itself as the
+   mask. */
+.jp-jersey-img {
   position: relative;
-  width: 178px;
-  height: 178px;
-  clip-path: polygon(22% 4%, 38% 4%, 50% 15%, 62% 4%, 78% 4%, 96% 17%, 80% 33%, 70% 25%, 70% 96%, 30% 96%, 30% 25%, 20% 33%, 4% 17%);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, transparent 32%),
-    var(--team1);
-  box-shadow: var(--glow), 0 12px 26px rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 1;
+  display: block;
+  width: 172px;
+  height: auto;
+  filter: drop-shadow(var(--glow)) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.45));
 }
 
-.jp-jersey-yoke {
-  position: absolute;
-  top: 24%;
-  left: 0;
-  right: 0;
-  height: 15%;
-  background: var(--team2);
-}
-
-.jp-jersey-stripes {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 13%;
-  height: 11%;
-  background:
-    linear-gradient(var(--team2), var(--team2)) 0 0 / 100% 32% no-repeat,
-    linear-gradient(#fff, #fff) 0 40% / 100% 22% no-repeat,
-    linear-gradient(var(--team2), var(--team2)) 0 66% / 100% 34% no-repeat;
-}
-
-/* Sheen highlight (.jp-jersey::after, z-index:1) sits above these so it
-   still reads as one lit fabric surface rather than flat color blocks;
-   the number/abbrev stays on top of all of it so it's always legible. */
-.jp-jersey-yoke, .jp-jersey-stripes { z-index: 0; }
-
-.jp-jersey::after {
-  content: "";
+.jp-jersey-sheen {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  clip-path: inherit;
+  z-index: 2;
+  pointer-events: none;
+  -webkit-mask-image: url("jerseys/borr-transparent.png");
+  mask-image: url("jerseys/borr-transparent.png");
+  -webkit-mask-size: 172px auto;
+  mask-size: 172px auto;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
   background: linear-gradient(
     120deg,
     transparent 38%,
@@ -4085,14 +3991,6 @@ a.mg-game-card:hover {
   background-size: 240% 240%;
   mix-blend-mode: overlay;
   animation: pc-sheen-sweep var(--shimmer-speed) ease-in-out infinite;
-}
-
-.jp-jersey-abbrev {
-  font-size: 27px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .jp-info {

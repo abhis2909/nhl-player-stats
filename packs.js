@@ -34,10 +34,11 @@ const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
 const STORAGE_KEY = 'pk_jersey_collection_v1';
 
-// Best-effort team colors (primary/secondary) for the CSS jersey shape —
-// decorative only, keyed by the live standings API's abbreviation so a
-// relocation/rebrand just falls back to DEFAULT_COLORS rather than
-// breaking. Not sourced from any API; hand-maintained here.
+// Hand-maintained team primary/secondary colors — not currently drawn
+// anywhere (the jersey art below is one shared sample image, not
+// per-team tinted; see SAMPLE_JERSEY_IMG), kept as the offline fallback
+// list of abbrevs (state.abbrevs, below) and ready for whenever real
+// per-team jersey art replaces the sample.
 const TEAM_COLORS = {
   ANA: ['#F47A38', '#111111'], BOS: ['#FFB81C', '#000000'], BUF: ['#002654', '#FCB514'],
   CGY: ['#C8102E', '#F1BE48'], CAR: ['#CC0000', '#000000'], CHI: ['#CF0A2C', '#000000'],
@@ -51,7 +52,13 @@ const TEAM_COLORS = {
   UTA: ['#71AFE5', '#101820'], VAN: ['#00205B', '#00843D'], VGK: ['#B4975A', '#333F42'],
   WSH: ['#C8102E', '#041E42'], WPG: ['#041E42', '#004C97'],
 };
-const DEFAULT_COLORS = ['#4a5568', '#1a202c'];
+
+// The one sample jersey (see jerseys/README.md) standing in for every
+// pull's art until real per-team images exist — background removed,
+// tightly cropped. Tier color still comes through via the CSS glow/
+// sheen wrapped around it (.jp-jersey-img/.jp-jersey-sheen below), not
+// from the image itself.
+const SAMPLE_JERSEY_IMG = 'jerseys/borr-transparent.png';
 
 const el = {
   loading: document.getElementById('pkLoading'),
@@ -138,7 +145,6 @@ function confettiHTML() {
  *  already-settled render (the collection's click-to-preview modal). */
 function buildJerseyPiece(team, tier, opts = {}) {
   const meta = state.teamMeta?.get(team);
-  const [primary, secondary] = TEAM_COLORS[team] || DEFAULT_COLORS;
   const teamName = meta?.common || meta?.name || team;
 
   const piece = document.createElement('div');
@@ -156,13 +162,8 @@ function buildJerseyPiece(team, tier, opts = {}) {
             <span class="jp-sparkle" style="top:80%; left:12%; animation-delay:1.6s;"></span>
             ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
             ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
-            <span class="jp-glove"></span>
-            <span class="jp-bag">${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : ''}</span>
-            <div class="jp-jersey" style="--team1:${primary}; --team2:${secondary};">
-              <span class="jp-jersey-yoke"></span>
-              <span class="jp-jersey-stripes"></span>
-              <span class="jp-jersey-abbrev">${escapeHtml(team)}</span>
-            </div>
+            <img class="jp-jersey-img" src="${SAMPLE_JERSEY_IMG}" alt="">
+            <span class="jp-jersey-sheen"></span>
           </div>
           <div class="jp-info">
             ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
