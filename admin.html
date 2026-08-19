@@ -61,6 +61,7 @@
       <button class="toggle-btn" data-subtab="deployment" role="tab" aria-selected="false">🎯 Deployment</button>
       <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Projections</button>
       <button class="toggle-btn" data-subtab="rating" role="tab" aria-selected="false">🏅 Ratings</button>
+      <button class="toggle-btn" data-subtab="jerseys" role="tab" aria-selected="false">🎽 Jerseys</button>
     </div>
 
     <!-- ---------------- Columns ---------------- -->
@@ -436,6 +437,67 @@
         </div>
       </section>
     </div>
+
+    <!-- ---------------- Jerseys (Player Jersey Packs art) ---------------- -->
+    <div id="subtabJerseys" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Jersey Pack Art</h2>
+        </div>
+        <p class="admin-hint">
+          Upload a jersey photo, pick its team and give it a name — the background is removed right
+          here in your browser (nothing uploads anywhere). This tool only <em>prepares</em> the
+          asset — there's no live publish yet (see <code>jerseys/README.md</code>): download the
+          processed PNG and add it to the <code>jerseys/</code> folder on GitHub, then paste the
+          snippet below into <code>packs.js</code>'s <code>JERSEY_ART</code> (or hand both to Claude
+          and it'll do that part).
+        </p>
+
+        <div class="fh-field-row">
+          <div class="fh-field">
+            <label for="jerseyTeamSelect">Team</label>
+            <select id="jerseyTeamSelect"></select>
+          </div>
+          <div class="fh-field">
+            <label for="jerseyNameInput">Name / label</label>
+            <input id="jerseyNameInput" type="text" placeholder="e.g. Bobby Orr — #4">
+          </div>
+        </div>
+        <div class="fh-field">
+          <label for="jerseyFileInput">Jersey photo</label>
+          <input id="jerseyFileInput" type="file" accept="image/*">
+        </div>
+        <p class="admin-hint" id="jerseyProcessingNote" hidden>Processing…</p>
+
+        <div class="adm-jersey-preview-row" id="jerseyPreviewRow" hidden>
+          <div class="adm-jersey-preview-cell">
+            <span class="section-sub">Original</span>
+            <img id="jerseyOriginalImg" alt="Original upload">
+          </div>
+          <div class="adm-jersey-preview-cell">
+            <span class="section-sub">Background removed</span>
+            <div class="adm-jersey-checker"><canvas id="jerseyOutCanvas"></canvas></div>
+          </div>
+        </div>
+
+        <div class="admin-buttons">
+          <button type="button" id="jerseyDownloadBtn" class="ghost-btn" disabled>⬇ Download PNG</button>
+          <button type="button" id="jerseyStageBtn" class="primary-btn" disabled>Add to staged list</button>
+          <span id="jerseySaveStatus" class="save-status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Staged Entries <span class="section-sub">(this browser only)</span></h2>
+          <div class="admin-section-actions">
+            <button type="button" class="link-btn" id="jerseyClearStagedBtn">Clear all</button>
+          </div>
+        </div>
+        <p class="admin-hint" id="jerseyStagedEmpty">Nothing staged yet — process a jersey above and add it.</p>
+        <div id="jerseyStagedList" class="adm-jersey-staged-list"></div>
+      </section>
+    </div>
   </div>
 </main>
 
@@ -506,5 +568,6 @@
 <script src="admin-deployment.js" defer></script>
 <script src="admin-projection.js" defer></script>
 <script src="admin-rating.js" defer></script>
+<script src="admin-jerseys.js" defer></script>
 </body>
 </html>

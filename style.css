@@ -2967,7 +2967,8 @@ a.mg-game-card:hover {
   margin-bottom: 6px;
 }
 
-.fh-field input {
+.fh-field input,
+.fh-field select {
   width: 100%;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
@@ -2977,6 +2978,14 @@ a.mg-game-card:hover {
   font: inherit;
   font-size: 14px;
 }
+
+.fh-field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.fh-field-row .fh-field { flex: 1; min-width: 200px; }
 
 .fh-login-error {
   margin: 0 0 14px;
@@ -4186,4 +4195,91 @@ a.mg-game-card:hover {
   .pk-pack-info { text-align: center; }
   .pk-team-row { justify-content: center; text-align: center; }
   .pk-team-row-label { justify-content: center; }
+}
+
+/* ---------- Admin: Jersey Pack Art tab (admin-jerseys.js) ---------- */
+
+.adm-jersey-preview-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.adm-jersey-preview-row[hidden] { display: none; }
+
+.adm-jersey-preview-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.adm-jersey-preview-cell img,
+.adm-jersey-preview-cell canvas {
+  max-width: 220px;
+  max-height: 260px;
+  display: block;
+}
+
+/* Checkerboard so a processed transparent PNG's alpha is actually
+   visible in the preview, not just "looks the same as the original." */
+.adm-jersey-checker {
+  background-image:
+    linear-gradient(45deg, #2a2f3a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2f3a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2f3a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2f3a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-color: #1a1d24;
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+.adm-jersey-staged-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adm-jersey-staged-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.adm-jersey-staged-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.adm-jersey-staged-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  background: #14161c;
+  border-radius: 6px;
+  flex: none;
+}
+
+.adm-jersey-staged-info { flex: 1; min-width: 0; }
+.adm-jersey-staged-info strong { display: block; font-size: 13.5px; }
+.adm-jersey-staged-info span { display: block; font-size: 12px; color: var(--text-dim); }
+
+.adm-jersey-staged-actions { display: flex; gap: 8px; flex: none; }
+
+.adm-jersey-staged-snippet {
+  width: 100%;
+  margin-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-dim);
+  resize: vertical;
 }

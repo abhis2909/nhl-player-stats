@@ -173,12 +173,13 @@
 
   /* ---------------------------------------------------------------
      Sub-tabs: Columns / Range Ratings / Users / Deployment /
-     Methodology all live on this one admin-gated page (Range Ratings
-     moved here from its own range.html; see fantasy-hub/README.md
-     history). Users/Deployment/Methodology's data loads are lazy
-     (admin-users.js / admin-deployment.js / admin-projection.js, each
-     exposing a window.__adminXTab.ensureLoaded()); Range Ratings' own
-     init() runs eagerly same as it always did on range.html.
+     Methodology / Jerseys all live on this one admin-gated page (Range
+     Ratings moved here from its own range.html; see fantasy-hub/
+     README.md history). Users/Deployment/Methodology/Jerseys' data
+     loads are lazy (admin-users.js / admin-deployment.js /
+     admin-projection.js / admin-jerseys.js, each exposing a
+     window.__adminXTab.ensureLoaded()); Range Ratings' own init() runs
+     eagerly same as it always did on range.html.
      --------------------------------------------------------------- */
   const subtabButtons = Array.from(document.querySelectorAll('.admin-subtabs [data-subtab]'));
   const subtabPanels = {
@@ -189,6 +190,7 @@
     deployment: document.getElementById('subtabDeployment'),
     projection: document.getElementById('subtabProjection'),
     rating: document.getElementById('subtabRating'),
+    jerseys: document.getElementById('subtabJerseys'),
   };
 
   function showSubtab(name) {
@@ -206,6 +208,7 @@
     if (name === 'deployment' && window.__adminDeploymentTab) window.__adminDeploymentTab.ensureLoaded();
     if (name === 'projection' && window.__adminProjectionTab) window.__adminProjectionTab.ensureLoaded();
     if (name === 'rating' && window.__adminRatingTab) window.__adminRatingTab.ensureLoaded();
+    if (name === 'jerseys' && window.__adminJerseysTab) window.__adminJerseysTab.ensureLoaded();
   }
 
   subtabButtons.forEach((btn) => {
