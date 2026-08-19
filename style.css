@@ -3609,14 +3609,13 @@ a.mg-game-card:hover {
   flex-wrap: wrap;
 }
 
-/* ---------- Jersey piece: just the jersey, no card frame. Reuses the
-   .tier-silver..diamond gem system (~line 1298 above) so rarity reads
-   as one visual language across Player Ratings cards and jersey pulls
-   — tier color/glow/shimmer/sparkle apply straight to the jersey shape
-   itself (box-shadow: var(--glow), a sheen sweep clipped to its
-   silhouette) instead of to a bordered card, and the shimmer/sheen/
-   sparkle keyframes (pc-shimmer/pc-sheen-sweep/pc-twinkle) are reused
-   rather than redefined. ---------- */
+/* ---------- Jersey piece: a graded-card-style slab holding the jersey.
+   Reuses the .tier-silver..diamond gem system (~line 1298 above) so
+   rarity reads as one visual language across Player Ratings cards and
+   jersey pulls — tier color drives the slab's border shimmer, the
+   holo-foil sheen's intensity, and the jersey's own glow (box-shadow:
+   var(--glow)), reusing the pc-shimmer/pc-sheen-sweep/pc-twinkle
+   keyframes rather than redefining them. ---------- */
 
 .jersey-piece {
   display: flex;
@@ -3641,6 +3640,7 @@ a.mg-game-card:hover {
 /* Idle hover once landed — on its own wrapper (not .jersey-piece
    itself) so it doesn't fight jp-rise-in over the transform property. */
 .jp-float-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3655,19 +3655,86 @@ a.mg-game-card:hover {
   50% { transform: translateY(-7px); }
 }
 
-/* Brightness pulse as the spotlight "catches" it, right as jp-rise-in
-   lands — on .jp-jersey-wrap specifically so the flash reads as coming
-   off the fabric, not the team name underneath it. */
+/* Brightness pulse across the whole slab as the spotlight "catches" it,
+   right as jp-rise-in lands. */
 .jp-spotlit {
   animation: jp-spotlit-pulse 1s ease-out 2.3s both;
 }
 
 @keyframes jp-spotlit-pulse {
-  0% { filter: brightness(1.55) drop-shadow(0 0 30px var(--t1)); }
+  0% { filter: brightness(1.5) drop-shadow(0 0 34px var(--t1)); }
   100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
+/* ---- The slab itself: a rotating holographic border (the same mask
+   trick the old bordered player-card used) around a foil-sheen panel,
+   like a graded trading-card holder. ---- */
+
+.jp-slab {
+  position: relative;
+  width: 250px;
+  border-radius: 22px;
+  padding: 3px;
+  box-shadow: 0 30px 55px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 0, 0, 0.3);
+}
+
+.jp-slab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  padding: 3px;
+  background: linear-gradient(115deg, var(--t1), #fff, var(--t-accent), #ffd76a, var(--t1));
+  background-size: 300% 300%;
+  animation: pc-shimmer var(--shimmer-speed) ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.tier-silver .jp-slab::before { background: var(--t1); }
+
+.jp-slab-panel {
+  position: relative;
+  border-radius: 19px;
+  overflow: hidden;
+  background: linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%);
+  padding: 18px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tier-emerald .jp-slab-panel  { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 42%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
+.tier-ruby .jp-slab-panel     { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 46%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
+.tier-amethyst .jp-slab-panel { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 50%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
+.tier-diamond .jp-slab-panel  { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 54%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
+
+/* Rainbow foil pattern behind everything else in the panel — a classic
+   holographic-card sheen, tinted per-tier by riding on --shimmer-opacity
+   (silver stays deliberately faint/plain, same principle as the rest of
+   the tier system). */
+.jp-slab-holo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(115deg, #ff9a9e 0%, #fecfef 18%, #a6c1ee 36%, #c2e9fb 52%, #d4fc79 68%, #fddb92 84%, #ff9a9e 100%);
+  background-size: 280% 280%;
+  opacity: calc(var(--shimmer-opacity) * 0.18);
+  mix-blend-mode: color-dodge;
+  animation: jp-holo-shift 7s ease infinite;
+  pointer-events: none;
+}
+
+@keyframes jp-holo-shift {
+  0%, 100% { background-position: 0% 30%; }
+  50% { background-position: 100% 70%; }
+}
+
 .jp-tier-tag {
+  position: relative;
+  z-index: 1;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 2px;
@@ -3676,29 +3743,13 @@ a.mg-game-card:hover {
   background: linear-gradient(120deg, var(--t-accent), var(--t1));
   padding: 4px 14px;
   border-radius: 20px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .jp-jersey-wrap {
   position: relative;
-}
-
-/* Soft halo behind the jersey for the top 4 tiers — same idea as the
-   old card's radial-gradient aura, just circular and untethered from
-   any card background now. */
-.tier-emerald .jp-jersey-wrap::before,
-.tier-ruby .jp-jersey-wrap::before,
-.tier-amethyst .jp-jersey-wrap::before,
-.tier-diamond .jp-jersey-wrap::before {
-  content: "";
-  position: absolute;
-  inset: -34px;
-  z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--t1) 0%, transparent 68%);
-  opacity: 0.55;
-  filter: blur(6px);
+  z-index: 1;
 }
 
 .jp-sparkle {
@@ -3720,8 +3771,8 @@ a.mg-game-card:hover {
 
 .jp-badge {
   position: absolute;
-  top: 12%;
-  right: -6px;
+  top: -4px;
+  right: -14px;
   z-index: 7;
   font-size: 10px;
   font-weight: 800;
@@ -3735,8 +3786,8 @@ a.mg-game-card:hover {
 
 .jp-count-chip {
   position: absolute;
-  top: 12%;
-  right: -2px;
+  top: -4px;
+  right: -10px;
   z-index: 7;
   font-size: 11px;
   font-weight: 800;
@@ -3748,13 +3799,13 @@ a.mg-game-card:hover {
 
 .jp-jersey {
   position: relative;
-  width: 210px;
-  height: 210px;
+  width: 178px;
+  height: 178px;
   clip-path: polygon(22% 4%, 38% 4%, 50% 15%, 62% 4%, 78% 4%, 96% 17%, 80% 33%, 70% 25%, 70% 96%, 30% 96%, 30% 25%, 20% 33%, 4% 17%);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, transparent 30%),
     linear-gradient(180deg, var(--team1) 0%, var(--team1) 55%, var(--team2) 55%, var(--team2) 100%);
-  box-shadow: var(--glow), 0 14px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--glow), 0 12px 26px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3779,7 +3830,7 @@ a.mg-game-card:hover {
 }
 
 .jp-jersey-abbrev {
-  font-size: 32px;
+  font-size: 27px;
   font-weight: 900;
   letter-spacing: 1px;
   color: rgba(255, 255, 255, 0.92);
@@ -3787,17 +3838,19 @@ a.mg-game-card:hover {
 }
 
 .jp-info {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
-.jp-team-logo { width: 32px; height: 32px; object-fit: contain; }
+.jp-team-logo { width: 30px; height: 30px; object-fit: contain; }
 
 .jp-team-name {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 800;
   text-align: center;
   letter-spacing: 0.3px;
@@ -3805,6 +3858,35 @@ a.mg-game-card:hover {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* ---- Confetti burst, timed to fire as the slab lands (see the 2.3s+
+   base delay baked into each piece's inline animation-delay in
+   confettiHTML()). ---- */
+
+.jp-confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.jp-confetti-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 1px;
+  opacity: 0;
+  animation: jp-confetti-burst 1.3s ease-out both;
+}
+
+@keyframes jp-confetti-burst {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.4); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); }
 }
 
 /* ---------- Collection progress + per-team pip rows ---------- */

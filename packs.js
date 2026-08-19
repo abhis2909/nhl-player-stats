@@ -109,13 +109,32 @@ function pullOne() {
 
 function keyFor(team, tier) { return `${team}-${tier}`; }
 
-/** Builds one jersey — just the jersey, no card frame around it (see
- *  style.css's .jersey-piece/.jp-* block) — as a DOM node. `opts.badge`
- *  ("NEW"/"+1"), if given, renders a pull-result ribbon. `opts.count`,
- *  if given, renders an owned-count chip instead (collection context).
- *  `opts.animate` plays the stage entrance (rise-in + spotlit flash +
- *  idle hover); omit it for a static, already-settled render (the
- *  collection's click-to-preview modal). */
+/** Random confetti-piece HTML: N rectangles flung outward from center on
+ *  random angles/distances, colored from the tier palette. Only used in
+ *  the animated stage reveal — see opts.animate below. */
+function confettiHTML() {
+  const colors = ['#fff', 'var(--t1)', 'var(--t-accent)'];
+  let html = '';
+  for (let i = 0; i < 18; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 70 + Math.random() * 100;
+    const dx = Math.round(Math.cos(angle) * dist);
+    const dy = Math.round(Math.sin(angle) * dist - 25); // biased upward/outward, not straight down
+    const rot = Math.round(Math.random() * 720 - 360);
+    const delay = (Math.random() * 0.3).toFixed(2);
+    const w = 3 + Math.round(Math.random() * 3);
+    html += `<span class="jp-confetti-piece" style="--dx:${dx}px; --dy:${dy}px; --rot:${rot}deg; width:${w}px; height:${w * 2}px; background:${colors[i % colors.length]}; animation-delay:${(2.3 + Number(delay)).toFixed(2)}s;"></span>`;
+  }
+  return html;
+}
+
+/** Builds one jersey slab — a graded-card-style holder (holographic
+ *  border + foil sheen) with the jersey inside, as a DOM node.
+ *  `opts.badge` ("NEW"/"+1"), if given, renders a pull-result ribbon.
+ *  `opts.count`, if given, renders an owned-count chip instead
+ *  (collection context). `opts.animate` plays the stage entrance
+ *  (rise-in + confetti burst + idle hover); omit it for a static,
+ *  already-settled render (the collection's click-to-preview modal). */
 function buildJerseyPiece(team, tier, opts = {}) {
   const meta = state.teamMeta?.get(team);
   const [primary, secondary] = TEAM_COLORS[team] || DEFAULT_COLORS;
@@ -126,21 +145,27 @@ function buildJerseyPiece(team, tier, opts = {}) {
   if (!opts.animate) piece.style.opacity = '1'; // skip the entrance's initial hidden state
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
-      <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
-      <div class="jp-jersey-wrap ${opts.animate ? 'jp-spotlit' : ''}">
-        <span class="jp-sparkle" style="top:10%; left:8%; animation-delay:0s;"></span>
-        <span class="jp-sparkle" style="top:28%; left:88%; animation-delay:0.9s;"></span>
-        <span class="jp-sparkle" style="top:78%; left:14%; animation-delay:1.6s;"></span>
-        ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
-        ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
-        <div class="jp-jersey" style="--team1:${primary}; --team2:${secondary};">
-          <span class="jp-jersey-abbrev">${escapeHtml(team)}</span>
+      <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
+        <div class="jp-slab-holo"></div>
+        <div class="jp-slab-panel">
+          <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
+          <div class="jp-jersey-wrap">
+            <span class="jp-sparkle" style="top:8%; left:6%; animation-delay:0s;"></span>
+            <span class="jp-sparkle" style="top:24%; left:90%; animation-delay:0.9s;"></span>
+            <span class="jp-sparkle" style="top:80%; left:12%; animation-delay:1.6s;"></span>
+            ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
+            ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
+            <div class="jp-jersey" style="--team1:${primary}; --team2:${secondary};">
+              <span class="jp-jersey-abbrev">${escapeHtml(team)}</span>
+            </div>
+          </div>
+          <div class="jp-info">
+            ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
+            <div class="jp-team-name">${escapeHtml(teamName)}</div>
+          </div>
         </div>
       </div>
-      <div class="jp-info">
-        ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
-        <div class="jp-team-name">${escapeHtml(teamName)}</div>
-      </div>
+      ${opts.animate ? `<div class="jp-confetti">${confettiHTML()}</div>` : ''}
     </div>
   `;
   return piece;
@@ -153,13 +178,13 @@ function renderOdds() {
 
 /** Plays the "ring of spotlights" reveal: five beams + the light-ring
  *  at the jersey's feet flash on first (see .pk-beam-flash in
- *  style.css, ~2.2s), then the jersey rises up smoothly from below the
- *  stage into the light (.jp-rise-in's 1s delay is tuned to land right
- *  as the flash settles), gets a brief brightness pulse as the light
- *  "catches" it, then settles into a slow idle hover. Re-triggering CSS
- *  animations on a repeat open needs the classList reset + a forced
- *  reflow below — just re-adding the same class name is a no-op to the
- *  browser. */
+ *  style.css, ~2.2s), then the graded-slab jersey rises up smoothly
+ *  from below the stage, through the ring, into the light (.jp-rise-in's
+ *  1s delay is tuned to land right as the flash settles), gets a brief
+ *  brightness pulse + confetti burst as the light "catches" it, then
+ *  settles into a slow idle hover. Re-triggering CSS animations on a
+ *  repeat open needs the classList reset + a forced reflow below — just
+ *  re-adding the same class name is a no-op to the browser. */
 function playOpeningAnimation(pull, badge) {
   el.stageBeams.className = 'pk-stage-beams';
   void el.stageBeams.offsetWidth; // force reflow so the animation restarts
