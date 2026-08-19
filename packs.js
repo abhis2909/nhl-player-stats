@@ -63,6 +63,7 @@ const el = {
   pack: document.getElementById('pkPack'),
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
+  stageFixtures: document.getElementById('pkStageFixtures'),
   stageBeams: document.getElementById('pkStageBeams'),
   stagePiece: document.getElementById('pkStagePiece'),
   openAgainBtn: document.getElementById('pkOpenAgainBtn'),
@@ -155,7 +156,11 @@ function buildJerseyPiece(team, tier, opts = {}) {
             <span class="jp-sparkle" style="top:80%; left:12%; animation-delay:1.6s;"></span>
             ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
             ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
+            <span class="jp-glove"></span>
+            <span class="jp-bag">${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : ''}</span>
             <div class="jp-jersey" style="--team1:${primary}; --team2:${secondary};">
+              <span class="jp-jersey-yoke"></span>
+              <span class="jp-jersey-stripes"></span>
               <span class="jp-jersey-abbrev">${escapeHtml(team)}</span>
             </div>
           </div>
@@ -176,19 +181,23 @@ function renderOdds() {
   el.odds.textContent = 'Odds: ' + TIERS.map((t) => `${TIER_LABEL[t]} ${(TIER_WEIGHTS[t] / total * 100).toFixed(0)}%`).join(' · ');
 }
 
-/** Plays the "ring of spotlights" reveal: five beams + the light-ring
- *  at the jersey's feet flash on first (see .pk-beam-flash in
- *  style.css, ~2.2s), then the graded-slab jersey rises up smoothly
- *  from below the stage, through the ring, into the light (.jp-rise-in's
- *  1s delay is tuned to land right as the flash settles), gets a brief
- *  brightness pulse + confetti burst as the light "catches" it, then
- *  settles into a slow idle hover. Re-triggering CSS animations on a
- *  repeat open needs the classList reset + a forced reflow below — just
- *  re-adding the same class name is a no-op to the browser. */
+/** Plays the "ring of spotlights" reveal: five beams + the light-ring +
+ *  the overhead fixture cones all flood the stage first (see
+ *  .pk-beam-flash/.pk-fixture-flash in style.css, ~3.4s to fully dim),
+ *  then the graded-slab jersey rises up smoothly from below the stage,
+ *  through the ring, into the light (.jp-rise-in's 1s delay is tuned to
+ *  land while the flood is still bright), gets a brief brightness pulse
+ *  + confetti burst as the light "catches" it — and as it settles, the
+ *  flood dims down with it, handing the spotlight to the jersey itself
+ *  rather than staying bright behind it. Re-triggering CSS animations
+ *  on a repeat open needs the classList reset + a forced reflow below —
+ *  just re-adding the same class name is a no-op to the browser. */
 function playOpeningAnimation(pull, badge) {
   el.stageBeams.className = 'pk-stage-beams';
+  el.stageFixtures.className = 'pk-stage-fixtures';
   void el.stageBeams.offsetWidth; // force reflow so the animation restarts
   el.stageBeams.classList.add(`tier-${pull.tier}`, 'pk-beam-flash');
+  el.stageFixtures.classList.add('pk-fixture-flash');
 
   el.stagePiece.innerHTML = '';
   el.stagePiece.appendChild(buildJerseyPiece(pull.team, pull.tier, { badge, animate: true }));

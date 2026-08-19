@@ -3575,6 +3575,10 @@ a.mg-game-card:hover {
   box-shadow: 0 0 9px 2px rgba(255, 205, 130, 0.85);
 }
 
+/* Dim by default — a constant low venue-light presence — and only
+   flooded bright by .pk-fixture-flash (triggered alongside
+   .pk-beam-flash below) when a pack opens, dimming back down to this
+   same baseline as the jersey settles into the spotlight. */
 .pk-fixture-cone {
   position: absolute;
   top: 18px;
@@ -3584,7 +3588,7 @@ a.mg-game-card:hover {
   clip-path: polygon(50% 0%, 14% 100%, 86% 100%);
   filter: blur(7px);
   mix-blend-mode: screen;
-  opacity: 0.55;
+  opacity: 0.16;
   transform-origin: top center;
 }
 
@@ -3592,6 +3596,24 @@ a.mg-game-card:hover {
 .pk-fixture-cone-2 { left: 8%; transform: rotate(16deg); }
 .pk-fixture-cone-3 { right: 8%; transform: rotate(-16deg); }
 .pk-fixture-cone-4 { right: -12%; transform: rotate(-32deg); }
+
+.pk-stage-fixtures.pk-fixture-flash .pk-fixture-cone {
+  animation: pk-fixture-flash 3.4s ease-in-out forwards;
+}
+
+.pk-stage-fixtures.pk-fixture-flash .pk-fixture-cone-1,
+.pk-stage-fixtures.pk-fixture-flash .pk-fixture-cone-4 { animation-delay: 0s; }
+.pk-stage-fixtures.pk-fixture-flash .pk-fixture-cone-2,
+.pk-stage-fixtures.pk-fixture-flash .pk-fixture-cone-3 { animation-delay: 0.08s; }
+
+@keyframes pk-fixture-flash {
+  0% { opacity: 0.16; }
+  12% { opacity: 0.8; }
+  30% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+  70% { opacity: 0.4; }
+  100% { opacity: 0.16; }
+}
 
 .pk-haze {
   position: absolute;
@@ -3669,32 +3691,39 @@ a.mg-game-card:hover {
   animation: pk-ring-spin 5s linear infinite;
 }
 
+/* Big flood first — fills the stage with light while the jersey is
+   still hidden below — then dims steadily down to a low idle glow as
+   jp-rise-in (1s delay + 1.3s rise + 1s settle ≈ 3.3s) lands and takes
+   over as the focal point. pk-beam-breathe's resting range is
+   deliberately much dimmer than the old constant "ambient" level so
+   the jersey, not the backdrop, stays the centerpiece afterward. */
 .pk-stage-beams.pk-beam-flash .pk-beam,
 .pk-stage-beams.pk-beam-flash .pk-light-ring {
-  animation: pk-beam-flash 2.2s ease-in-out forwards, pk-beam-breathe 3.6s ease-in-out 2.2s infinite;
+  animation: pk-beam-flash 3.4s ease-in-out forwards, pk-beam-breathe 3.6s ease-in-out 3.4s infinite;
 }
 
 /* Staggered so the ring reads as lighting up sequentially rather than
    all at once — outer beams first, inward toward center. */
 .pk-stage-beams.pk-beam-flash .pk-beam-1,
-.pk-stage-beams.pk-beam-flash .pk-beam-5 { animation-delay: 0s, 2.2s; }
+.pk-stage-beams.pk-beam-flash .pk-beam-5 { animation-delay: 0s, 3.4s; }
 .pk-stage-beams.pk-beam-flash .pk-beam-2,
-.pk-stage-beams.pk-beam-flash .pk-beam-4 { animation-delay: 0.1s, 2.3s; }
-.pk-stage-beams.pk-beam-flash .pk-beam-3 { animation-delay: 0.2s, 2.4s; }
-.pk-stage-beams.pk-beam-flash .pk-light-ring { animation-delay: 0.15s, 2.35s; }
+.pk-stage-beams.pk-beam-flash .pk-beam-4 { animation-delay: 0.1s, 3.5s; }
+.pk-stage-beams.pk-beam-flash .pk-beam-3 { animation-delay: 0.2s, 3.6s; }
+.pk-stage-beams.pk-beam-flash .pk-light-ring { animation-delay: 0.15s, 3.55s; }
 
 @keyframes pk-beam-flash {
   0% { opacity: 0; }
-  25% { opacity: 0.5; }
-  42% { opacity: 0.2; }
-  65% { opacity: 0.62; }
-  85% { opacity: 0.35; }
-  100% { opacity: 0.52; }
+  10% { opacity: 0.88; }
+  22% { opacity: 0.55; }
+  38% { opacity: 0.95; }
+  55% { opacity: 0.5; }
+  75% { opacity: 0.3; }
+  100% { opacity: 0.14; }
 }
 
 @keyframes pk-beam-breathe {
-  0%, 100% { opacity: 0.48; }
-  50% { opacity: 0.64; }
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.2; }
 }
 
 @keyframes pk-ring-spin {
@@ -3876,6 +3905,75 @@ a.mg-game-card:hover {
   z-index: 1;
 }
 
+/* Small decorative flourishes flanking the jersey at its base — a
+   glove and an equipment bag, echoing a graded-slab display without
+   trying to be full illustrations. Sized to stay inside .jp-slab-panel's
+   overflow:hidden bounds. */
+.jp-glove {
+  position: absolute;
+  z-index: 2;
+  bottom: -4px;
+  left: -15px;
+  width: 28px;
+  height: 24px;
+  background: linear-gradient(160deg, #c98f3e, #6b4718);
+  border-radius: 12px 12px 8px 8px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.jp-glove::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 8px;
+  width: 11px;
+  height: 13px;
+  background: inherit;
+  border-radius: 7px;
+}
+
+.jp-glove::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  background: var(--t1);
+  border-radius: 0 0 8px 8px;
+}
+
+.jp-bag {
+  position: absolute;
+  z-index: 2;
+  bottom: -6px;
+  right: -15px;
+  width: 30px;
+  height: 22px;
+  background: linear-gradient(160deg, var(--team1, var(--t1)), var(--team2, var(--t2)));
+  border-radius: 7px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.jp-bag::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 15px;
+  height: 9px;
+  border: 3px solid #2a2a2a;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  transform: translateX(-50%);
+}
+
+.jp-bag img { width: 16px; height: 16px; object-fit: contain; }
+
 .jp-sparkle {
   display: none;
   position: absolute;
@@ -3921,24 +4019,60 @@ a.mg-game-card:hover {
   border-radius: 20px;
 }
 
+/* One shared jersey template, recolored per team via --team1/--team2 —
+   deliberately not a bespoke asset per team (32 of those is its own
+   project); a real jersey silhouette (solid body + shoulder yoke +
+   waist stripes, like every NHL sweater actually looks) reads as
+   "a jersey" much better than a flat two-tone split did. Overflow on
+   .jp-jersey isn't set explicitly — clip-path already crops
+   .jp-jersey-yoke/.jp-jersey-stripes to this exact silhouette since
+   clip-path clips a box's whole contents, same as overflow:hidden
+   would for a rectangle. */
 .jp-jersey {
   position: relative;
   width: 178px;
   height: 178px;
   clip-path: polygon(22% 4%, 38% 4%, 50% 15%, 62% 4%, 78% 4%, 96% 17%, 80% 33%, 70% 25%, 70% 96%, 30% 96%, 30% 25%, 20% 33%, 4% 17%);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, transparent 30%),
-    linear-gradient(180deg, var(--team1) 0%, var(--team1) 55%, var(--team2) 55%, var(--team2) 100%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, transparent 32%),
+    var(--team1);
   box-shadow: var(--glow), 0 12px 26px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.jp-jersey-yoke {
+  position: absolute;
+  top: 24%;
+  left: 0;
+  right: 0;
+  height: 15%;
+  background: var(--team2);
+}
+
+.jp-jersey-stripes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 13%;
+  height: 11%;
+  background:
+    linear-gradient(var(--team2), var(--team2)) 0 0 / 100% 32% no-repeat,
+    linear-gradient(#fff, #fff) 0 40% / 100% 22% no-repeat,
+    linear-gradient(var(--team2), var(--team2)) 0 66% / 100% 34% no-repeat;
+}
+
+/* Sheen highlight (.jp-jersey::after, z-index:1) sits above these so it
+   still reads as one lit fabric surface rather than flat color blocks;
+   the number/abbrev stays on top of all of it so it's always legible. */
+.jp-jersey-yoke, .jp-jersey-stripes { z-index: 0; }
+
 .jp-jersey::after {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 1;
   clip-path: inherit;
   background: linear-gradient(
     120deg,
