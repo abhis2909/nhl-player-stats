@@ -92,6 +92,17 @@ async function handleList(req, res) {
 
     const creditByUserId = new Map(creditSums.map((row) => [row.userId, row._sum.amount || 0]));
 
+    // Whether a solve ACTUALLY got credited — not assumed from `solved`
+    // alone. A day can be solved but never credited (e.g. it was solved
+    // before this feature existed, or the winning sync never reached
+    // the server), so this checks for a real CreditTransaction row
+    // rather than hardcoding "+25" next to every solved day.
+    const creditedRows = await prisma.creditTransaction.findMany({
+      where: { refType: 'DailyGuess', refId: { in: recentGuesses.map((g) => g.id) } },
+      select: { refId: true, amount: true },
+    });
+    const creditedByGuessId = new Map(creditedRows.map((c) => [c.refId, c.amount]));
+
     res.status(200).json({
       ok: true,
       users: users.map((u) => ({
@@ -113,6 +124,7 @@ async function handleList(req, res) {
         displayName: g.user.displayName,
         solved: g.solved,
         attempts: g.attempts,
+        creditsAwarded: creditedByGuessId.get(g.id) || 0,
       })),
     });
   } catch (err) {

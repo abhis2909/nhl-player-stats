@@ -415,6 +415,15 @@
     `).join('');
   }
 
+  function dailyActivityStatus(g) {
+    if (!g.solved) return '❌ Not solved';
+    // Reflects a REAL CreditTransaction lookup (admin-users.js API),
+    // not an assumption that solved always means credited — a day can
+    // be solved but uncredited (solved before this feature existed, or
+    // the winning sync never reached the server).
+    return g.creditsAwarded ? `✅ Solved · +${g.creditsAwarded} credited` : '✅ Solved · not credited';
+  }
+
   function renderDailyActivity(entries) {
     if (!entries.length) {
       activityWrap.hidden = true;
@@ -429,7 +438,7 @@
           <div class="fh-tx-sides">${g.date} — ${g.attempts} guess${g.attempts === 1 ? '' : 'es'}</div>
         </div>
         <div class="fh-tx-meta">
-          <span class="fh-tx-winner">${g.solved ? '✅ Solved (+25)' : '❌ Not solved'}</span>
+          <span class="fh-tx-winner">${dailyActivityStatus(g)}</span>
         </div>
       </div>
     `).join('');
