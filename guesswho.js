@@ -10,28 +10,24 @@
    yellow = close, dark = not close. Progress for today's puzzle is
    saved to localStorage so a reload doesn't lose it.
 
-   Data source: data.js's loadPlayerBioPool() — one roster fetch per
-   team (bio fields: height/weight/birth date+country/shoots), NOT the
-   season-stats pipeline the rest of the site uses. This game cares who
-   a player IS, not how they're performing this season.
+   Data source: GET /api/fantasy/guesswho-sync?date= — the server's
+   OWN frozen roster/bio pool for today (playerId/name/team/pos/
+   heightInInches/birthDate/birthCountry/headshot), the exact same one
+   api/_lib/guessWhoPool.js used to pick today's mystery player. NOT an
+   independent client-side fetch of all 32 team rosters anymore — that
+   design caused a real bug (2026-08-19): the NHL API rate-limited some
+   of those 32 parallel requests, silently shrinking the pool, so a
+   client computing its OWN pool-of-a-different-size landed on a
+   DIFFERENT mystery player than the server had frozen — real solves
+   got marked "not solved" server-side. Fetching the server's already-
+   frozen pool instead makes every client (and the server) agree on the
+   same answer BY CONSTRUCTION, and only ever hits the NHL API once a
+   day (server-side, via api/fantasy/guesswho-sync.js's
+   getOrFreezeDailyPlayer()) instead of once per visitor.
    ====================================================================== */
 
 const MAX_GUESSES = 8;
 const AGE_CLOSE_TOLERANCE = 3; // years
-
-// Empirically ~811-813 players in a healthy fetch (all 32 teams'
-// rosters succeeded) — a real, confirmed bug: the NHL API rate-limits
-// firing 32 roster requests at once, silently shrinking the pool when
-// some fail (data.js's loadPlayerBioPool() degrades gracefully for its
-// OTHER callers, which don't need a hard guarantee — this game does,
-// since pickMysteryPlayer() is `hash % pool.length`, so a different
-// pool size almost always means a DIFFERENT mystery player than what
-// the server independently computes — a real player solving the
-// correct answer in-browser could get marked "not solved" server-side
-// purely because the two sides' pools ended up different sizes). Set
-// well below the healthy count so ordinary roster churn never trips
-// it, but several teams failing does.
-const MIN_HEALTHY_POOL_SIZE = 700;
 const HEIGHT_CLOSE_TOLERANCE = 2; // inches
 const POSITION_GROUP = { C: 'F', L: 'F', R: 'F', D: 'D', G: 'G' };
 const POSITION_LABEL = { C: 'C', L: 'LW', R: 'RW', D: 'D', G: 'G' };
@@ -579,16 +575,36 @@ function wireGuessBar() {
  *  Yesterday's entry is just left behind in localStorage, unused —
  *  harmless, and lets `shareText()` still work if someone looks back at
  *  an old day (not currently exposed in the UI, but the data's there). */
-function loadPuzzleForToday() {
-  state.dateKey = todayISO();
-  const saved = loadSavedState(state.dateKey);
+/** Fetches `dateKey`'s frozen roster/bio pool from the server (GET
+ *  /api/fantasy/guesswho-sync?date=) and populates state.pool/poolById
+ *  from it — see this file's header comment for why this replaced an
+ *  independent client-side 32-roster fetch. Always a fresh fetch, never
+ *  reused across a different date — called both on initial load and on
+ *  a midnight rollover (checkForNewDay()), each of which needs THAT
+ *  date's own frozen pool, not whatever was loaded before. */
+async function loadPoolFor(dateKey) {
+  const res = await fetch(`/api/fantasy/guesswho-sync?date=${dateKey}`);
+  const data = await res.json();
+  if (!res.ok || !data.ok || !Array.isArray(data.pool) || !data.pool.length) {
+    throw new Error(data.message || "Couldn't load today's player pool — try refreshing.");
+  }
+  state.pool = data.pool.slice().sort((a, b) => a.name.localeCompare(b.name));
+  state.poolById = new Map(data.pool.map((p) => [p.playerId, p]));
+}
+
+async function loadPuzzleForToday() {
+  const dateKey = todayISO();
+  state.dateKey = dateKey;
+  await loadPoolFor(dateKey);
+
+  const saved = loadSavedState(dateKey);
   if (saved && saved.mystery) {
     state.mystery = saved.mystery;
     state.guesses = saved.guesses || [];
     state.gameOver = !!saved.gameOver;
     state.won = !!saved.won;
   } else {
-    state.mystery = pickMysteryPlayer(state.pool, state.dateKey);
+    state.mystery = pickMysteryPlayer(state.pool, dateKey);
     state.guesses = [];
     state.gameOver = false;
     state.won = false;
@@ -604,39 +620,26 @@ function loadPuzzleForToday() {
  *  rolled over, reloads today's (new) puzzle live, no manual refresh
  *  needed — clearing any leftover UI (open win modal, confetti, typed
  *  guess) from the puzzle that just ended. */
-function checkForNewDay() {
+async function checkForNewDay() {
   if (todayISO() === state.dateKey) return;
   closeWinModal();
   closeDivisionsModal();
   el.confettiLayer.innerHTML = '';
   el.guessInput.value = '';
   el.suggestions.hidden = true;
-  loadPuzzleForToday();
-  renderBoard();
+  try {
+    await loadPuzzleForToday();
+    renderBoard();
+  } catch (err) {
+    showError(`Couldn't load today's puzzle (${err.message}). Try refreshing.`);
+  }
 }
 
 async function init() {
   try {
     const standings = await getJSON(`${API_WEB}/v1/standings/now`);
-    const teamMeta = buildTeamMeta(standings);
-    const pool = await loadPlayerBioPool(teamMeta);
-    if (!pool.length) throw new Error('No players loaded');
-
-    const eligiblePool = pool.filter((p) => p.birthDate && p.heightInInches);
-    // See MIN_HEALTHY_POOL_SIZE's doc comment — a smaller-than-usual
-    // pool here (some teams' roster fetches failed) would pick a
-    // DIFFERENT mystery player than the server's independently-computed
-    // one, so refuse to start a game against a pool this incomplete
-    // rather than silently disagreeing with everyone else. The error
-    // message is a real "try again" prompt, not a generic failure.
-    if (eligiblePool.length < MIN_HEALTHY_POOL_SIZE) {
-      throw new Error(`Player pool came back incomplete (${eligiblePool.length} players) — the NHL API likely rate-limited a few requests. Refresh to try again.`);
-    }
-
-    state.teamMeta = teamMeta;
-    state.pool = eligiblePool.sort((a, b) => a.name.localeCompare(b.name));
-    state.poolById = new Map(pool.map((p) => [p.playerId, p]));
-    loadPuzzleForToday();
+    state.teamMeta = buildTeamMeta(standings);
+    await loadPuzzleForToday(); // fetches state.pool + picks/restores today's mystery
 
     el.subtitle.textContent = `A new player every day · ${state.pool.length.toLocaleString()} players in the pool`;
     el.skeleton.hidden = true;

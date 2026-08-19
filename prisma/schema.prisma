@@ -206,6 +206,23 @@ model DailyPlayer {
   date        String @id // "2026-08-16"
   nhlPlayerId Int
   attributes  Json // snapshot: team, position, nationality, age, etc.
+  // The exact roster/bio pool (loadServerPlayerBioPool()'s shape —
+  // playerId/name/team/pos/heightInInches/birthDate/birthCountry/
+  // headshot, birthDate+heightInInches-filtered) nhlPlayerId was picked
+  // from — frozen alongside the pick itself, once per day, so
+  // guesswho.js (the client) can fetch this SAME pool from
+  // GET /api/fantasy/guesswho-sync instead of independently re-fetching
+  // all 32 team rosters itself. That independent-fetch design is what
+  // caused a real bug (2026-08-19): the NHL API rate-limited some of
+  // those 32 parallel requests, silently shrinking the pool, so the
+  // client's OWN pick and the server's frozen pick came from different-
+  // sized pools and landed on different players — real solves got
+  // marked "not solved". Storing (and serving) ONE pool eliminates that
+  // by construction: everyone computes pickMysteryPlayer() against the
+  // literal same array. Nullable only for rows frozen before this field
+  // existed (see getOrFreezeDailyPlayer() in guesswho-sync.js for the
+  // backfill path) — every new row always sets it.
+  pool Json?
 }
 
 model DailyGuess {

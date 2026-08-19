@@ -22,7 +22,61 @@ async function getPoolCached() {
   return cachedPool;
 }
 
-/* POST /api/fantasy/guesswho-sync — session required.
+/** Get-or-create (or backfill) the frozen DailyPlayer row for `date` —
+ *  the ONE place both the GET (client's pool fetch) and POST (guess
+ *  sync) handlers below get today's answer+pool from, so they can never
+ *  disagree with each other by construction.
+ *
+ *  Three cases:
+ *  - Row exists with a pool already -> return it as-is, no fetch.
+ *  - Row doesn't exist at all -> race-safe create (upsert with a no-op
+ *    update — a concurrent racer just reads whoever wins the create,
+ *    same "first writer wins" semantics as before this had a pool).
+ *  - Row exists but predates the `pool` field (legacy) -> backfill the
+ *    pool in place WITHOUT touching the existing nhlPlayerId/attributes
+ *    — that day's answer already happened and may have real DailyGuess
+ *    rows referencing it; changing the answer itself would invalidate
+ *    real progress. (2026-08-19's specific known-bad row — frozen from
+ *    a corrupted small pool before this fix existed — was deleted by
+ *    hand rather than going through this path, since ITS pick was
+ *    provably wrong, not just missing a pool.) */
+async function getOrFreezeDailyPlayer(prisma, date) {
+  const existing = await prisma.dailyPlayer.findUnique({ where: { date } });
+  if (existing && existing.pool) return existing;
+
+  const pool = await getPoolCached();
+
+  if (existing) {
+    return prisma.dailyPlayer.update({ where: { date }, data: { pool } });
+  }
+
+  const mystery = pickMysteryPlayer(pool, date);
+  return prisma.dailyPlayer.upsert({
+    where: { date },
+    create: { date, nhlPlayerId: mystery.playerId, attributes: mystery, pool },
+    update: {}, // someone else's concurrent request may have beaten us to it — just read theirs
+  });
+}
+
+/* /api/fantasy/guesswho-sync
+
+   GET ?date=YYYY-MM-DD — PUBLIC (no auth; anonymous play must keep
+   working). Returns { ok, date, pool } — the SAME frozen roster/bio
+   pool that determined that date's mystery player (get-or-created via
+   getOrFreezeDailyPlayer(), same as the POST side below). guesswho.js
+   fetches this ONCE per page load instead of independently re-fetching
+   all 32 team rosters itself — the real fix for a real bug (2026-08-19):
+   firing 32 parallel roster requests routinely got some 429'd by the
+   NHL API, silently shrinking the pool, so the client's own pick and
+   the server's frozen pick came from different-sized pools and landed
+   on DIFFERENT players — real solves got marked "not solved" server-
+   side. Serving one server-frozen pool to everyone eliminates that by
+   construction: every client runs pickMysteryPlayer() against the
+   literal same array the server used. This doesn't leak anything new —
+   the picking algorithm was already public in guesswho.js's own source,
+   same as before.
+
+   POST — session required.
    Body: { date: "YYYY-MM-DD", guesses: number[], gameOver, won }
    (gameOver/won accepted but NOT trusted — solved/attempts are always
    recomputed server-side from `guesses` vs. the frozen DailyPlayer.)
@@ -41,11 +95,30 @@ async function getPoolCached() {
    DAILY_GUESS_REWARD) so guesswho.js can show a "+25 credits" toast
    without a second round trip. */
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ ok: false, error: 'method_not_allowed' });
-    return;
-  }
+  if (req.method === 'GET') return handleGetPool(req, res);
+  if (req.method === 'POST') return handleSync(req, res);
+  res.status(405).json({ ok: false, error: 'method_not_allowed' });
+};
 
+async function handleGetPool(req, res) {
+  try {
+    const prisma = getPrisma();
+    const url = new URL(req.url, 'http://localhost');
+    const date = url.searchParams.get('date') || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      res.status(400).json({ ok: false, error: 'invalid_input' });
+      return;
+    }
+
+    const dailyPlayer = await getOrFreezeDailyPlayer(prisma, date);
+    res.status(200).json({ ok: true, date, pool: dailyPlayer.pool });
+  } catch (err) {
+    console.error('fantasy/guesswho-sync (GET) error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+}
+
+async function handleSync(req, res) {
   try {
     const prisma = getPrisma();
     const user = await getSessionUser(req, prisma);
@@ -63,21 +136,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // Get-or-create the frozen mystery player for this date. First sync
-    // of the day (from anyone) computes and freezes it; every request
-    // after just reads the frozen row, guaranteeing every player (and
-    // every anonymous client computing the same thing independently)
-    // agrees on the same answer for a given date.
-    let dailyPlayer = await prisma.dailyPlayer.findUnique({ where: { date } });
-    if (!dailyPlayer) {
-      const pool = await getPoolCached();
-      const mystery = pickMysteryPlayer(pool, date);
-      dailyPlayer = await prisma.dailyPlayer.upsert({
-        where: { date },
-        create: { date, nhlPlayerId: mystery.playerId, attributes: mystery },
-        update: {}, // someone else's concurrent request may have beaten us to it — just read theirs
-      });
-    }
+    const dailyPlayer = await getOrFreezeDailyPlayer(prisma, date);
 
     const solved = guesses.includes(dailyPlayer.nhlPlayerId);
     const attempts = guesses.length;
@@ -114,7 +173,7 @@ module.exports = async function handler(req, res) {
 
     res.status(200).json({ ok: true, solved, attempts, creditsAwarded });
   } catch (err) {
-    console.error('fantasy/guesswho-sync error:', err);
+    console.error('fantasy/guesswho-sync (POST) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
-};
+}
