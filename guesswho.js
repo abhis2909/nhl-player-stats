@@ -18,6 +18,20 @@
 
 const MAX_GUESSES = 8;
 const AGE_CLOSE_TOLERANCE = 3; // years
+
+// Empirically ~811-813 players in a healthy fetch (all 32 teams'
+// rosters succeeded) — a real, confirmed bug: the NHL API rate-limits
+// firing 32 roster requests at once, silently shrinking the pool when
+// some fail (data.js's loadPlayerBioPool() degrades gracefully for its
+// OTHER callers, which don't need a hard guarantee — this game does,
+// since pickMysteryPlayer() is `hash % pool.length`, so a different
+// pool size almost always means a DIFFERENT mystery player than what
+// the server independently computes — a real player solving the
+// correct answer in-browser could get marked "not solved" server-side
+// purely because the two sides' pools ended up different sizes). Set
+// well below the healthy count so ordinary roster churn never trips
+// it, but several teams failing does.
+const MIN_HEALTHY_POOL_SIZE = 700;
 const HEIGHT_CLOSE_TOLERANCE = 2; // inches
 const POSITION_GROUP = { C: 'F', L: 'F', R: 'F', D: 'D', G: 'G' };
 const POSITION_LABEL = { C: 'C', L: 'LW', R: 'RW', D: 'D', G: 'G' };
@@ -608,8 +622,19 @@ async function init() {
     const pool = await loadPlayerBioPool(teamMeta);
     if (!pool.length) throw new Error('No players loaded');
 
+    const eligiblePool = pool.filter((p) => p.birthDate && p.heightInInches);
+    // See MIN_HEALTHY_POOL_SIZE's doc comment — a smaller-than-usual
+    // pool here (some teams' roster fetches failed) would pick a
+    // DIFFERENT mystery player than the server's independently-computed
+    // one, so refuse to start a game against a pool this incomplete
+    // rather than silently disagreeing with everyone else. The error
+    // message is a real "try again" prompt, not a generic failure.
+    if (eligiblePool.length < MIN_HEALTHY_POOL_SIZE) {
+      throw new Error(`Player pool came back incomplete (${eligiblePool.length} players) — the NHL API likely rate-limited a few requests. Refresh to try again.`);
+    }
+
     state.teamMeta = teamMeta;
-    state.pool = pool.filter((p) => p.birthDate && p.heightInInches).sort((a, b) => a.name.localeCompare(b.name));
+    state.pool = eligiblePool.sort((a, b) => a.name.localeCompare(b.name));
     state.poolById = new Map(pool.map((p) => [p.playerId, p]));
     loadPuzzleForToday();
 

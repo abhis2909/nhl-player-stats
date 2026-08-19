@@ -278,20 +278,58 @@ function seasonGameCount(skaters) {
   return skaters.reduce((max, p) => Math.max(max, p.gamesPlayed || 0), 0);
 }
 
+const ROSTER_FETCH_CONCURRENCY = 6; // teams in flight at once, not all 32
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Same retry-on-429/5xx shape as the server's guessWhoPool.js — a
+ *  local helper rather than changing the shared getJSON() above, so
+ *  this doesn't change retry behavior for every other page's fetches. */
+async function getJSONWithRetry(url, attempt = 1) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const retryable = res.status === 429 || res.status >= 500;
+    if (retryable && attempt < 3) {
+      await sleepMs(attempt * 600);
+      return getJSONWithRetry(url, attempt + 1);
+    }
+    throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  }
+  return res.json();
+}
+
 /** Fetches every team's current roster — bio info (height, weight, birth
  *  date/country, shoots/catches hand), not season stats — and flattens it
  *  into one array. Used by pages that need player BIOGRAPHY rather than
- *  performance (the Mini-Games hub's daily guessing game). One request per
- *  team (`/v1/roster/{abbrev}/current`), run in parallel; a team whose
- *  roster fails to load is skipped rather than failing the whole pool.
+ *  performance (the Mini-Games hub's daily guessing game, projections.js's
+ *  age curves, admin-deployment.js). Throttled to ROSTER_FETCH_CONCURRENCY
+ *  requests in flight at once instead of all 32 simultaneously, each
+ *  retried on a transient failure — real bug this fixes: firing all 32
+ *  at once routinely got some 429'd by the NHL API, silently shrinking
+ *  the pool (confirmed live: 811 players one call, 743 the next, a few
+ *  seconds apart). A team still failing after retries is skipped, not
+ *  fatal — callers that need a HARD guarantee on pool completeness
+ *  (guesswho.js specifically — an incomplete pool there means a
+ *  DIFFERENT mystery player than the server picked, not just slightly
+ *  less data) check the returned length themselves; this function stays
+ *  permissive since projections.js/admin-deployment.js would rather
+ *  degrade gracefully on a partial pool than hard-fail entirely.
  *  `teamMeta` supplies which abbrevs to fetch — reuse the Map already
  *  built by `buildTeamMeta()` so this always covers exactly the teams
  *  currently in the league. */
 async function loadPlayerBioPool(teamMeta) {
   const abbrevs = Array.from(teamMeta.keys());
-  const rosters = await Promise.all(
-    abbrevs.map((abbrev) => getJSON(`${API_WEB}/v1/roster/${abbrev}/current`).catch(() => null)),
-  );
+  const rosters = new Array(abbrevs.length).fill(null);
+  let next = 0;
+  async function worker() {
+    while (next < abbrevs.length) {
+      const i = next++;
+      rosters[i] = await getJSONWithRetry(`${API_WEB}/v1/roster/${abbrevs[i]}/current`).catch(() => null);
+    }
+  }
+  await Promise.all(Array.from({ length: ROSTER_FETCH_CONCURRENCY }, worker));
 
   const out = [];
   rosters.forEach((roster, i) => {
