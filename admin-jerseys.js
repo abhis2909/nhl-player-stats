@@ -19,7 +19,17 @@
    the same one used to produce jerseys/borr-transparent.png — that was
    done as a one-off Python script; this is that same approach ported
    to run live in the browser via Canvas, tuned from the same trial run
-   against that image. Lazy-loaded (window.__adminJerseysTab.ensureLoaded()). */
+   against that image.
+
+   The "already transparent" checkbox skips all of that and routes to
+   trimTransparent() instead — for a PNG someone already cut out
+   elsewhere. Running the flood-fill remover on one of those would be
+   actively harmful (it reasons purely off RGB, with no idea the alpha
+   channel is already doing the real work, so it could reclassify parts
+   of an already-clean cutout as background); trimTransparent() only
+   trusts the existing alpha and crops the excess margin.
+
+   Lazy-loaded (window.__adminJerseysTab.ensureLoaded()). */
 (function () {
   const TEAMS = [
     ['ANA', 'Anaheim Ducks'], ['BOS', 'Boston Bruins'], ['BUF', 'Buffalo Sabres'],
@@ -52,6 +62,8 @@
     stagedEmpty: document.getElementById('jerseyStagedEmpty'),
     stagedList: document.getElementById('jerseyStagedList'),
     clearStagedBtn: document.getElementById('jerseyClearStagedBtn'),
+    alreadyTransparent: document.getElementById('jerseyAlreadyTransparent'),
+    opaqueWarning: document.getElementById('jerseyOpaqueWarning'),
   };
 
   let loaded = false;
@@ -189,13 +201,57 @@
     return cropped;
   }
 
+  /** For a PNG that's already had its background removed elsewhere —
+   *  trusts the existing alpha channel completely (no flood fill, no
+   *  decontamination, no floor) and only trims the excess transparent
+   *  margin down to the real content, same as removeBackground()'s
+   *  crop step. Running the flood-fill remover on an image like this
+   *  would be actively harmful: it only looks at RGB, not the alpha
+   *  that's already doing the real work, so it could reclassify parts
+   *  of an already-clean cutout as "background." Returns
+   *  { canvas, hasTransparency } — hasTransparency false means nothing
+   *  in the file was actually transparent, which the caller surfaces
+   *  as a warning rather than silently shipping an opaque "cutout." */
+  function trimTransparent(imageData) {
+    const { width: w, height: h, data } = imageData;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    let hasTransparency = false;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const a = data[(y * w + x) * 4 + 3];
+        if (a < 250) hasTransparency = true;
+        if (a > 5) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < x0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; } // fully transparent file — nothing to trim to, bail to the full frame
+
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = w; srcCanvas.height = h;
+    srcCanvas.getContext('2d').putImageData(imageData, 0, 0);
+
+    const bw = x1 - x0 + 1;
+    const bh = y1 - y0 + 1;
+    const cropped = document.createElement('canvas');
+    cropped.width = bw; cropped.height = bh;
+    cropped.getContext('2d').drawImage(srcCanvas, x0, y0, bw, bh, 0, 0, bw, bh);
+    return { canvas: cropped, hasTransparency };
+  }
+
   function processFile(file) {
     el.processingNote.hidden = false;
     el.previewRow.hidden = true;
     el.downloadBtn.disabled = true;
     el.stageBtn.disabled = true;
+    el.opaqueWarning.hidden = true;
     processedBlob = null;
     processedThumb = null;
+
+    const skipRemoval = el.alreadyTransparent.checked;
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -214,7 +270,13 @@
 
         let outCanvas;
         try {
-          outCanvas = removeBackground(sctx.getImageData(0, 0, w, h));
+          if (skipRemoval) {
+            const { canvas, hasTransparency } = trimTransparent(sctx.getImageData(0, 0, w, h));
+            outCanvas = canvas;
+            el.opaqueWarning.hidden = hasTransparency;
+          } else {
+            outCanvas = removeBackground(sctx.getImageData(0, 0, w, h));
+          }
         } catch (err) {
           el.processingNote.textContent = `Couldn't process that image: ${err.message}`;
           return;

@@ -467,7 +467,15 @@
           <label for="jerseyFileInput">Jersey photo</label>
           <input id="jerseyFileInput" type="file" accept="image/*">
         </div>
+        <label class="check-item">
+          <input type="checkbox" id="jerseyAlreadyTransparent">
+          <span>This PNG already has its background removed — skip processing, just trim &amp; use it as-is</span>
+        </label>
         <p class="admin-hint" id="jerseyProcessingNote" hidden>Processing…</p>
+        <p class="warn-text" id="jerseyOpaqueWarning" hidden>
+          This file doesn't look like it actually has any transparency — double-check you exported it
+          as a PNG with the background removed, or uncheck the box above to run background removal here.
+        </p>
 
         <div class="adm-jersey-preview-row" id="jerseyPreviewRow" hidden>
           <div class="adm-jersey-preview-cell">
