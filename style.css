@@ -3487,11 +3487,99 @@ a.mg-game-card:hover {
 
 .pk-reveal-section h2 { font-size: 16px; margin: 34px 0 14px; }
 
-.pk-reveal-grid {
+/* ---------- Opening stage: spotlight flash + card rising into the light ---------- */
+
+.pk-stage {
+  position: relative;
+  height: 460px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 100%, #141a24 0%, #05070a 68%);
+  border: 1px solid var(--border);
+}
+
+.pk-stage-beams {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pk-beam {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 220px;
+  height: 100%;
+  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+  background: linear-gradient(to top, var(--t1, var(--accent)) 0%, transparent 78%);
+  opacity: 0;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  transform-origin: 50% 100%;
+}
+
+.pk-beam-c { transform: translateX(-50%) rotate(0deg); }
+.pk-beam-l { width: 180px; transform: translateX(-50%) rotate(-16deg); }
+.pk-beam-r { width: 180px; transform: translateX(-50%) rotate(16deg); }
+
+.pk-floor-glow {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  width: 260px;
+  height: 90px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, var(--t1, var(--accent)) 0%, transparent 72%);
+  opacity: 0;
+  filter: blur(4px);
+}
+
+.pk-stage-beams.pk-beam-flash .pk-beam,
+.pk-stage-beams.pk-beam-flash .pk-floor-glow {
+  animation: pk-beam-flash 1.5s ease-out forwards;
+}
+
+.pk-stage-beams.pk-beam-flash .pk-beam-l { animation-delay: 0.05s; }
+.pk-stage-beams.pk-beam-flash .pk-beam-r { animation-delay: 0.1s; }
+
+@keyframes pk-beam-flash {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  22% { opacity: 0.35; }
+  34% { opacity: 0.9; }
+  46% { opacity: 0.4; }
+  60%, 100% { opacity: 0.6; }
+}
+
+.pk-stage-card {
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 22px;
+  align-items: flex-end;
   justify-content: center;
+  padding-bottom: 28px;
+}
+
+/* Rises up from below the stage (clipped by .pk-stage's overflow:hidden
+   until this animation lifts it into view) timed to land as the
+   .pk-beam-flash beams settle, then gets a brief brightness pulse as if
+   the spotlight just caught it. */
+.jc-rise-in {
+  animation:
+    jc-rise-in 0.7s cubic-bezier(0.17, 0.89, 0.32, 1.25) 0.32s both,
+    jc-spotlit-pulse 0.6s ease-out 0.85s both;
+}
+
+@keyframes jc-rise-in {
+  0% { opacity: 0; transform: translateY(140px) scale(0.85); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes jc-spotlit-pulse {
+  0% { filter: brightness(1.6) drop-shadow(0 0 34px var(--t1)); }
+  100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
 .pk-reveal-actions {
@@ -3685,15 +3773,6 @@ a.mg-game-card:hover {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.jc-revealing {
-  animation: jc-reveal-in 0.45s ease backwards;
-}
-
-@keyframes jc-reveal-in {
-  from { opacity: 0; transform: translateY(16px) scale(0.9) rotate(-2deg); }
-  to { opacity: 1; transform: none; }
 }
 
 /* ---------- Collection progress + per-team pip rows ---------- */

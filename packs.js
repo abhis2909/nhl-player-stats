@@ -30,7 +30,7 @@ const TIERS = ['silver', 'gold', 'emerald', 'ruby', 'amethyst', 'diamond'];
 const TIER_WEIGHTS = { silver: 45, gold: 28, emerald: 15, ruby: 7, amethyst: 4, diamond: 1 };
 const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: 'Ruby', amethyst: 'Amethyst', diamond: 'Diamond' };
 
-const PACK = { name: 'Standard Jersey Pack', cardCount: 3 };
+const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
 const STORAGE_KEY = 'pk_jersey_collection_v1';
 
@@ -63,7 +63,8 @@ const el = {
   pack: document.getElementById('pkPack'),
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
-  revealGrid: document.getElementById('pkRevealGrid'),
+  stageBeams: document.getElementById('pkStageBeams'),
+  stageCard: document.getElementById('pkStageCard'),
   openAgainBtn: document.getElementById('pkOpenAgainBtn'),
   collection: document.getElementById('pkCollection'),
   progressLabel: document.getElementById('pkProgressLabel'),
@@ -145,25 +146,34 @@ function renderOdds() {
   el.odds.textContent = 'Odds: ' + TIERS.map((t) => `${TIER_LABEL[t]} ${(TIER_WEIGHTS[t] / total * 100).toFixed(0)}%`).join(' · ');
 }
 
+/** Plays the "spotlight" reveal: the tier-colored beams flash on first
+ *  (see .pk-beam-flash in style.css), then the jersey card rises up from
+ *  below the stage into the light (.jc-rise-in's animation-delay is
+ *  tuned to land right as the flash settles) and gets a brief brightness
+ *  pulse once it's "under" the light. Re-triggering CSS animations on a
+ *  repeat open needs the classList reset + a forced reflow below —
+ *  just re-adding the same class name is a no-op to the browser. */
+function playOpeningAnimation(pull, badge) {
+  el.stageBeams.className = 'pk-stage-beams';
+  void el.stageBeams.offsetWidth; // force reflow so the animation restarts
+  el.stageBeams.classList.add(`tier-${pull.tier}`, 'pk-beam-flash');
+
+  el.stageCard.innerHTML = '';
+  const card = buildJerseyCard(pull.team, pull.tier, { badge });
+  card.classList.add('jc-rise-in');
+  el.stageCard.appendChild(card);
+}
+
 function openPack() {
   el.openBtn.disabled = true;
-  const pulls = Array.from({ length: PACK.cardCount }, () => pullOne());
-
-  el.revealGrid.innerHTML = '';
-  el.revealSection.hidden = false;
-
-  pulls.forEach((pull, i) => {
-    const key = keyFor(pull.team, pull.tier);
-    const isNew = !state.collection[key];
-    state.collection[key] = (state.collection[key] || 0) + 1;
-
-    const card = buildJerseyCard(pull.team, pull.tier, { badge: isNew ? 'NEW' : `+1` });
-    card.classList.add('jc-revealing');
-    card.style.animationDelay = `${i * 0.18}s`;
-    el.revealGrid.appendChild(card);
-  });
-
+  const pull = pullOne();
+  const key = keyFor(pull.team, pull.tier);
+  const isNew = !state.collection[key];
+  state.collection[key] = (state.collection[key] || 0) + 1;
   saveCollection();
+
+  el.revealSection.hidden = false;
+  playOpeningAnimation(pull, isNew ? 'NEW' : '+1');
   renderCollection();
   el.revealSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   el.openBtn.disabled = false;
@@ -258,7 +268,7 @@ async function init() {
   el.loading.hidden = true;
   el.packName.textContent = PACK.name;
   el.packName2.textContent = PACK.name;
-  el.packCount.textContent = `${PACK.cardCount} jerseys`;
+  el.packCount.textContent = `${PACK.cardCount} jersey${PACK.cardCount === 1 ? '' : 's'}`;
   renderOdds();
   el.packSection.hidden = false;
 
