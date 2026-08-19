@@ -30,6 +30,18 @@ const TIERS = ['silver', 'gold', 'emerald', 'ruby', 'amethyst', 'diamond'];
 const TIER_WEIGHTS = { silver: 45, gold: 28, emerald: 15, ruby: 7, amethyst: 4, diamond: 1 };
 const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: 'Ruby', amethyst: 'Amethyst', diamond: 'Diamond' };
 
+// A second, independent roll on top of tier — a BGS-style grading slab
+// layered onto the pull, same "weighted odds" mechanic as tier but
+// deliberately its own axis: two Diamond pulls can still differ by
+// grade. NOT part of the collection key (state.collection stays
+// team+tier) — this is presentation/flavor on top of a pull, not a
+// separate thing to "own," so it's re-rolled fresh each pack open
+// rather than persisted.
+const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
+const GRADE_WEIGHTS = { '7': 13, '8': 25, '8.5': 28, '9': 22, '9.5': 10, '10': 2 };
+const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'PRISTINE' };
+const GRADE_COLOR = { '7': '#8b98ab', '8': '#aab0ba', '8.5': '#c7cdd6', '9': '#e8edf4', '9.5': '#ffffff', '10': '#ffd76a' };
+
 const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
 const STORAGE_KEY = 'pk_jersey_collection_v1';
@@ -53,12 +65,22 @@ const TEAM_COLORS = {
   WSH: ['#C8102E', '#041E42'], WPG: ['#041E42', '#004C97'],
 };
 
-// The one sample jersey (see jerseys/README.md) standing in for every
-// pull's art until real per-team images exist — background removed,
-// tightly cropped. Tier color still comes through via the CSS glow/
-// sheen wrapped around it (.jp-jersey-img/.jp-jersey-sheen below), not
-// from the image itself.
-const SAMPLE_JERSEY_IMG = 'jerseys/borr-transparent.png';
+// Jersey art registry — one explicit entry per team, `name` and `image`
+// both set deliberately (by the Jerseys tab on admin.html, or by hand
+// here) rather than guessed from the picture. A team with no entry
+// falls back to FALLBACK_JERSEY so every pull still renders something.
+// Mirrors the shape admin-jerseys.js's localStorage-staged entries use
+// (see admin.html) — copy an entry here verbatim to actually publish it
+// site-wide, since this file (not localStorage) is what every visitor
+// loads.
+const JERSEY_ART = {
+  BOS: { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png' },
+};
+const FALLBACK_JERSEY = { name: '', image: 'jerseys/borr-transparent.png' };
+
+function jerseyArtFor(team) {
+  return JERSEY_ART[team] || FALLBACK_JERSEY;
+}
 
 const el = {
   loading: document.getElementById('pkLoading'),
@@ -67,6 +89,7 @@ const el = {
   packName2: document.getElementById('pkPackName2'),
   packCount: document.getElementById('pkPackCount'),
   odds: document.getElementById('pkOdds'),
+  gradeOdds: document.getElementById('pkGradeOdds'),
   pack: document.getElementById('pkPack'),
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
@@ -99,20 +122,21 @@ function saveCollection() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.collection));
 }
 
-function pickWeightedTier() {
-  const total = TIERS.reduce((sum, t) => sum + TIER_WEIGHTS[t], 0);
+function pickWeighted(values, weights) {
+  const total = values.reduce((sum, v) => sum + weights[v], 0);
   let r = Math.random() * total;
-  for (const t of TIERS) {
-    r -= TIER_WEIGHTS[t];
-    if (r <= 0) return t;
+  for (const v of values) {
+    r -= weights[v];
+    if (r <= 0) return v;
   }
-  return TIERS[0];
+  return values[0];
 }
 
 function pullOne() {
   const team = state.abbrevs[Math.floor(Math.random() * state.abbrevs.length)];
-  const tier = pickWeightedTier();
-  return { team, tier };
+  const tier = pickWeighted(TIERS, TIER_WEIGHTS);
+  const grade = pickWeighted(GRADES, GRADE_WEIGHTS);
+  return { team, tier, grade };
 }
 
 function keyFor(team, tier) { return `${team}-${tier}`; }
@@ -146,6 +170,7 @@ function confettiHTML() {
 function buildJerseyPiece(team, tier, opts = {}) {
   const meta = state.teamMeta?.get(team);
   const teamName = meta?.common || meta?.name || team;
+  const art = jerseyArtFor(team);
 
   const piece = document.createElement('div');
   piece.className = `jersey-piece tier-${tier}${opts.animate ? ' jp-rise-in' : ''}`;
@@ -153,8 +178,14 @@ function buildJerseyPiece(team, tier, opts = {}) {
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
+        ${opts.grade ? `
+          <div class="jp-grade-plate">
+            <span class="jp-grade-num" style="color:${GRADE_COLOR[opts.grade]};">${opts.grade}</span>
+            <span class="jp-grade-label">${GRADE_LABEL[opts.grade]}</span>
+          </div>
+        ` : ''}
         <div class="jp-slab-holo"></div>
-        <div class="jp-slab-panel">
+        <div class="jp-slab-panel${opts.grade ? ' jp-slab-panel-graded' : ''}">
           <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
           <div class="jp-jersey-wrap">
             <span class="jp-sparkle" style="top:8%; left:6%; animation-delay:0s;"></span>
@@ -162,12 +193,13 @@ function buildJerseyPiece(team, tier, opts = {}) {
             <span class="jp-sparkle" style="top:80%; left:12%; animation-delay:1.6s;"></span>
             ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
             ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
-            <img class="jp-jersey-img" src="${SAMPLE_JERSEY_IMG}" alt="">
-            <span class="jp-jersey-sheen"></span>
+            <img class="jp-jersey-img" src="${art.image}" alt="">
+            <span class="jp-jersey-sheen" style="-webkit-mask-image:url('${art.image}'); mask-image:url('${art.image}');"></span>
           </div>
           <div class="jp-info">
             ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
             <div class="jp-team-name">${escapeHtml(teamName)}</div>
+            ${art.name ? `<div class="jp-jersey-label">${escapeHtml(art.name)}</div>` : ''}
           </div>
         </div>
       </div>
@@ -180,6 +212,10 @@ function buildJerseyPiece(team, tier, opts = {}) {
 function renderOdds() {
   const total = TIERS.reduce((sum, t) => sum + TIER_WEIGHTS[t], 0);
   el.odds.textContent = 'Odds: ' + TIERS.map((t) => `${TIER_LABEL[t]} ${(TIER_WEIGHTS[t] / total * 100).toFixed(0)}%`).join(' · ');
+
+  const gradeTotal = GRADES.reduce((sum, g) => sum + GRADE_WEIGHTS[g], 0);
+  el.gradeOdds.textContent = 'Grade odds: ' + GRADES.slice().reverse()
+    .map((g) => `${g} ${(GRADE_WEIGHTS[g] / gradeTotal * 100).toFixed(0)}%`).join(' · ');
 }
 
 /** Plays the "ring of spotlights" reveal: five beams + the light-ring +
@@ -201,7 +237,7 @@ function playOpeningAnimation(pull, badge) {
   el.stageFixtures.classList.add('pk-fixture-flash');
 
   el.stagePiece.innerHTML = '';
-  el.stagePiece.appendChild(buildJerseyPiece(pull.team, pull.tier, { badge, animate: true }));
+  el.stagePiece.appendChild(buildJerseyPiece(pull.team, pull.tier, { badge, grade: pull.grade, animate: true }));
 }
 
 function openPack() {

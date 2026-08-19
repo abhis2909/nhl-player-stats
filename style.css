@@ -3859,6 +3859,42 @@ a.mg-game-card:hover {
   align-items: center;
 }
 
+/* Only rounded on the bottom when a .jp-grade-plate sits above it —
+   the plate owns the top corners in that layout instead. */
+.jp-slab-panel-graded { border-radius: 0 0 19px 19px; }
+
+/* ---- BGS-style grading plate: an independent second roll from tier
+   (see GRADES/GRADE_WEIGHTS in packs.js) — a real graded-slab holder
+   always has this label strip above the card window, so it sits above
+   .jp-slab-panel rather than competing with the tier pill inside it. ---- */
+.jp-grade-plate {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 19px 19px 0 0;
+  background: linear-gradient(180deg, #17130c 0%, #050403 100%);
+  border-bottom: 2px solid #d4af37;
+}
+
+.jp-grade-num {
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.jp-grade-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #d4af37;
+}
+
 .tier-emerald .jp-slab-panel  { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 42%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
 .tier-ruby .jp-slab-panel     { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 46%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
 .tier-amethyst .jp-slab-panel { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 50%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
@@ -3950,14 +3986,14 @@ a.mg-game-card:hover {
   border-radius: 20px;
 }
 
-/* The one sample jersey image (jerseys/borr-transparent.png, background
-   already removed — see packs.js's SAMPLE_JERSEY_IMG) standing in for
-   every pull until real per-team art exists. Since it's a raster image
-   now, not a colorable CSS shape, tier rarity comes through as a glow
-   wrapped around its actual alpha silhouette (filter: drop-shadow
+/* Jersey art (see packs.js's JERSEY_ART registry — one shared sample
+   image for any team without a real entry yet). Since it's a raster
+   image, not a colorable CSS shape, tier rarity comes through as a
+   glow wrapped around its actual alpha silhouette (filter: drop-shadow
    follows transparency, unlike box-shadow) plus a sheen sweep clipped
    to that same silhouette via mask-image using the image itself as the
-   mask. */
+   mask — packs.js sets both the <img> src and the mask-image inline
+   per pull, so this rule's url() is only the pre-JS/no-JS fallback. */
 .jp-jersey-img {
   position: relative;
   z-index: 1;
@@ -4014,6 +4050,17 @@ a.mg-game-card:hover {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* The jersey art's own label (JERSEY_ART[team].name, e.g. "Bobby Orr —
+   #4") — only rendered when the art registry has one, distinct from
+   the team name above it. */
+.jp-jersey-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: -4px;
 }
 
 /* ---- Confetti burst, timed to fire as the slab lands (see the 2.3s+
