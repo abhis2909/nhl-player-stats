@@ -64,7 +64,7 @@ const el = {
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
   stageBeams: document.getElementById('pkStageBeams'),
-  stageCard: document.getElementById('pkStageCard'),
+  stagePiece: document.getElementById('pkStagePiece'),
   openAgainBtn: document.getElementById('pkOpenAgainBtn'),
   collection: document.getElementById('pkCollection'),
   progressLabel: document.getElementById('pkProgressLabel'),
@@ -109,36 +109,41 @@ function pullOne() {
 
 function keyFor(team, tier) { return `${team}-${tier}`; }
 
-/** Builds one jersey card as a DOM node. `opts.badge` ("NEW"/"+1"), if
- *  given, renders a pull-result ribbon (reveal context only). `opts.count`,
- *  if given, renders an owned-count chip (collection context only). */
-function buildJerseyCard(team, tier, opts = {}) {
+/** Builds one jersey — just the jersey, no card frame around it (see
+ *  style.css's .jersey-piece/.jp-* block) — as a DOM node. `opts.badge`
+ *  ("NEW"/"+1"), if given, renders a pull-result ribbon. `opts.count`,
+ *  if given, renders an owned-count chip instead (collection context).
+ *  `opts.animate` plays the stage entrance (rise-in + spotlit flash +
+ *  idle hover); omit it for a static, already-settled render (the
+ *  collection's click-to-preview modal). */
+function buildJerseyPiece(team, tier, opts = {}) {
   const meta = state.teamMeta?.get(team);
   const [primary, secondary] = TEAM_COLORS[team] || DEFAULT_COLORS;
   const teamName = meta?.common || meta?.name || team;
 
-  const card = document.createElement('div');
-  card.className = `jersey-card tier-${tier}`;
-  card.innerHTML = `
-    <div class="jc-inner">
-      <div class="jc-tier-tag">${TIER_LABEL[tier]}</div>
-      <span class="jc-sparkle" style="top:16%; left:12%; animation-delay:0s;"></span>
-      <span class="jc-sparkle" style="top:30%; left:84%; animation-delay:0.9s;"></span>
-      <span class="jc-sparkle" style="top:50%; left:18%; animation-delay:1.6s;"></span>
-      ${opts.badge ? `<div class="jc-pull-badge jc-pull-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
-      ${opts.count ? `<div class="jc-count-chip">×${opts.count}</div>` : ''}
-      <div class="jc-jersey-wrap">
-        <div class="jc-jersey" style="--team1:${primary}; --team2:${secondary};">
-          <span class="jc-jersey-abbrev">${escapeHtml(team)}</span>
+  const piece = document.createElement('div');
+  piece.className = `jersey-piece tier-${tier}${opts.animate ? ' jp-rise-in' : ''}`;
+  if (!opts.animate) piece.style.opacity = '1'; // skip the entrance's initial hidden state
+  piece.innerHTML = `
+    <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
+      <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
+      <div class="jp-jersey-wrap ${opts.animate ? 'jp-spotlit' : ''}">
+        <span class="jp-sparkle" style="top:10%; left:8%; animation-delay:0s;"></span>
+        <span class="jp-sparkle" style="top:28%; left:88%; animation-delay:0.9s;"></span>
+        <span class="jp-sparkle" style="top:78%; left:14%; animation-delay:1.6s;"></span>
+        ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
+        ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
+        <div class="jp-jersey" style="--team1:${primary}; --team2:${secondary};">
+          <span class="jp-jersey-abbrev">${escapeHtml(team)}</span>
         </div>
       </div>
-      <div class="jc-info">
-        ${meta?.logo ? `<img class="jc-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
-        <div class="jc-team-name">${escapeHtml(teamName)}</div>
+      <div class="jp-info">
+        ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
+        <div class="jp-team-name">${escapeHtml(teamName)}</div>
       </div>
     </div>
   `;
-  return card;
+  return piece;
 }
 
 function renderOdds() {
@@ -146,22 +151,22 @@ function renderOdds() {
   el.odds.textContent = 'Odds: ' + TIERS.map((t) => `${TIER_LABEL[t]} ${(TIER_WEIGHTS[t] / total * 100).toFixed(0)}%`).join(' · ');
 }
 
-/** Plays the "spotlight" reveal: the tier-colored beams flash on first
- *  (see .pk-beam-flash in style.css), then the jersey card rises up from
- *  below the stage into the light (.jc-rise-in's animation-delay is
- *  tuned to land right as the flash settles) and gets a brief brightness
- *  pulse once it's "under" the light. Re-triggering CSS animations on a
- *  repeat open needs the classList reset + a forced reflow below —
- *  just re-adding the same class name is a no-op to the browser. */
+/** Plays the "ring of spotlights" reveal: five beams + the light-ring
+ *  at the jersey's feet flash on first (see .pk-beam-flash in
+ *  style.css, ~2.2s), then the jersey rises up smoothly from below the
+ *  stage into the light (.jp-rise-in's 1s delay is tuned to land right
+ *  as the flash settles), gets a brief brightness pulse as the light
+ *  "catches" it, then settles into a slow idle hover. Re-triggering CSS
+ *  animations on a repeat open needs the classList reset + a forced
+ *  reflow below — just re-adding the same class name is a no-op to the
+ *  browser. */
 function playOpeningAnimation(pull, badge) {
   el.stageBeams.className = 'pk-stage-beams';
   void el.stageBeams.offsetWidth; // force reflow so the animation restarts
   el.stageBeams.classList.add(`tier-${pull.tier}`, 'pk-beam-flash');
 
-  el.stageCard.innerHTML = '';
-  const card = buildJerseyCard(pull.team, pull.tier, { badge });
-  card.classList.add('jc-rise-in');
-  el.stageCard.appendChild(card);
+  el.stagePiece.innerHTML = '';
+  el.stagePiece.appendChild(buildJerseyPiece(pull.team, pull.tier, { badge, animate: true }));
 }
 
 function openPack() {
@@ -219,8 +224,7 @@ function renderCollection() {
 function openJerseyModal(team, tier) {
   const count = state.collection[keyFor(team, tier)] || 0;
   el.modalContent.innerHTML = '';
-  const card = buildJerseyCard(team, tier, { count });
-  el.modalContent.appendChild(card);
+  el.modalContent.appendChild(buildJerseyPiece(team, tier, { count }));
   el.modalRoot.hidden = false;
 }
 
