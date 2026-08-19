@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Jersey Packs — Mini-Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎽</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🎽</span>
+      <div>
+        <h1>Hockey Hub</h1>
+        <p class="subtitle">Open packs, collect every team's jersey.</p>
+      </div>
+    </div>
+    <div id="fhAuthSlot" class="fh-auth-slot"></div>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <a href="index.html" class="nav-tab">📊 Player Stats</a>
+    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
+    <a href="minigames.html" class="nav-tab active">🎮 Mini-Games</a>
+    <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
+    <a href="admin.html" class="nav-tab">⚙ Admin</a>
+  </nav>
+</header>
+
+<main class="pk-page">
+  <p class="gw-back"><a href="minigames.html">← Mini-Games</a></p>
+
+  <p class="gw-intro pk-preview-note">
+    🧪 <strong>Preview build.</strong> Packs are free to open while this is being tested, and your pulls are
+    saved in this browser only (<code>localStorage</code>) — nothing here is shared with the league yet.
+    Spending real credits and a synced collection are coming once this is wired up to the database.
+  </p>
+
+  <div id="pkLoading" class="gw-loading" aria-hidden="true">Loading team data…</div>
+
+  <section id="pkPackSection" class="pk-pack-section" hidden>
+    <div class="pk-pack-shelf">
+      <div class="pk-pack" id="pkPack">
+        <div class="pk-pack-shine"></div>
+        <span class="pk-pack-icon" aria-hidden="true">🎽</span>
+        <span class="pk-pack-name" id="pkPackName">Standard Jersey Pack</span>
+        <span class="pk-pack-count" id="pkPackCount">3 jerseys</span>
+      </div>
+      <div class="pk-pack-info">
+        <h2 id="pkPackName2">Standard Jersey Pack</h2>
+        <p>Every pull is a random team's jersey at a random rarity tier — six tiers, same gem system as
+          Player Ratings cards.</p>
+        <p class="pk-odds" id="pkOdds"></p>
+        <button type="button" id="pkOpenBtn" class="primary-btn">Open Pack</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="pkRevealSection" class="pk-reveal-section" hidden>
+    <h2>Your Pull</h2>
+    <div class="pk-reveal-grid" id="pkRevealGrid"></div>
+    <div class="pk-reveal-actions">
+      <button type="button" id="pkOpenAgainBtn" class="primary-btn">Open Another Pack</button>
+      <a href="#pkCollection" class="ghost-btn">View Collection ↓</a>
+    </div>
+  </section>
+
+  <section id="pkCollection" class="pk-collection-section" hidden>
+    <div class="pk-collection-head">
+      <div>
+        <h2>My Collection</h2>
+        <p class="pk-progress-label" id="pkProgressLabel"></p>
+        <div class="pk-progress-bar"><div class="pk-progress-fill" id="pkProgressFill"></div></div>
+      </div>
+      <button type="button" id="pkResetBtn" class="ghost-btn danger-btn">🗑 Reset Collection</button>
+    </div>
+    <div class="pk-team-rows" id="pkTeamRows"></div>
+  </section>
+</main>
+
+<div id="pkModalRoot" class="modal-root" hidden>
+  <div class="modal-overlay" id="pkModalOverlay"></div>
+  <div class="modal-panel pk-modal-panel" role="dialog" aria-modal="true" aria-label="Jersey details">
+    <button class="modal-close" id="pkModalClose" aria-label="Close">✕</button>
+    <div id="pkModalContent"></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <p>
+    Team names/logos via the unofficial
+    <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>. Not affiliated with or
+    endorsed by the NHL. For personal / educational use.
+  </p>
+</footer>
+
+<script src="data.js" defer></script>
+<script src="avatar.js" defer></script>
+<script src="fantasy-auth.js" defer></script>
+<script src="packs.js" defer></script>
+</body>
+</html>

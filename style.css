@@ -3418,3 +3418,376 @@ a.mg-game-card:hover {
   .fh-trade-vs { padding-top: 0; text-align: center; }
   .fh-avatar-editor { flex-direction: column; }
 }
+
+/* ---------- Player Jersey Packs (packs.html) ---------- */
+
+.pk-preview-note {
+  background: rgba(79, 179, 255, 0.08);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+}
+
+.pk-preview-note code {
+  background: var(--bg-hover);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+.pk-pack-shelf {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.pk-pack {
+  position: relative;
+  width: 150px;
+  height: 200px;
+  flex: none;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #1b2532, #0c1119);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.pk-pack:hover { transform: translateY(-3px); }
+
+.pk-pack-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.12) 48%, rgba(255, 255, 255, 0.22) 52%, transparent 68%);
+  background-size: 240% 240%;
+  animation: pc-sheen-sweep 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.pk-pack-icon { font-size: 44px; }
+.pk-pack-name { font-weight: 800; font-size: 13.5px; text-align: center; padding: 0 10px; }
+.pk-pack-count { font-size: 11.5px; color: var(--text-dim); }
+
+.pk-pack-info { flex: 1; min-width: 240px; }
+.pk-pack-info h2 { margin: 0 0 6px; font-size: 18px; }
+.pk-pack-info p { margin: 0 0 10px; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+.pk-odds { font-size: 11.5px !important; color: var(--text-faint) !important; }
+
+.pk-reveal-section h2 { font-size: 16px; margin: 34px 0 14px; }
+
+.pk-reveal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  justify-content: center;
+}
+
+.pk-reveal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Jersey card: reuses the .tier-silver..diamond gem system
+   (~line 1298 above) so rarity reads as one visual language across both
+   Player Ratings cards and jersey pulls — a different shell/inner here
+   (.jc-* vs .pc-*) since there's no headshot, but the shimmer/sheen/
+   sparkle keyframes (pc-shimmer/pc-sheen-sweep/pc-twinkle) are reused
+   rather than redefined. ---------- */
+
+.jersey-card {
+  width: 280px;
+  height: 380px;
+  border-radius: 20px;
+  position: relative;
+  padding: 3px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  flex: none;
+}
+
+.jersey-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 3px;
+  opacity: var(--shimmer-opacity);
+  background: linear-gradient(115deg, var(--t1), var(--t-accent), var(--t2), var(--t-accent), var(--t1));
+  background-size: 300% 300%;
+  animation: pc-shimmer var(--shimmer-speed) ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.tier-silver.jersey-card::before { background: var(--t1); }
+
+.jc-inner {
+  position: relative;
+  height: 100%;
+  border-radius: 17px;
+  overflow: hidden;
+  background: linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%);
+  display: flex;
+  flex-direction: column;
+}
+
+.tier-emerald .jc-inner  { background: radial-gradient(circle at 50% 30%, var(--t1) 0%, transparent 42%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-ruby .jc-inner     { background: radial-gradient(circle at 50% 30%, var(--t1) 0%, transparent 46%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-amethyst .jc-inner { background: radial-gradient(circle at 50% 30%, var(--t1) 0%, transparent 50%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+.tier-diamond .jc-inner  { background: radial-gradient(circle at 50% 30%, var(--t1) 0%, transparent 54%), linear-gradient(175deg, var(--t2) 0%, #0c0f14 72%); }
+
+.jc-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    transparent 38%,
+    rgba(255, 255, 255, calc(var(--sheen-peak) * 0.35)) 46%,
+    rgba(255, 255, 255, var(--sheen-peak)) 50%,
+    rgba(255, 255, 255, calc(var(--sheen-peak) * 0.35)) 54%,
+    transparent 62%
+  );
+  background-size: 240% 240%;
+  mix-blend-mode: overlay;
+  animation: pc-sheen-sweep var(--shimmer-speed) ease-in-out infinite;
+}
+
+.jc-tier-tag {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--t2);
+  background: linear-gradient(120deg, var(--t-accent), var(--t1));
+  padding: 3px 12px;
+  border-radius: 20px;
+  z-index: 4;
+}
+
+.jc-sparkle {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  width: 9px;
+  height: 9px;
+  background: radial-gradient(circle, #fff 0%, transparent 72%);
+  clip-path: polygon(50% 0%, 61% 40%, 100% 50%, 61% 60%, 50% 100%, 39% 60%, 0% 50%, 39% 40%);
+  pointer-events: none;
+  animation: pc-twinkle 2.4s ease-in-out infinite;
+}
+
+.tier-amethyst .jc-sparkle,
+.tier-diamond .jc-sparkle {
+  display: block;
+}
+
+.jc-pull-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 7;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 4px 9px;
+  border-radius: 20px;
+}
+
+.jc-pull-badge-new { background: #1f7a4d; color: #eafff0; }
+.jc-pull-badge-dupe { background: var(--bg-hover); color: var(--text-dim); }
+
+.jc-count-chip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 7;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--t-accent);
+  padding: 4px 9px;
+  border-radius: 20px;
+}
+
+.jc-jersey-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  padding: 30px 0 10px;
+}
+
+.jc-jersey {
+  width: 168px;
+  height: 168px;
+  position: relative;
+  clip-path: polygon(22% 4%, 38% 4%, 50% 15%, 62% 4%, 78% 4%, 96% 17%, 80% 33%, 70% 25%, 70% 96%, 30% 96%, 30% 25%, 20% 33%, 4% 17%);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, transparent 30%),
+    linear-gradient(180deg, var(--team1) 0%, var(--team1) 55%, var(--team2) 55%, var(--team2) 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jc-jersey-abbrev {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.jc-info {
+  position: relative;
+  z-index: 3;
+  padding: 4px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.jc-team-logo { width: 30px; height: 30px; object-fit: contain; }
+
+.jc-team-name {
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.3px;
+  background: linear-gradient(180deg, #fff, var(--t-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.jc-revealing {
+  animation: jc-reveal-in 0.45s ease backwards;
+}
+
+@keyframes jc-reveal-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.9) rotate(-2deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Collection progress + per-team pip rows ---------- */
+
+.pk-collection-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 40px 0 18px;
+}
+
+.pk-collection-head h2 { margin: 0 0 4px; font-size: 16px; }
+
+.pk-progress-label { margin: 0 0 8px; color: var(--text-dim); font-size: 12.5px; }
+
+.pk-progress-bar {
+  width: 260px;
+  max-width: 60vw;
+  height: 8px;
+  border-radius: 20px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.pk-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width 0.3s ease;
+}
+
+.pk-team-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pk-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 14px;
+  background: var(--bg-elevated);
+  flex-wrap: wrap;
+}
+
+.pk-team-row:nth-child(even) { background: var(--bg); }
+
+.pk-team-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 160px;
+}
+
+.pk-team-row-label img { width: 20px; height: 20px; object-fit: contain; }
+
+.pk-pip-row { display: flex; gap: 6px; }
+
+.pk-pip {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  padding: 0;
+  cursor: default;
+  background: var(--t1, var(--bg-hover));
+  border: 2px solid var(--t1, var(--border));
+}
+
+.pk-pip-locked {
+  background: transparent !important;
+  border: 2px dashed var(--border) !important;
+  opacity: 0.5;
+}
+
+.pk-pip-owned {
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--t1, transparent);
+}
+
+.pk-pip-owned:hover { transform: scale(1.15); }
+
+.pk-modal-panel { max-width: 340px; display: flex; justify-content: center; }
+
+@media (max-width: 640px) {
+  .pk-pack-shelf { flex-direction: column; text-align: center; padding: 20px; }
+  .pk-pack-info { text-align: center; }
+  .pk-team-row { justify-content: center; text-align: center; }
+  .pk-team-row-label { justify-content: center; }
+}
