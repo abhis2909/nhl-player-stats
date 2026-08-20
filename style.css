@@ -3890,24 +3890,25 @@ a.mg-game-card:hover {
   100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
-/* ---- The slab itself: a real molded frame (brushed-metal band,
-   beveled) around the tier-colored display window, rather than a thin
-   foil line — with the tier color carried as the frame's accents (the
-   sweeping light in ::before, the trim ring where frame meets panel,
-   the grade plate's underline) instead of being the frame's own base
-   material, so every tier reads as "the same frame, a different
-   rarity's light in it" rather than a differently-colored frame each
-   time. ---- */
+/* ---- The slab itself: a real collectible-case layout — header strip
+   (team monogram, player name, rating box) / display window (jersey +
+   a decorative side icon) / footer strip (team name, item id, tier
+   pill) — rather than a generic bordered rectangle. Inspired by a
+   reference the user shared (a goldish-tan graded-slab mockup); the
+   structure carries over, but the color is generalized from that
+   reference's single fixed gold-tan to every tier's own --t1/--t2/
+   --t-accent, since this site has six rarities to support, not one. ---- */
 
 .jp-slab {
   position: relative;
-  width: 250px;
-  border-radius: 22px;
-  padding: 12px;
-  background: linear-gradient(155deg, #45454b 0%, #201f22 45%, #0a0a0b 100%);
+  width: 264px;
+  border-radius: 20px;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(165deg, var(--t1) 0%, var(--t2) 55%, #05070a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -3px 6px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 34px 60px rgba(10, 6, 2, 0.65),
     0 0 46px rgba(255, 180, 90, 0.12);
 }
@@ -3925,121 +3926,175 @@ a.mg-game-card:hover {
   filter: blur(3px);
 }
 
-/* A tier-colored light sweeping across the metal frame (same
-   border-only reveal trick as before — an inset content-box XORed out
-   of the full box leaves just the band) rather than the frame's own
-   material being rainbow foil. Silver stays a plain static glint since
-   it has no shimmer (--shimmer-speed: 999s freezes the animation). */
+/* A soft diagonal sheen across the whole slab body (not just a border
+   ring, now that the body itself carries the tier color) — same
+   shimmer timing as the rest of the tier system, low-opacity overlay
+   blend so it reads as a light catching the case rather than
+   obscuring anything under it. */
 .jp-slab::before {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 22px;
-  padding: 12px;
-  background: linear-gradient(115deg, transparent 15%, var(--t-accent) 40%, var(--t1) 50%, var(--t-accent) 60%, transparent 85%);
-  background-size: 300% 300%;
-  opacity: 0.8;
+  z-index: 0;
+  background: linear-gradient(115deg, transparent 30%, var(--t-accent) 48%, #fff 50%, var(--t-accent) 52%, transparent 70%);
+  background-size: 250% 250%;
+  opacity: calc(var(--shimmer-opacity) * 0.35);
+  mix-blend-mode: overlay;
   animation: pc-shimmer var(--shimmer-speed) ease infinite;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
 }
 
-/* A vivid tier-colored backdrop (not just a dark panel with a hint of
-   color) — the rarity color IS the backdrop the card sits against,
-   rather than something the card itself has to carry. Same radial
-   shape for every tier via --t1/--t2 (no more per-tier overrides
-   below), so silver reads as a muted grey backdrop and diamond as a
-   bright icy one purely from its own tier colors, no special-casing. */
-.jp-slab-panel {
+.jp-slab-top,
+.jp-slab-middle,
+.jp-slab-bottom {
   position: relative;
-  border-radius: 19px;
+  z-index: 1;
+}
+
+/* ---- Header: team monogram, player name + rarity subtitle, and (when
+   a grade was rolled) the rating box — mirrors the reference's
+   logo/title/rating-box row. ---- */
+.jp-slab-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.jp-slab-logo {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(5, 7, 10, 0.55);
+  border: 1.5px solid var(--t-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 38%, var(--t1) 0%, var(--t2) 62%, #05070a 100%);
-  padding: 18px 16px 20px;
+}
+
+.jp-slab-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; }
+.jp-slab-logo span { font-size: 15px; font-weight: 800; color: var(--t-accent); }
+
+.jp-slab-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.jp-slab-player-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.jp-slab-subtitle {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--t-accent);
+  opacity: 0.9;
+}
+
+.jp-rating-box {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* The trim ring where the neutral metal frame meets the colored
-     window — this, not the frame material itself, is what carries the
-     rarity color at this boundary. */
-  box-shadow: 0 0 0 2px var(--t1), inset 0 0 24px rgba(0, 0, 0, 0.4);
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(5, 7, 10, 0.55);
+  border: 1px solid var(--t-accent);
 }
 
-/* Only rounded on the bottom when a .jp-grade-plate sits above it —
-   the plate owns the top corners in that layout instead. */
-.jp-slab-panel-graded { border-radius: 0 0 19px 19px; }
-
-/* ---- BGS-style grading plate: an independent second roll from tier
-   (see GRADES/GRADE_WEIGHTS in packs.js) — a real graded-slab holder
-   always has this label strip above the card window, so it sits above
-   .jp-slab-panel rather than competing with the tier pill inside it.
-   Underline now tracks the tier accent (was a fixed gold) so this
-   plate reads as part of the same rarity-accented frame as the trim
-   ring and shimmer, not a separately-styled element. ---- */
-.jp-grade-plate {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 19px 19px 0 0;
-  background: linear-gradient(180deg, #17130c 0%, #050403 100%);
-  border-bottom: 2px solid var(--t1);
+.jp-rating-title, .jp-rating-desc {
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--t-accent);
 }
 
-.jp-grade-num {
-  font-size: 21px;
+.jp-rating-score {
+  font-size: 18px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.jp-grade-label {
+/* ---- Middle: the display window (jersey photo) plus a decorative
+   crossed-sticks icon, inside an etched panel — same "trim ring where
+   the case meets the window" idea as before, just relocated to frame
+   the whole middle section rather than the photo alone. ---- */
+.jp-slab-middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 14px;
+  margin: 10px 12px;
+  border-radius: 12px;
+  background: rgba(5, 7, 10, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.jp-slab-side-icon {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--t-accent);
+  opacity: 0.75;
+}
+
+.jp-slab-side-icon svg { width: 100%; height: 100%; }
+
+/* ---- Footer: team name + a flavor item id, and the tier pill. ---- */
+.jp-slab-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.jp-slab-footer-text { min-width: 0; }
+
+.jp-slab-team-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.jp-slab-item-id {
+  font-size: 9px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  color: var(--t-accent);
+  opacity: 0.85;
+  letter-spacing: 0.3px;
+}
+
+.jp-tier-tag {
+  flex: 0 0 auto;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: #d4af37;
-}
-
-
-/* Rainbow foil pattern behind everything else in the panel — a classic
-   holographic-card sheen, tinted per-tier by riding on --shimmer-opacity
-   (silver stays deliberately faint/plain, same principle as the rest of
-   the tier system). */
-.jp-slab-holo {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(115deg, #ff9a9e 0%, #fecfef 18%, #a6c1ee 36%, #c2e9fb 52%, #d4fc79 68%, #fddb92 84%, #ff9a9e 100%);
-  background-size: 280% 280%;
-  opacity: calc(var(--shimmer-opacity) * 0.18);
-  mix-blend-mode: color-dodge;
-  animation: jp-holo-shift 7s ease infinite;
-  pointer-events: none;
-}
-
-@keyframes jp-holo-shift {
-  0%, 100% { background-position: 0% 30%; }
-  50% { background-position: 100% 70%; }
-}
-
-.jp-tier-tag {
-  position: relative;
-  z-index: 1;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-transform: uppercase;
   color: var(--t2);
   background: linear-gradient(120deg, var(--t-accent), var(--t1));
-  padding: 4px 14px;
+  padding: 3px 10px;
   border-radius: 20px;
-  margin-bottom: 14px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
@@ -4093,34 +4148,21 @@ a.mg-game-card:hover {
   border-radius: 20px;
 }
 
-/* Jersey art (see packs.js's JERSEY_ART registry — one shared sample
-   image for any team without a real entry yet) rendered as a plain
-   rectangular photo card — background included, no transparency
-   required. .jp-jersey-photo owns the rounded corners + tier glow (a
-   normal box-shadow, since there's no alpha silhouette to follow
-   anymore) and clips the sheen sweep to that same rectangle via
-   overflow:hidden; .jp-jersey-wrap stays overflow:visible one level
-   up so the badge/count-chip/sparkles positioned just outside the
-   photo's edges aren't clipped along with it.
-
-   Uploaded jersey photos each carry whatever background color they
-   happened to be shot/generated on (grey, tan, flat black, ...) — a
-   flat rectangle of that color, cropped hard, sitting on top of
-   .jp-slab-panel's own tier-colored backdrop below. Earlier this tried
-   to hide that seam by feathering the photo's own edges to transparent
-   (a mask-image); the current approach leans the other way instead —
-   own the rectangle as a lit display window (bright --t-accent border
-   + --t1 glow, like a museum-case frame), so the backdrop reads as
-   deliberately behind the card rather than something the card is
-   trying to fade into. */
+/* The jersey photo, as a lit display window inside .jp-slab-middle —
+   background included, no transparency required. Owns the rounded
+   corners + tier glow (a normal box-shadow) and clips the sheen sweep
+   via overflow:hidden; .jp-jersey-wrap stays overflow:visible one
+   level up so the badge/count-chip/sparkles positioned just outside
+   the photo's edges aren't clipped along with it. Sized to leave room
+   for .jp-slab-side-icon alongside it within the middle section. */
 .jp-jersey-photo {
   position: relative;
   z-index: 1;
-  width: 172px;
+  width: 158px;
   border-radius: 10px;
   overflow: hidden;
   border: 2px solid var(--t-accent);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 22px var(--t1), var(--glow), 0 10px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 18px var(--t1), var(--glow), 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
 .jp-jersey-img {
@@ -4145,40 +4187,6 @@ a.mg-game-card:hover {
   background-size: 240% 240%;
   mix-blend-mode: overlay;
   animation: pc-sheen-sweep var(--shimmer-speed) ease-in-out infinite;
-}
-
-.jp-info {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.jp-team-logo { width: 30px; height: 30px; object-fit: contain; }
-
-.jp-team-name {
-  font-size: 14.5px;
-  font-weight: 800;
-  text-align: center;
-  letter-spacing: 0.3px;
-  background: linear-gradient(180deg, #fff, var(--t-accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* The jersey art's own label (JERSEY_ART[team].name, e.g. "Bobby Orr —
-   #4") — only rendered when the art registry has one, distinct from
-   the team name above it. */
-.jp-jersey-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-align: center;
-  margin-top: -4px;
 }
 
 /* ---- Confetti burst, timed to fire as the slab lands (see the 2.3s+
@@ -4487,7 +4495,8 @@ a.mg-game-card:hover {
 .adm-grid-cell canvas { display: block; width: 100%; height: auto; border-radius: 4px; }
 
 .adm-grid-cell-team,
-.adm-grid-cell-name {
+.adm-grid-cell-name,
+.adm-grid-cell-tier {
   width: 100%;
   padding: 6px 8px;
   border-radius: 6px;

@@ -24,7 +24,13 @@
       and trim margins, preview the slice lines, then cut it into one
       canvas per cell (plain rectangular crops, same as the single-photo
       default — no background removal) so each player just needs its
-      team/name confirmed instead of a separate upload.
+      team/name/rarity confirmed instead of a separate upload.
+
+   Both tools ask for a "Rarity class" alongside team/name — this is
+   what packs.js's pullOne() actually weights pulls by (see its
+   ALL_PLAYERS/TIER_WEIGHTS): a player's tier is fixed at classification
+   time here, not rolled independently per pull, so this dropdown is a
+   real gameplay decision, not cosmetic metadata.
 
    Both tools also let you pull in an image already committed to
    jerseys/ (fetchImageFromRepo()) instead of only a fresh upload —
@@ -57,9 +63,18 @@
   const STORAGE_KEY = 'adm_jersey_staged_v1';
   const MAX_DIMENSION = 700; // downscale anything bigger, for speed — matches the scale jerseys/borr.jpg was processed at
 
+  // Mirrors packs.js's TIERS/TIER_LABEL — kept as its own copy rather
+  // than shared, since admin-jerseys.js is loaded on admin.html, which
+  // never loads packs.js. Rarity is now a property of the player set
+  // here at upload time (see packs.js's pullOne()/ALL_PLAYERS), not
+  // something rolled per pull — this is the one place that gets decided.
+  const TIERS = ['silver', 'gold', 'emerald', 'ruby', 'amethyst', 'diamond'];
+  const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: 'Ruby', amethyst: 'Amethyst', diamond: 'Diamond' };
+
   const el = {
     teamSelect: document.getElementById('jerseyTeamSelect'),
     nameInput: document.getElementById('jerseyNameInput'),
+    tierSelect: document.getElementById('jerseyTierSelect'),
     fileInput: document.getElementById('jerseyFileInput'),
     processingNote: document.getElementById('jerseyProcessingNote'),
     previewRow: document.getElementById('jerseyPreviewRow'),
@@ -310,6 +325,10 @@
     return TEAMS.map(([abbrev, name]) => `<option value="${abbrev}">${escapeHtmlLocal(name)} (${abbrev})</option>`).join('');
   }
 
+  function tierOptionsHtml() {
+    return TIERS.map((t) => `<option value="${t}">${TIER_LABEL[t]}</option>`).join('');
+  }
+
   function filenameFor(team, name) {
     return `${slugify(team || 'jersey')}${name ? '-' + slugify(name) : ''}.png`;
   }
@@ -367,8 +386,15 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   }
 
+  /** The bare player object — {name, image, tier} — same shape as one
+   *  element inside a JERSEY_ART[team] array, deliberately WITHOUT the
+   *  team key: pasting this straight into an existing team's array
+   *  (e.g. BUF's) just works, and for a brand-new team it needs
+   *  wrapping in `TEAM: [ ... ]` (or `TEAM: { ... }` for a single
+   *  entry) by hand — the tool has no way to know whether the target
+   *  team already has an array in packs.js or not. */
   function snippetFor(entry) {
-    return `  ${entry.team}: { name: '${entry.name.replace(/'/g, "\\'")}', image: 'jerseys/${entry.filename}' },`;
+    return `{ name: '${entry.name.replace(/'/g, "\\'")}', image: 'jerseys/${entry.filename}', tier: '${entry.tier}' },`;
   }
 
   function renderStaged() {
@@ -380,7 +406,7 @@
           <img class="adm-jersey-staged-thumb" src="${entry.thumb}" alt="">
           <div class="adm-jersey-staged-info">
             <strong>${escapeHtmlLocal(entry.name)}</strong>
-            <span>${escapeHtmlLocal(entry.team)} — ${escapeHtmlLocal(entry.filename)}</span>
+            <span>${escapeHtmlLocal(entry.team)} — ${TIER_LABEL[entry.tier] || entry.tier} — ${escapeHtmlLocal(entry.filename)}</span>
           </div>
           <div class="adm-jersey-staged-actions">
             <button type="button" class="link-btn" data-remove="${i}">Remove</button>
@@ -391,9 +417,9 @@
     `).join('');
   }
 
-  function stageEntry(team, name, filename, thumb) {
+  function stageEntry(team, name, tier, filename, thumb) {
     const list = loadStaged();
-    list.push({ team, name, filename, thumb });
+    list.push({ team, name, tier, filename, thumb });
     saveStaged(list);
     renderStaged();
   }
@@ -425,7 +451,7 @@
       setTimeout(() => { el.saveStatus.textContent = ''; }, 2500);
       return;
     }
-    stageEntry(team, name, filenameFor(team, name), processedThumb);
+    stageEntry(team, name, el.tierSelect.value, filenameFor(team, name), processedThumb);
     el.saveStatus.textContent = 'Staged. Download the PNG above if you haven’t already.';
     setTimeout(() => { el.saveStatus.textContent = ''; }, 3500);
   }
@@ -511,7 +537,7 @@
           x0 + c * cellW, y0 + r * cellH, cellW, cellH,
           0, 0, canvas.width, canvas.height,
         );
-        gridCells.push({ canvas, team: TEAMS[0][0], name: '' });
+        gridCells.push({ canvas, team: TEAMS[0][0], name: '', tier: TIERS[0] });
       }
     }
     document.getElementById('gridSliceStatus').textContent = `Sliced into ${gridCells.length} cells.`;
@@ -526,6 +552,7 @@
         <div class="adm-jersey-checker"><canvas class="adm-grid-cell-canvas" width="${cell.canvas.width}" height="${cell.canvas.height}"></canvas></div>
         <select class="adm-grid-cell-team" data-cell-team="${i}">${teamOptionsHtml()}</select>
         <input type="text" class="adm-grid-cell-name" data-cell-name="${i}" placeholder="Name / label" value="${escapeHtmlLocal(cell.name)}">
+        <select class="adm-grid-cell-tier" data-cell-tier="${i}">${tierOptionsHtml()}</select>
         <div class="adm-grid-cell-actions">
           <button type="button" class="ghost-btn" data-cell-download="${i}">⬇</button>
           <button type="button" class="primary-btn" data-cell-publish="${i}">☁ Publish</button>
@@ -542,6 +569,8 @@
       target.getContext('2d').drawImage(cell.canvas, 0, 0);
       const teamSelect = list.querySelector(`[data-cell-team="${i}"]`);
       teamSelect.value = cell.team;
+      const tierSelect = list.querySelector(`[data-cell-tier="${i}"]`);
+      tierSelect.value = cell.tier;
     });
   }
 
@@ -593,6 +622,8 @@
       if (teamI !== undefined) { gridCells[Number(teamI)].team = e.target.value; return; }
       const nameI = e.target.dataset.cellName;
       if (nameI !== undefined) { gridCells[Number(nameI)].name = e.target.value; return; }
+      const tierI = e.target.dataset.cellTier;
+      if (tierI !== undefined) { gridCells[Number(tierI)].tier = e.target.value; return; }
     });
     list.addEventListener('input', (e) => {
       const nameI = e.target.dataset.cellName;
@@ -615,7 +646,7 @@
         const cell = gridCells[i];
         if (!cell.name.trim()) { statusFor(i).textContent = 'Give it a name first.'; return; }
         const filename = filenameFor(cell.team, cell.name);
-        stageEntry(cell.team, cell.name, filename, thumbFromCanvas(cell.canvas));
+        stageEntry(cell.team, cell.name, cell.tier, filename, thumbFromCanvas(cell.canvas));
         statusFor(i).textContent = 'Staged.';
         return;
       }
@@ -673,6 +704,7 @@
 
   function init() {
     el.teamSelect.innerHTML = teamOptionsHtml();
+    el.tierSelect.innerHTML = tierOptionsHtml();
     wireEvents();
     renderStaged();
   }

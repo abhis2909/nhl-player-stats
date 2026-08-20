@@ -446,10 +446,14 @@
           <h2>Jersey Pack Art</h2>
         </div>
         <p class="admin-hint">
-          Upload a jersey photo, pick its team and give it a name — the background is removed right
-          here in your browser (nothing uploads until you click Publish). <strong>Publish to
+          Upload a jersey photo, pick its team, give it a name, and classify its rarity — the
+          background is removed right here in your browser (nothing uploads until you click
+          Publish). <strong>Rarity class</strong> is what drives pack odds: a pull picks a random
+          <em>player</em> weighted by their class's odds (see the odds strip on
+          <code>packs.html</code>), so a card's tier is fixed to that specific player rather than
+          rolled independently — pick it deliberately, it's not cosmetic. <strong>Publish to
           GitHub</strong> commits the processed PNG straight to this repo's <code>jerseys/</code>
-          folder. That's the image only, though — it doesn't wire the team up to it: copy the
+          folder. That's the image only, though — it doesn't wire the player up to it: copy the
           snippet below into <code>packs.js</code>'s <code>JERSEY_ART</code> yourself (or hand it to
           Claude) to actually put it in the game. See <code>jerseys/README.md</code>.
         </p>
@@ -462,6 +466,10 @@
           <div class="fh-field">
             <label for="jerseyNameInput">Name / label</label>
             <input id="jerseyNameInput" type="text" placeholder="e.g. Bobby Orr — #4">
+          </div>
+          <div class="fh-field">
+            <label for="jerseyTierSelect">Rarity class</label>
+            <select id="jerseyTierSelect"></select>
           </div>
         </div>
         <div class="fh-field">
@@ -512,8 +520,9 @@
           For a poster-style sheet of many jerseys in one image (e.g. a generated "Top 20" grid) —
           set the rows/columns and trim off any title bar or border, preview the slice lines, then
           cut it into one card per cell. Each cell is a plain rectangular crop, same as above (no
-          background removal) — just confirm the team and name for each before downloading/
-          publishing.
+          background removal) — just confirm the team, name, and <strong>rarity class</strong> for
+          each before downloading/publishing (see the note above — class drives pack odds per
+          player, it's not just a label).
         </p>
         <div class="fh-field">
           <label for="gridFileInput">Grid image</label>

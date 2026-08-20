@@ -4,8 +4,16 @@
    Player Jersey Packs — Mini-Games page 2 (Game 5 from fantasy-hub's
    design doc, "player packs", built here as a JERSEY collectible rather
    than a stat-card collectible — cards.html/ratings.js already own the
-   player-rating-card idea, so packs pull a random TEAM's jersey at a
-   random rarity tier instead of a random player).
+   player-rating-card idea).
+
+   Rarity is a property of the PLAYER, not the pull: each JERSEY_ART
+   entry is classified into a tier at upload time (Admin -> Jerseys'
+   "Rarity class" select), and a pack pull picks a random player
+   weighted by TIER_WEIGHTS applied to each player's own tier (see
+   ALL_PLAYERS/pickWeightedBy/pullOne below) — so which specific player
+   you get and which rarity you get are the same roll, not two
+   independent ones. (Grade is still its own independent second roll on
+   top of that — see GRADE_WEIGHTS.)
 
    PREVIEW BUILD: no backend yet. Nothing here touches CreditTransaction/
    Card/Pack/UserCard/PackOpening (see prisma/schema.prisma — those exist
@@ -33,12 +41,23 @@ const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: '
 // A second, independent roll on top of tier — a BGS-style grading slab
 // layered onto the pull, same "weighted odds" mechanic as tier but
 // deliberately its own axis: two Diamond pulls can still differ by
-// grade. NOT part of the collection key (state.collection stays
-// team+tier) — this is presentation/flavor on top of a pull, not a
-// separate thing to "own," so it's re-rolled fresh each pack open
-// rather than persisted.
+// grade. NOT part of the collection key (state.collection keys off the
+// player, not the grade) — this is presentation/flavor on top of a
+// pull, not a separate thing to "own," so it's re-rolled fresh each
+// pack open rather than persisted.
+//
+// Weights are a discretized normal distribution — mean 8, sigma 1 —
+// sampled at each grade's actual numeric value (so 8.5 and 9 are only
+// half a point apart while 7 and 8 are a full point, matching real BGS
+// grade spacing) and normalized to sum to 100:
+//   python3 -c "import math; mean=8; sigma=1
+//   xs=[7,8,8.5,9,9.5,10]
+//   raw=[math.exp(-((x-mean)**2)/(2*sigma**2)) for x in xs]
+//   print([round(r/sum(raw)*100) for r in raw])"
+// -> [17, 28, 25, 17, 9, 4] — 8 is the clear peak, tapering off
+// symmetrically-ish in both directions (matching "8 most common").
 const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
-const GRADE_WEIGHTS = { '7': 13, '8': 25, '8.5': 28, '9': 22, '9.5': 10, '10': 2 };
+const GRADE_WEIGHTS = { '7': 17, '8': 28, '8.5': 25, '9': 17, '9.5': 9, '10': 4 };
 const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'PRISTINE' };
 const GRADE_COLOR = { '7': '#8b98ab', '8': '#aab0ba', '8.5': '#c7cdd6', '9': '#e8edf4', '9.5': '#ffffff', '10': '#ffd76a' };
 
@@ -46,77 +65,67 @@ const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
 const STORAGE_KEY = 'pk_jersey_collection_v1';
 
-// Hand-maintained team primary/secondary colors — not currently drawn
-// anywhere (the jersey art below is one shared sample image, not
-// per-team tinted; see SAMPLE_JERSEY_IMG), kept as the offline fallback
-// list of abbrevs (state.abbrevs, below) and ready for whenever real
-// per-team jersey art replaces the sample.
-const TEAM_COLORS = {
-  ANA: ['#F47A38', '#111111'], BOS: ['#FFB81C', '#000000'], BUF: ['#002654', '#FCB514'],
-  CGY: ['#C8102E', '#F1BE48'], CAR: ['#CC0000', '#000000'], CHI: ['#CF0A2C', '#000000'],
-  COL: ['#6F263D', '#236192'], CBJ: ['#002654', '#CE1126'], DAL: ['#006847', '#8F8F8C'],
-  DET: ['#CE1126', '#FFFFFF'], EDM: ['#041E42', '#FF4C00'], FLA: ['#C8102E', '#041E42'],
-  LAK: ['#111111', '#A2AAAD'], MIN: ['#154734', '#A6192E'], MTL: ['#AF1E2D', '#192168'],
-  NSH: ['#FFB81C', '#041E42'], NJD: ['#CE1126', '#000000'], NYI: ['#00539B', '#F47D30'],
-  NYR: ['#0038A8', '#CE1126'], OTT: ['#C52032', '#000000'], PHI: ['#F74902', '#000000'],
-  PIT: ['#FCB514', '#000000'], SJS: ['#006D75', '#EA7200'], SEA: ['#001628', '#99D9D9'],
-  STL: ['#002F87', '#FCB514'], TBL: ['#002868', '#FFFFFF'], TOR: ['#00205B', '#FFFFFF'],
-  UTA: ['#71AFE5', '#101820'], VAN: ['#00205B', '#00843D'], VGK: ['#B4975A', '#333F42'],
-  WSH: ['#C8102E', '#041E42'], WPG: ['#041E42', '#004C97'],
-};
-
-// Jersey art registry — `name` and `image` both set deliberately (by the
-// Jerseys tab on admin.html, or by hand here) rather than guessed from the
-// picture. A team maps to either one entry (BOS below) or an array of them
-// (BUF below, sliced from a "Top 20" grid via the admin Grid Splitter) —
-// a pull for that team picks a random one from the array, so a team with
-// a deep roster of jerseys shows a different player each time instead of
-// always the same face. A team with no entry falls back to FALLBACK_JERSEY
-// so every pull still renders something. Mirrors the shape
-// admin-jerseys.js's localStorage-staged entries use (see admin.html) —
-// copy an entry here verbatim to actually publish it site-wide, since this
-// file (not localStorage) is what every visitor loads.
+// Jersey art registry — `name`, `image`, and `tier` all set deliberately
+// (by the Jerseys tab on admin.html's "Rarity class" select, or by hand
+// here) rather than guessed. A team maps to either one entry (a single
+// object) or an array of them (BOS/BUF below) — every entry, regardless
+// of team, is one card in the pool a pull draws from (see ALL_PLAYERS):
+// there's no per-team pull step anymore, so a team with zero entries
+// just never comes up rather than falling back to a placeholder. Mirrors
+// the shape admin-jerseys.js's localStorage-staged entries use (see
+// admin.html) — copy an entry here verbatim to actually publish it
+// site-wide, since this file (not localStorage) is what every visitor
+// loads.
+//
+// `tier` currently defaults every entry below to 'silver' — real
+// classification (which of these are actually Diamond-caliber legends
+// vs. depth guys) is a call for the site owner to make via Admin ->
+// Jerseys, not something to guess at here. Until that happens, every
+// pull will land on silver (TIER_WEIGHTS' by-far-largest bucket) since
+// nothing's classified into the other five yet — expected, not a bug.
 const JERSEY_ART = {
   BOS: [
-    { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png' },
+    { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png', tier: 'silver' },
     // Published via Admin -> Jerseys with the team dropdown left on its
     // default (Anaheim) — the jersey itself is unmistakably Boston
     // (black/gold, ORR #4), so it's filed here rather than under ANA.
     // Filename kept as originally published (ana-bobby-orr.png); only
     // this registry entry's team placement was corrected.
-    { name: 'Bobby Orr — #4 (alt)', image: 'jerseys/ana-bobby-orr.png' },
-    { name: 'Ray Bourque — #77', image: 'jerseys/bos-ray-bourque.png' },
+    { name: 'Bobby Orr — #4 (alt)', image: 'jerseys/ana-bobby-orr.png', tier: 'silver' },
+    { name: 'Ray Bourque — #77', image: 'jerseys/bos-ray-bourque.png', tier: 'silver' },
   ],
   BUF: [
-    { name: 'Perreault — #11', image: 'jerseys/buf-perreault-11.png' },
-    { name: 'Hasek — #39', image: 'jerseys/buf-hasek-39.png' },
-    { name: 'Lafontaine — #16', image: 'jerseys/buf-lafontaine-16.png' },
-    { name: 'Gare — #18', image: 'jerseys/buf-gare-18.png' },
-    { name: 'Andreychuk — #26', image: 'jerseys/buf-andreychuk-26.png' },
-    { name: 'Ruff — #22', image: 'jerseys/buf-ruff-22.png' },
-    { name: 'Ramsay — #14', image: 'jerseys/buf-ramsay-14.png' },
-    { name: 'Martin — #7', image: 'jerseys/buf-martin-7.png' },
-    { name: 'Robert — #8', image: 'jerseys/buf-robert-8.png' },
-    { name: 'Miller — #30', image: 'jerseys/buf-miller-30.png' },
-    { name: 'Vanek — #26', image: 'jerseys/buf-vanek-26.png' },
-    { name: 'Drury — #23', image: 'jerseys/buf-drury-23.png' },
-    { name: 'Briere — #48', image: 'jerseys/buf-briere-48.png' },
-    { name: 'Pominville — #29', image: 'jerseys/buf-pominville-29.png' },
-    { name: 'Afinogenov — #61', image: 'jerseys/buf-afinogenov-61.png' },
-    { name: 'Roy — #9', image: 'jerseys/buf-roy-9.png' },
-    { name: 'Thompson — #72', image: 'jerseys/buf-thompson-72.png' },
-    { name: 'Schoenfeld — #6', image: 'jerseys/buf-schoenfeld-6.png' },
-    { name: 'Korab — #4', image: 'jerseys/buf-korab-4.png' },
-    { name: 'Dahlin — #26', image: 'jerseys/buf-dahlin-26.png' },
+    { name: 'Perreault — #11', image: 'jerseys/buf-perreault-11.png', tier: 'silver' },
+    { name: 'Hasek — #39', image: 'jerseys/buf-hasek-39.png', tier: 'silver' },
+    { name: 'Lafontaine — #16', image: 'jerseys/buf-lafontaine-16.png', tier: 'silver' },
+    { name: 'Gare — #18', image: 'jerseys/buf-gare-18.png', tier: 'silver' },
+    { name: 'Andreychuk — #26', image: 'jerseys/buf-andreychuk-26.png', tier: 'silver' },
+    { name: 'Ruff — #22', image: 'jerseys/buf-ruff-22.png', tier: 'silver' },
+    { name: 'Ramsay — #14', image: 'jerseys/buf-ramsay-14.png', tier: 'silver' },
+    { name: 'Martin — #7', image: 'jerseys/buf-martin-7.png', tier: 'silver' },
+    { name: 'Robert — #8', image: 'jerseys/buf-robert-8.png', tier: 'silver' },
+    { name: 'Miller — #30', image: 'jerseys/buf-miller-30.png', tier: 'silver' },
+    { name: 'Vanek — #26', image: 'jerseys/buf-vanek-26.png', tier: 'silver' },
+    { name: 'Drury — #23', image: 'jerseys/buf-drury-23.png', tier: 'silver' },
+    { name: 'Briere — #48', image: 'jerseys/buf-briere-48.png', tier: 'silver' },
+    { name: 'Pominville — #29', image: 'jerseys/buf-pominville-29.png', tier: 'silver' },
+    { name: 'Afinogenov — #61', image: 'jerseys/buf-afinogenov-61.png', tier: 'silver' },
+    { name: 'Roy — #9', image: 'jerseys/buf-roy-9.png', tier: 'silver' },
+    { name: 'Thompson — #72', image: 'jerseys/buf-thompson-72.png', tier: 'silver' },
+    { name: 'Schoenfeld — #6', image: 'jerseys/buf-schoenfeld-6.png', tier: 'silver' },
+    { name: 'Korab — #4', image: 'jerseys/buf-korab-4.png', tier: 'silver' },
+    { name: 'Dahlin — #26', image: 'jerseys/buf-dahlin-26.png', tier: 'silver' },
   ],
 };
-const FALLBACK_JERSEY = { name: '', image: 'jerseys/borr-transparent.png' };
 
-function jerseyArtFor(team) {
-  const entry = JERSEY_ART[team];
-  if (!entry) return FALLBACK_JERSEY;
-  return Array.isArray(entry) ? entry[Math.floor(Math.random() * entry.length)] : entry;
-}
+// Flattened once at load: every JERSEY_ART entry, from every team,
+// as one flat list of pullable players — this (not JERSEY_ART directly)
+// is what pullOne()/renderCollection() actually operate on, so the pull
+// doesn't care whether a team's entries happen to be grouped as an
+// array or a single object above.
+const ALL_PLAYERS = Object.entries(JERSEY_ART).flatMap(([team, entries]) =>
+  (Array.isArray(entries) ? entries : [entries]).map((entry) => ({ ...entry, team }))
+);
 
 const el = {
   loading: document.getElementById('pkLoading'),
@@ -145,9 +154,8 @@ const el = {
 };
 
 const state = {
-  teamMeta: null, // Map from data.js's buildTeamMeta()
-  abbrevs: [],
-  collection: loadCollection(), // { "TOR-diamond": 3, ... }
+  teamMeta: null, // Map from data.js's buildTeamMeta() — team logos/common-names only, cosmetic
+  collection: loadCollection(), // { "jerseys/buf-hasek-39.png": 3, ... } — keyed by player (see keyFor())
 };
 
 function loadCollection() {
@@ -168,14 +176,37 @@ function pickWeighted(values, weights) {
   return values[0];
 }
 
-function pullOne() {
-  const team = state.abbrevs[Math.floor(Math.random() * state.abbrevs.length)];
-  const tier = pickWeighted(TIERS, TIER_WEIGHTS);
-  const grade = pickWeighted(GRADES, GRADE_WEIGHTS);
-  return { team, tier, grade };
+/** Same idea as pickWeighted, but for a list of arbitrary objects whose
+ *  weight comes from a function instead of a plain {value: weight} map
+ *  — used to weight ALL_PLAYERS by each player's own tier's odds. */
+function pickWeightedBy(items, weightFn) {
+  const total = items.reduce((sum, it) => sum + weightFn(it), 0);
+  if (total <= 0) return items[Math.floor(Math.random() * items.length)];
+  let r = Math.random() * total;
+  for (const it of items) {
+    r -= weightFn(it);
+    if (r <= 0) return it;
+  }
+  return items[items.length - 1];
 }
 
-function keyFor(team, tier) { return `${team}-${tier}`; }
+/** The pull: one player, drawn from every classified jersey in
+ *  ALL_PLAYERS weighted by TIER_WEIGHTS[player.tier] — so tier and
+ *  player are one roll, not two (a Diamond pull IS whichever player is
+ *  actually classified Diamond, never a mismatch). Grade is still its
+ *  own separate roll on top. */
+function pullOne() {
+  const player = pickWeightedBy(ALL_PLAYERS, (p) => TIER_WEIGHTS[p.tier] || 0);
+  const grade = pickWeighted(GRADES, GRADE_WEIGHTS);
+  return { player, team: player.team, tier: player.tier, grade };
+}
+
+// The collection key is the player, not team+tier — tier is now fixed
+// per player rather than an independent roll, so "own BOS at Diamond"
+// isn't a meaningful separate thing from "own whichever specific player
+// is BOS's Diamond card" the way it used to be. image is already a
+// stable per-player unique id (every jersey is its own file).
+function keyFor(player) { return player.image; }
 
 /** Random confetti-piece HTML: N rectangles flung outward from center on
  *  random angles/distances, colored from the tier palette. Only used in
@@ -196,17 +227,24 @@ function confettiHTML() {
   return html;
 }
 
-/** Builds one jersey slab — a graded-card-style holder (holographic
- *  border + foil sheen) with the jersey inside, as a DOM node.
- *  `opts.badge` ("NEW"/"+1"), if given, renders a pull-result ribbon.
- *  `opts.count`, if given, renders an owned-count chip instead
- *  (collection context). `opts.animate` plays the stage entrance
- *  (rise-in + confetti burst + idle hover); omit it for a static,
- *  already-settled render (the collection's click-to-preview modal). */
-function buildJerseyPiece(team, tier, opts = {}) {
-  const meta = state.teamMeta?.get(team);
-  const teamName = meta?.common || meta?.name || team;
-  const art = jerseyArtFor(team);
+/** Builds one jersey slab — a real graded-collectible layout (header
+ *  strip with team monogram/player name/rating box, a middle display
+ *  window with the jersey art + a decorative side icon, a footer with
+ *  team name + item id + tier pill), as a DOM node. Takes the player
+ *  object straight from ALL_PLAYERS/pullOne() — tier comes from
+ *  `player.tier`, not a separate argument, since the two are the same
+ *  roll now (see pullOne()). `opts.badge` ("NEW"/"+1"), if given,
+ *  renders a pull-result ribbon. `opts.count`, if given, renders an
+ *  owned-count chip instead (collection context). `opts.grade`, if
+ *  given, renders the rating box (omitted in some static previews
+ *  where no grade was rolled — see openJerseyModal). `opts.animate`
+ *  plays the stage entrance (rise-in + confetti burst + idle hover);
+ *  omit it for a static, already-settled render. */
+function buildJerseyPiece(player, opts = {}) {
+  const tier = player.tier;
+  const meta = state.teamMeta?.get(player.team);
+  const teamName = meta?.common || meta?.name || player.team;
+  const itemId = player.image.split('/').pop().replace(/\.[a-z0-9]+$/i, '').toUpperCase();
 
   const piece = document.createElement('div');
   piece.className = `jersey-piece tier-${tier}${opts.animate ? ' jp-rise-in' : ''}`;
@@ -214,15 +252,23 @@ function buildJerseyPiece(team, tier, opts = {}) {
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
-        ${opts.grade ? `
-          <div class="jp-grade-plate">
-            <span class="jp-grade-num" style="color:${GRADE_COLOR[opts.grade]};">${opts.grade}</span>
-            <span class="jp-grade-label">${GRADE_LABEL[opts.grade]}</span>
+        <div class="jp-slab-top">
+          <div class="jp-slab-logo">
+            ${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : `<span>${escapeHtml((teamName || '?').slice(0, 1))}</span>`}
           </div>
-        ` : ''}
-        <div class="jp-slab-holo"></div>
-        <div class="jp-slab-panel${opts.grade ? ' jp-slab-panel-graded' : ''}">
-          <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
+          <div class="jp-slab-heading">
+            <div class="jp-slab-player-name">${escapeHtml(player.name || teamName)}</div>
+            <div class="jp-slab-subtitle">${TIER_LABEL[tier]} Collectible</div>
+          </div>
+          ${opts.grade ? `
+            <div class="jp-rating-box">
+              <span class="jp-rating-title">Card Rating</span>
+              <span class="jp-rating-score" style="color:${GRADE_COLOR[opts.grade]};">${opts.grade}</span>
+              <span class="jp-rating-desc">${GRADE_LABEL[opts.grade]}</span>
+            </div>
+          ` : ''}
+        </div>
+        <div class="jp-slab-middle">
           <div class="jp-jersey-wrap">
             <span class="jp-sparkle" style="top:8%; left:6%; animation-delay:0s;"></span>
             <span class="jp-sparkle" style="top:24%; left:90%; animation-delay:0.9s;"></span>
@@ -230,15 +276,26 @@ function buildJerseyPiece(team, tier, opts = {}) {
             ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
             ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
             <div class="jp-jersey-photo">
-              <img class="jp-jersey-img" src="${art.image}" alt="">
+              <img class="jp-jersey-img" src="${player.image}" alt="">
               <span class="jp-jersey-sheen"></span>
             </div>
           </div>
-          <div class="jp-info">
-            ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}
-            <div class="jp-team-name">${escapeHtml(teamName)}</div>
-            ${art.name ? `<div class="jp-jersey-label">${escapeHtml(art.name)}</div>` : ''}
+          <div class="jp-slab-side-icon" aria-hidden="true">
+            <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round">
+              <line x1="20" y1="80" x2="80" y2="20" />
+              <line x1="20" y1="20" x2="80" y2="80" />
+              <line x1="20" y1="80" x2="35" y2="85" />
+              <line x1="80" y1="80" x2="65" y2="85" />
+              <ellipse cx="50" cy="88" rx="7" ry="3.4" fill="currentColor" stroke="none" />
+            </svg>
           </div>
+        </div>
+        <div class="jp-slab-bottom">
+          <div class="jp-slab-footer-text">
+            <div class="jp-slab-team-name">${escapeHtml(teamName)}</div>
+            <div class="jp-slab-item-id">#${escapeHtml(itemId)}</div>
+          </div>
+          <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
         </div>
       </div>
       ${opts.animate ? `<div class="jp-confetti">${confettiHTML()}</div>` : ''}
@@ -275,13 +332,13 @@ function playOpeningAnimation(pull, badge) {
   el.stageFixtures.classList.add('pk-fixture-flash');
 
   el.stagePiece.innerHTML = '';
-  el.stagePiece.appendChild(buildJerseyPiece(pull.team, pull.tier, { badge, grade: pull.grade, animate: true }));
+  el.stagePiece.appendChild(buildJerseyPiece(pull.player, { badge, grade: pull.grade, animate: true }));
 }
 
 function openPack() {
   el.openBtn.disabled = true;
   const pull = pullOne();
-  const key = keyFor(pull.team, pull.tier);
+  const key = keyFor(pull.player);
   const isNew = !state.collection[key];
   state.collection[key] = (state.collection[key] || 0) + 1;
   saveCollection();
@@ -293,47 +350,52 @@ function openPack() {
   el.openBtn.disabled = false;
 }
 
+/** Lists every classified player as its own row (one pip each, colored
+ *  by that player's fixed tier) — replaces the old team x tier pip
+ *  grid, which stopped making sense once tier became a property of the
+ *  player rather than something independently rolled per team. */
 function renderCollection() {
   el.collection.hidden = false;
-  const total = state.abbrevs.length * TIERS.length;
-  const owned = Object.keys(state.collection).length;
+  const total = ALL_PLAYERS.length;
+  const owned = ALL_PLAYERS.filter((p) => state.collection[keyFor(p)]).length;
   const totalPulls = Object.values(state.collection).reduce((a, b) => a + b, 0);
   el.progressLabel.textContent = `${owned} / ${total} unique jerseys collected — ${totalPulls} total pulls`;
   el.progressFill.style.width = `${total ? (owned / total * 100) : 0}%`;
 
-  const teams = [...state.abbrevs].sort((a, b) => {
-    const na = state.teamMeta?.get(a)?.common || a;
-    const nb = state.teamMeta?.get(b)?.common || b;
-    return na.localeCompare(nb);
+  const sorted = [...ALL_PLAYERS].sort((a, b) => {
+    const na = state.teamMeta?.get(a.team)?.common || a.team;
+    const nb = state.teamMeta?.get(b.team)?.common || b.team;
+    if (na !== nb) return na.localeCompare(nb);
+    return (a.name || '').localeCompare(b.name || '');
   });
 
   el.teamRows.innerHTML = '';
-  for (const team of teams) {
-    const meta = state.teamMeta?.get(team);
+  for (const player of sorted) {
+    const meta = state.teamMeta?.get(player.team);
+    const count = state.collection[keyFor(player)] || 0;
     const row = document.createElement('div');
     row.className = 'pk-team-row';
     row.innerHTML = `
       <div class="pk-team-row-label">
         ${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : ''}
-        <span>${escapeHtml(meta?.common || team)}</span>
+        <span>${escapeHtml(player.name || player.team)}</span>
       </div>
       <div class="pk-pip-row">
-        ${TIERS.map((t) => {
-          const count = state.collection[keyFor(team, t)] || 0;
-          return `<button type="button" class="pk-pip tier-${t} ${count ? 'pk-pip-owned' : 'pk-pip-locked'}"
-            data-team="${team}" data-tier="${t}" title="${TIER_LABEL[t]}${count ? ` — owned ×${count}` : ' — not pulled yet'}"
-            ${count ? '' : 'disabled'}></button>`;
-        }).join('')}
+        <button type="button" class="pk-pip tier-${player.tier} ${count ? 'pk-pip-owned' : 'pk-pip-locked'}"
+          data-image="${escapeHtml(player.image)}" title="${TIER_LABEL[player.tier]}${count ? ` — owned ×${count}` : ' — not pulled yet'}"
+          ${count ? '' : 'disabled'}></button>
       </div>
     `;
     el.teamRows.appendChild(row);
   }
 }
 
-function openJerseyModal(team, tier) {
-  const count = state.collection[keyFor(team, tier)] || 0;
+function openJerseyModal(image) {
+  const player = ALL_PLAYERS.find((p) => p.image === image);
+  if (!player) return;
+  const count = state.collection[keyFor(player)] || 0;
   el.modalContent.innerHTML = '';
-  el.modalContent.appendChild(buildJerseyPiece(team, tier, { count }));
+  el.modalContent.appendChild(buildJerseyPiece(player, { count }));
   el.modalRoot.hidden = false;
 }
 
@@ -347,7 +409,7 @@ function wireEvents() {
   el.teamRows.addEventListener('click', (e) => {
     const pip = e.target.closest('.pk-pip-owned');
     if (!pip) return;
-    openJerseyModal(pip.dataset.team, pip.dataset.tier);
+    openJerseyModal(pip.dataset.image);
   });
 
   el.resetBtn.addEventListener('click', () => {
@@ -370,11 +432,11 @@ async function init() {
   try {
     const standings = await getJSON(`${API_WEB}/v1/standings/now`);
     state.teamMeta = buildTeamMeta(standings);
-    state.abbrevs = Array.from(state.teamMeta.keys());
   } catch {
-    // Team names/logos are cosmetic here — fall back to a bare list of
-    // abbrevs so packs can still be opened even if standings/now is down.
-    state.abbrevs = Object.keys(TEAM_COLORS);
+    // Team logos/common-names are cosmetic only (buildJerseyPiece and
+    // renderCollection both already fall back to the raw abbrev when
+    // teamMeta has nothing) — packs still open fine off ALL_PLAYERS
+    // alone if standings/now is down.
     state.teamMeta = new Map();
   }
 
