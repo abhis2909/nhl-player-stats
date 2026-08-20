@@ -3932,11 +3932,17 @@ a.mg-game-card:hover {
 
 .tier-silver .jp-slab::before { background: var(--t1); }
 
+/* A vivid tier-colored backdrop (not just a dark panel with a hint of
+   color) — the rarity color IS the backdrop the card sits against,
+   rather than something the card itself has to carry. Same radial
+   shape for every tier via --t1/--t2 (no more per-tier overrides
+   below), so silver reads as a muted grey backdrop and diamond as a
+   bright icy one purely from its own tier colors, no special-casing. */
 .jp-slab-panel {
   position: relative;
   border-radius: 19px;
   overflow: hidden;
-  background: linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%);
+  background: radial-gradient(circle at 50% 38%, var(--t1) 0%, var(--t2) 62%, #05070a 100%);
   padding: 18px 16px 20px;
   display: flex;
   flex-direction: column;
@@ -3979,10 +3985,6 @@ a.mg-game-card:hover {
   color: #d4af37;
 }
 
-.tier-emerald .jp-slab-panel  { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 42%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
-.tier-ruby .jp-slab-panel     { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 46%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
-.tier-amethyst .jp-slab-panel { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 50%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
-.tier-diamond .jp-slab-panel  { background: radial-gradient(circle at 50% 26%, var(--t1) 0%, transparent 54%), linear-gradient(165deg, var(--t2) 0%, #0b0e14 68%); }
 
 /* Rainbow foil pattern behind everything else in the panel — a classic
    holographic-card sheen, tinted per-tier by riding on --shimmer-opacity
@@ -4078,31 +4080,26 @@ a.mg-game-card:hover {
    anymore) and clips the sheen sweep to that same rectangle via
    overflow:hidden; .jp-jersey-wrap stays overflow:visible one level
    up so the badge/count-chip/sparkles positioned just outside the
-   photo's edges aren't clipped along with it. */
-/* Uploaded jersey photos each carry whatever background color they
-   happened to be shot/generated on (grey, tan, flat black, ...) —
-   cropped to a hard rectangle, that background used to sit as an
-   obvious mismatched block against the slab panel behind it. The mask
-   below feathers the photo's own edges to transparent before they
-   reach the box's true edge, so whatever's actually behind it (the
-   slab panel's tier-colored gradient/glow) shows through at the
-   fringe instead — the photo blends into the panel it's sitting in
-   regardless of its own background color, no per-image editing or
-   per-team color-matching needed. box-shadow (the tier glow) is
-   unaffected by mask-image — it's still drawn from the full
-   rounded-rect box, so the glow traces the card's true bounds even
-   though the visible photo content fades in before reaching them,
-   reading as a lit window the jersey sits inside rather than a
-   sticker pasted on top. */
+   photo's edges aren't clipped along with it.
+
+   Uploaded jersey photos each carry whatever background color they
+   happened to be shot/generated on (grey, tan, flat black, ...) — a
+   flat rectangle of that color, cropped hard, sitting on top of
+   .jp-slab-panel's own tier-colored backdrop below. Earlier this tried
+   to hide that seam by feathering the photo's own edges to transparent
+   (a mask-image); the current approach leans the other way instead —
+   own the rectangle as a lit display window (bright --t-accent border
+   + --t1 glow, like a museum-case frame), so the backdrop reads as
+   deliberately behind the card rather than something the card is
+   trying to fade into. */
 .jp-jersey-photo {
   position: relative;
   z-index: 1;
   width: 172px;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: var(--glow), 0 10px 20px rgba(0, 0, 0, 0.45);
-  -webkit-mask-image: radial-gradient(ellipse 65% 68% at 50% 46%, #000 30%, transparent 88%);
-  mask-image: radial-gradient(ellipse 65% 68% at 50% 46%, #000 30%, transparent 88%);
+  border: 2px solid var(--t-accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 22px var(--t1), var(--glow), 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
 .jp-jersey-img {
