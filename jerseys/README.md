@@ -43,10 +43,17 @@ running list of them, this browser only, shared between both tools);
 paste that into `packs.js` yourself, or hand it to Claude, to actually
 put the published jersey in the game.
 
-**Fallback, no token configured (or you already have a processed PNG
-some other way)**: drop the file here directly via GitHub's own web UI
-or a normal git push, tell Claude the filename, and it wires the
-`JERSEY_ART` entry into `packs.js` for you.
+**No token configured, or you'd rather push originals yourself?** Drop
+files here directly via GitHub's own web UI or a normal git push, tell
+Claude the filename, and it wires the `JERSEY_ART` entry into
+`packs.js` for you. Both admin tools also have a "load an existing
+file from jerseys/" option right below the upload field — type the
+filename already in this folder and hit Load, and it runs through the
+same crop/background-removal/preview pipeline as a fresh upload. That
+fetch is same-origin, so it works with no token at all; only Publish
+needs one, and Download always works, so this is the way to touch up
+something you already pushed by hand (recrop it, try background
+removal on it) without ever needing GITHUB_TOKEN configured.
 
 Keep filenames lowercase, hyphenated, descriptive (e.g.
 `<team>-<detail>.png`) — no spaces. The admin tool's downloaded/

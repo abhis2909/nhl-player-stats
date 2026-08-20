@@ -26,6 +26,15 @@
       default — no background removal) so each player just needs its
       team/name confirmed instead of a separate upload.
 
+   Both tools also let you pull in an image already committed to
+   jerseys/ (fetchImageFromRepo()) instead of only a fresh upload —
+   handy when images get pushed to GitHub directly (no GITHUB_TOKEN
+   configured) and you still want to run them through cropping/
+   background removal here afterwards. That fetch is same-origin, so
+   it works with no token; only Publish needs one. Download always
+   works either way — the result is meant to be dragged back into
+   GitHub by hand in that case.
+
    "Staged" entries are localStorage only, one browser, purely so the
    person doing this doesn't lose track of names/teams they've already
    processed mid-session. Lazy-loaded
@@ -64,6 +73,9 @@
     stagedList: document.getElementById('jerseyStagedList'),
     clearStagedBtn: document.getElementById('jerseyClearStagedBtn'),
     removeBg: document.getElementById('jerseyRemoveBackground'),
+    repoFilenameInput: document.getElementById('jerseyRepoFilename'),
+    repoLoadBtn: document.getElementById('jerseyLoadRepoBtn'),
+    repoLoadStatus: document.getElementById('jerseyRepoLoadStatus'),
   };
 
   let loaded = false;
@@ -201,8 +213,12 @@
     return cropped;
   }
 
-  function processFile(file) {
-    el.processingNote.hidden = false;
+  /** Core processing pipeline, shared by "upload a file" and "load an
+   *  existing jerseys/<file> for re-editing" — everything downstream of
+   *  having a loaded <img> (downscale, optional background removal,
+   *  preview, blob/thumb prep) is identical either way. `originalSrc` is
+   *  just what the "Original" preview <img> points at. */
+  function processImage(img, originalSrc) {
     el.previewRow.hidden = true;
     el.downloadBtn.disabled = true;
     el.publishBtn.disabled = true;
@@ -212,57 +228,82 @@
 
     const removeBg = el.removeBg.checked;
 
+    let { width: w, height: h } = img;
+    if (Math.max(w, h) > MAX_DIMENSION) {
+      const scale = MAX_DIMENSION / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = w; srcCanvas.height = h;
+    const sctx = srcCanvas.getContext('2d');
+    sctx.drawImage(img, 0, 0, w, h);
+
+    // Default: used exactly as uploaded (background included) — the
+    // pack-opening stage renders jersey art as a plain photo card
+    // now, no cutout required. "Remove background" is opt-in for
+    // whoever still wants that floating look.
+    let outCanvas;
+    try {
+      outCanvas = removeBg ? removeBackground(sctx.getImageData(0, 0, w, h)) : srcCanvas;
+    } catch (err) {
+      el.processingNote.hidden = false;
+      el.processingNote.textContent = `Couldn't process that image: ${err.message}`;
+      return;
+    }
+
+    el.originalImg.src = originalSrc;
+    el.outCanvas.width = outCanvas.width;
+    el.outCanvas.height = outCanvas.height;
+    el.outCanvas.getContext('2d').drawImage(outCanvas, 0, 0);
+    el.previewRow.hidden = false;
+    el.processingNote.hidden = true;
+
+    outCanvas.toBlob((blob) => {
+      processedBlob = blob;
+      el.downloadBtn.disabled = false;
+      el.publishBtn.disabled = false;
+      el.stageBtn.disabled = false;
+    }, 'image/png');
+
+    // Kept modest (64px) so a handful of staged entries don't blow
+    // past localStorage's per-origin quota (each thumb is a few KB
+    // as a dataURL, vs. the full processed PNG which can be 100KB+).
+    processedThumb = thumbFromCanvas(outCanvas);
+  }
+
+  function processFile(file) {
+    el.processingNote.hidden = false;
+    el.processingNote.textContent = 'Processing…';
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => {
-        let { width: w, height: h } = img;
-        if (Math.max(w, h) > MAX_DIMENSION) {
-          const scale = MAX_DIMENSION / Math.max(w, h);
-          w = Math.round(w * scale);
-          h = Math.round(h * scale);
-        }
-        const srcCanvas = document.createElement('canvas');
-        srcCanvas.width = w; srcCanvas.height = h;
-        const sctx = srcCanvas.getContext('2d');
-        sctx.drawImage(img, 0, 0, w, h);
-
-        // Default: used exactly as uploaded (background included) — the
-        // pack-opening stage renders jersey art as a plain photo card
-        // now, no cutout required. "Remove background" is opt-in for
-        // whoever still wants that floating look.
-        let outCanvas;
-        try {
-          outCanvas = removeBg ? removeBackground(sctx.getImageData(0, 0, w, h)) : srcCanvas;
-        } catch (err) {
-          el.processingNote.textContent = `Couldn't process that image: ${err.message}`;
-          return;
-        }
-
-        el.originalImg.src = reader.result;
-        el.outCanvas.width = outCanvas.width;
-        el.outCanvas.height = outCanvas.height;
-        el.outCanvas.getContext('2d').drawImage(outCanvas, 0, 0);
-        el.previewRow.hidden = false;
-        el.processingNote.hidden = true;
-
-        outCanvas.toBlob((blob) => {
-          processedBlob = blob;
-          el.downloadBtn.disabled = false;
-          el.publishBtn.disabled = false;
-          el.stageBtn.disabled = false;
-        }, 'image/png');
-
-        // Kept modest (64px) so a handful of staged entries don't blow
-        // past localStorage's per-origin quota (each thumb is a few KB
-        // as a dataURL, vs. the full processed PNG which can be 100KB+).
-        processedThumb = thumbFromCanvas(outCanvas);
-      };
-      img.onerror = () => { el.processingNote.textContent = "Couldn't load that file as an image."; };
+      img.onload = () => processImage(img, reader.result);
+      img.onerror = () => { el.processingNote.hidden = false; el.processingNote.textContent = "Couldn't load that file as an image."; };
       img.src = reader.result;
     };
-    reader.onerror = () => { el.processingNote.textContent = "Couldn't read that file."; };
+    reader.onerror = () => { el.processingNote.hidden = false; el.processingNote.textContent = "Couldn't read that file."; };
     reader.readAsDataURL(file);
+  }
+
+  /** Fetches an already-committed image from this site's own /jerseys/
+   *  folder (same-origin, so no CORS issue) so it can be re-run through
+   *  the same processing pipeline as a fresh upload — for touching up
+   *  something you already pushed to GitHub directly, without needing
+   *  GITHUB_TOKEN configured to pull it back down. Publish still needs
+   *  the token; Download never does. */
+  async function fetchImageFromRepo(filename) {
+    const path = filename.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/jerseys/${path}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status === 404 ? 'not found' : `HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = () => reject(new Error("that's not a valid image"));
+      img.src = url;
+    });
   }
 
   function teamOptionsHtml() {
@@ -529,6 +570,23 @@
 
     document.getElementById('gridSliceBtn').addEventListener('click', sliceGrid);
 
+    document.getElementById('gridLoadRepoBtn').addEventListener('click', async () => {
+      const input = document.getElementById('gridRepoFilename');
+      const status = document.getElementById('gridRepoLoadStatus');
+      const filename = input.value.trim().replace(/^\/?jerseys\//, '');
+      if (!filename) return;
+      status.textContent = 'Loading…';
+      try {
+        const { img } = await fetchImageFromRepo(filename);
+        gridImg = img;
+        renderGridPreview();
+        status.textContent = `Loaded jerseys/${filename}.`;
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } catch (err) {
+        status.textContent = `Couldn't load jerseys/${filename} — ${err.message}.`;
+      }
+    });
+
     const list = document.getElementById('gridCellsList');
     list.addEventListener('change', (e) => {
       const teamI = e.target.dataset.cellTeam;
@@ -584,6 +642,19 @@
     el.downloadBtn.addEventListener('click', downloadProcessed);
     el.publishBtn.addEventListener('click', publishToGithub);
     el.stageBtn.addEventListener('click', stageCurrent);
+    el.repoLoadBtn.addEventListener('click', async () => {
+      const filename = el.repoFilenameInput.value.trim().replace(/^\/?jerseys\//, '');
+      if (!filename) return;
+      el.repoLoadStatus.textContent = 'Loading…';
+      try {
+        const { img, url } = await fetchImageFromRepo(filename);
+        processImage(img, url);
+        el.repoLoadStatus.textContent = `Loaded jerseys/${filename}.`;
+        setTimeout(() => { el.repoLoadStatus.textContent = ''; }, 3000);
+      } catch (err) {
+        el.repoLoadStatus.textContent = `Couldn't load jerseys/${filename} — ${err.message}.`;
+      }
+    });
     el.clearStagedBtn.addEventListener('click', () => {
       if (!confirm('Clear all staged jersey entries? This only affects this browser.')) return;
       saveStaged([]);

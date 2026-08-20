@@ -467,6 +467,17 @@
           <label for="jerseyFileInput">Jersey photo</label>
           <input id="jerseyFileInput" type="file" accept="image/*">
         </div>
+        <p class="admin-hint adm-jersey-or">— or, to touch up something already pushed to <code>jerseys/</code> on GitHub —</p>
+        <div class="fh-field-row">
+          <div class="fh-field" style="flex: 2;">
+            <label for="jerseyRepoFilename">Existing filename in jerseys/</label>
+            <input id="jerseyRepoFilename" type="text" placeholder="e.g. borr.jpg">
+          </div>
+          <div class="fh-field adm-jersey-load-btn-field">
+            <button type="button" id="jerseyLoadRepoBtn" class="ghost-btn">Load</button>
+          </div>
+        </div>
+        <p class="admin-hint" id="jerseyRepoLoadStatus" aria-live="polite"></p>
         <label class="check-item">
           <input type="checkbox" id="jerseyRemoveBackground">
           <span>Remove background (optional) — otherwise the photo is used as-is, background included</span>
@@ -507,6 +518,17 @@
           <label for="gridFileInput">Grid image</label>
           <input id="gridFileInput" type="file" accept="image/*">
         </div>
+        <p class="admin-hint adm-jersey-or">— or, to re-slice a grid already pushed to <code>jerseys/</code> on GitHub —</p>
+        <div class="fh-field-row">
+          <div class="fh-field" style="flex: 2;">
+            <label for="gridRepoFilename">Existing filename in jerseys/</label>
+            <input id="gridRepoFilename" type="text" placeholder="e.g. buffalo-top20.png">
+          </div>
+          <div class="fh-field adm-jersey-load-btn-field">
+            <button type="button" id="gridLoadRepoBtn" class="ghost-btn">Load</button>
+          </div>
+        </div>
+        <p class="admin-hint" id="gridRepoLoadStatus" aria-live="polite"></p>
         <div class="fh-field-row">
           <div class="fh-field">
             <label for="gridRows">Rows</label>

@@ -4198,6 +4198,22 @@ a.mg-game-card:hover {
 
 /* ---------- Admin: Jersey Pack Art tab (admin-jerseys.js) ---------- */
 
+.adm-jersey-or {
+  text-align: center;
+  font-size: 12px;
+  margin: 4px 0 14px;
+}
+
+.adm-jersey-load-btn-field {
+  display: flex;
+  align-items: flex-end;
+}
+
+.adm-jersey-load-btn-field button {
+  width: 100%;
+  padding: 10px 14px;
+}
+
 .adm-jersey-preview-row {
   display: flex;
   gap: 20px;
