@@ -131,14 +131,75 @@ model CreditTransaction {
 // ---------- Cached Yahoo data ----------
 // Pulled with ONE commissioner-level OAuth token via a scheduled
 // job, not per-user tokens — Yahoo's access rules are based on
-// league membership, so one token can read the whole league.
-// Deferred entirely in Phase 1 (see fantasy-hub/README.md).
+// league membership, so one token can read the whole league. ACTIVE
+// as of the Yahoo Fantasy import feature (api/_lib/yahoo.js) — the
+// "deferred entirely" note above (and in fantasy-hub/README.md) is now
+// stale for this section specifically; every other "unused in Phase 1"
+// model in this file is still accurate.
+
+// The one OAuth credential (singleton, like ProjectionSettings/
+// RatingSettings above) — a single commissioner connects their Yahoo
+// account once via Admin -> Yahoo League, and every visitor's page
+// view reads from the *cache* tables below, never Yahoo directly.
+// accessToken is short-lived (~1hr, Yahoo-controlled); refreshToken is
+// long-lived and is what actually matters for staying connected —
+// getValidAccessToken() in api/_lib/yahoo.js refreshes and rewrites
+// both plus expiresAt whenever the access token's stale, so this row
+// is always the current pair, not just the original grant.
+// leagueKey/gameKey are set once via Admin -> Yahoo League after
+// connecting (a Yahoo login can belong to several leagues/seasons;
+// see discoverLeagues() in api/_lib/yahoo.js) and drive every sync.
+model YahooToken {
+  id           String    @id @default("singleton")
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  leagueKey    String? // e.g. "453.l.12345" — which league syncGames() pulls
+  leagueName   String? // cached display name, set alongside leagueKey — avoids a Yahoo round trip just to show "connected to <league>"
+  gameKey      String? // e.g. "453" — the sport+season Yahoo "game" the league belongs to
+  updatedAt    DateTime  @updatedAt
+}
 
 model YahooMatchupCache {
   matchupKey String   @id // Yahoo's matchup identifier
   weekKey    String
   rawData    Json
   fetchedAt  DateTime @default(now())
+}
+
+// Whole-league standings table, refreshed in full each sync (there's
+// only ever one current standings view, so — like YahooToken above —
+// this is a singleton row, not one per team; ideas like
+// "how has this changed since last sync" aren't needed for Phase 1).
+model YahooStandingsCache {
+  id        String   @id @default("singleton")
+  rawData   Json
+  fetchedAt DateTime @default(now())
+}
+
+// One row per Yahoo team, its current roster — separate from
+// YahooMatchupCache/YahooStandingsCache since rosters are fetched
+// per-team (one Yahoo API call each) rather than as a single
+// whole-league payload.
+model YahooRosterCache {
+  teamKey   String   @id // e.g. "453.l.12345.t.4"
+  teamName  String
+  rawData   Json
+  fetchedAt DateTime @default(now())
+}
+
+model YahooTransactionCache {
+  transactionKey String   @id // Yahoo's transaction identifier
+  rawData         Json
+  fetchedAt       DateTime @default(now())
+}
+
+// Full draft-results list for the league, refreshed in full each sync
+// (a completed draft never changes) — singleton like standings above.
+model YahooDraftCache {
+  id        String   @id @default("singleton")
+  rawData   Json
+  fetchedAt DateTime @default(now())
 }
 
 // ---------- Game 1: Betting (matchup / category / over-under) ----------

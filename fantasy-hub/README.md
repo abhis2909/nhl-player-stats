@@ -53,10 +53,16 @@ writes to it yet.
    credits to open a pack of randomized player cards by rarity. *Not
    built yet.*
 
-Plus `YahooMatchupCache` — **deferred indefinitely**, not part of any
-current phase. The schema keeps the table and `User.yahooTeamKey` for
-when it's picked back up, but no OAuth app is registered and no token
-handling exists.
+Plus the Yahoo Fantasy import (`YahooToken`, `YahooMatchupCache`,
+`YahooStandingsCache`, `YahooRosterCache`, `YahooTransactionCache`,
+`YahooDraftCache`) — **ACTIVE**, picked up ahead of everything else on
+the list above. One commissioner-level OAuth connection (Yahoo's
+access rules are based on league membership, so one token can read the
+whole league — no per-user OAuth) pulls standings, current-week
+matchups, every team's roster, transactions, and draft results into
+those cache tables, once via a manual "Sync now" and automatically
+every day via a Vercel cron. See "Yahoo Fantasy import" below for
+setup and how it all fits together.
 
 ## Accounts: username assigned, everything else self-serve
 
@@ -151,13 +157,78 @@ fire-and-forget sync call trivially safe to fire more than once.
   `_lib` auth/hashing logic, the login UI) can be built and tested now;
   actual migrations and DB reads/writes are blocked until Neon is
   connected.
-- **Yahoo OAuth**: deferred entirely, not part of any current phase.
+- **Yahoo OAuth**: ACTIVE — see "Yahoo Fantasy import" below.
 - **Auth**: username (commissioner-assigned) + password + name
   (self-chosen, set together on first login) — see above. Not
   magic-link, not Yahoo-linked, no separate code to hand over.
 - **Existing "Guess the Player" game**: coexists with the new
   account-linked version — anonymous `localStorage` play stays exactly
   as-is, login adds synced progress on top. Not a replacement.
+
+## Yahoo Fantasy import
+
+One commissioner connects their own Yahoo login once (Admin → Yahoo
+League → Connect to Yahoo); from then on, standings/matchups/rosters/
+transactions/draft results for whichever league they pick show up on
+`fantasy-hub.html`'s League panel for every visitor, no login required
+on their end — Yahoo's access rules are based on league membership, so
+one OAuth token can read the whole league.
+
+**Setup, in order:**
+
+1. **Register a Yahoo app** (if not done already) at
+   [Yahoo's developer console](https://developer.yahoo.com/apps/) —
+   needs Fantasy Sports read permission. Note the **Client ID
+   (Consumer Key)** and **Client Secret (Consumer Secret)**.
+2. **Set three env vars in Vercel** (Project → Settings → Environment
+   Variables), and redeploy after adding them:
+   - `YAHOO_CLIENT_ID` / `YAHOO_CLIENT_SECRET` — from step 1.
+   - `YAHOO_REDIRECT_URI` — the exact callback URL, e.g.
+     `https://<your-domain>/api/yahoo/callback`. Must be a fixed value
+     (not derived from the request), since Yahoo requires an exact
+     match and Vercel serves the same deployment from multiple
+     hostnames.
+   - `CRON_SECRET` — any random string; enables the daily auto-sync
+     (Vercel injects it as a bearer token on cron-triggered requests
+     automatically once it's set — see `vercel.json`'s `crons` entry
+     and `handleYahooSync()`'s cron branch in `admin-settings.js`).
+     Without it, the daily cron 401s harmlessly and only manual "Sync
+     now" clicks work.
+3. **Register that exact `YAHOO_REDIRECT_URI` value** as an allowed
+   redirect URI in the Yahoo app's own settings too — both sides need
+   to match exactly, or Yahoo rejects the callback.
+4. **Run the migration** against the real database (`npx prisma
+   migrate deploy`, or `migrate dev` in a dev environment) — adds
+   `YahooToken` and the four `Yahoo*Cache` tables. Not wired into the
+   Vercel build (see the warning below), so this is a manual, one-time
+   step after setting `DATABASE_URL`.
+5. **Admin → Yahoo League → Connect to Yahoo**, approve on Yahoo's
+   consent screen, then **Find my leagues** → pick the right one →
+   **Sync now**. The League panel appears on `fantasy-hub.html`
+   automatically once there's cached data.
+
+**How it fits together**: `api/_lib/yahoo.js` is the OAuth + Fantasy
+API client (token exchange/refresh, `discoverLeagues()`,
+`syncLeague()`); `api/fantasy/admin-settings.js`'s `yahoo-*` types are
+the dispatch (folded in rather than a dedicated endpoint, same
+Hobby-plan 12-function-cap reason as the jersey-image publish); the
+public read is `api/fantasy/public-config.js?type=yahoo`; the display
+is `league.js` on `fantasy-hub.html`; the admin control panel is
+`admin-yahoo.js` (Admin → Yahoo League tab).
+
+**A note on Yahoo's JSON shape**: Yahoo's Fantasy API is XML-first —
+its `?format=json` output is a fairly direct transliteration, not a
+clean REST shape (collections come back as `{"0":x,"1":y,"count":2}`
+instead of a real array; one resource comes back as an array of
+single-key fragments needing merging). `yArr()`/`yMerge()` in
+`api/_lib/yahoo.js` (and their client-side equivalents in `league.js`)
+are the generic helpers for navigating that, written against Yahoo's
+documented/community-reverse-engineered format with no live account
+available to test against while building this. Every cache table
+stores the untouched original response (`rawData`) alongside whatever
+got parsed out of it, so if a field turns out to live in a slightly
+different spot than expected, fixing the parser never needs another
+Yahoo round trip — just re-render from what's already cached.
 
 ## ⚠️ Do not wire `prisma migrate deploy` into the Vercel build yet
 
@@ -200,6 +271,9 @@ pin deliberately later if there's a reason to.
 | `../api/_lib/guessWhoPool.js` | Server-side mirror of `guesswho.js`'s deterministic daily-pick algorithm |
 | `../fantasy-auth.js` | Client-side league-member login-UI module (currently wired into `guesswho.html` only) |
 | `../admin-auth.js` | Client-side site-admin login gate, wired into `admin.html` |
+| `../api/_lib/yahoo.js` | Yahoo OAuth + Fantasy Sports API client (token exchange/refresh, league discovery, sync) |
+| `../admin-yahoo.js` | Admin → Yahoo League tab — connect/pick league/sync-now control panel |
+| `../league.js` | `fantasy-hub.html`'s League panel — renders the cached Yahoo data |
 
 ## Next steps (once Neon is authorized)
 

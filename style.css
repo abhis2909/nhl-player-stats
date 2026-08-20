@@ -3346,6 +3346,81 @@ a.mg-game-card:hover {
   padding: 2px 4px;
 }
 
+/* -- League panel (league.js) -- */
+
+.league-subpanel[hidden] { display: none; }
+
+.league-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.league-table th,
+.league-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.league-table th {
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+}
+
+.league-matchup-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.league-matchup-week {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.league-matchup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 13.5px;
+}
+
+.league-roster-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.league-roster-card h3 { margin: 0 0 8px; font-size: 14px; }
+
+.league-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px 12px;
+  font-size: 12.5px;
+}
+
+.league-pos {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
 .fh-tx-time {
   color: var(--text-faint);
   font-size: 11px;
@@ -4195,6 +4270,50 @@ a.mg-game-card:hover {
   .pk-team-row { justify-content: center; text-align: center; }
   .pk-team-row-label { justify-content: center; }
 }
+
+/* ---------- Admin: Yahoo League tab (admin-yahoo.js) ---------- */
+
+.adm-yahoo-status-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.adm-yahoo-status-line {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+}
+
+.adm-yahoo-status-line:last-child { margin-bottom: 0; }
+
+.adm-yahoo-league-picker {
+  margin-top: 16px;
+}
+
+.adm-yahoo-league-picker label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.adm-yahoo-league-picker select {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.adm-yahoo-league-picker[hidden] { display: none; }
 
 /* ---------- Admin: Jersey Pack Art tab (admin-jerseys.js) ---------- */
 

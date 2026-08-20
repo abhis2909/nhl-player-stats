@@ -62,7 +62,17 @@ const DEFAULT_RATING_SETTINGS = {
    `season` is optional — deployment overrides are season-scoped and
    only included if a season is given, but the two settings objects are
    always returned regardless (e.g. the Power Ranking column needs
-   ratingSettings on views that have no "projected season" concept at all). */
+   ratingSettings on views that have no "projected season" concept at all).
+
+   GET /api/fantasy/public-config?type=yahoo — PUBLIC read of the Yahoo
+   Fantasy import's cached league data (standings/matchups/rosters/
+   transactions/draft — see api/_lib/yahoo.js and admin-settings.js's
+   yahoo-sync). Fully public, same as everything else in this file —
+   this is a small private friend league, not sensitive data, and
+   fantasy-hub.html's League panel needs it without requiring a Fantasy
+   Hub login. Returns cached rows straight from the DB (rawData Json,
+   Yahoo's own response shape) plus a `connected`/`leagueName` flag so
+   the panel can render "not set up yet" instead of an empty page. */
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     res.status(405).json({ ok: false, error: 'method_not_allowed' });
@@ -70,6 +80,11 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    if (req.query?.type === 'yahoo') {
+      await handleYahooRead(req, res);
+      return;
+    }
+
     const url = new URL(req.url, 'http://localhost');
     const season = (url.searchParams.get('season') || '').trim();
 
@@ -119,3 +134,32 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 };
+
+async function handleYahooRead(req, res) {
+  const prisma = getPrisma();
+  const token = await prisma.yahooToken.findUnique({ where: { id: 'singleton' } });
+  if (!token || !token.leagueKey) {
+    res.status(200).json({ ok: true, connected: false });
+    return;
+  }
+
+  const [standings, matchups, rosters, transactions, draft] = await Promise.all([
+    prisma.yahooStandingsCache.findUnique({ where: { id: 'singleton' } }),
+    prisma.yahooMatchupCache.findMany({ orderBy: { fetchedAt: 'desc' } }),
+    prisma.yahooRosterCache.findMany({ orderBy: { teamName: 'asc' } }),
+    prisma.yahooTransactionCache.findMany({ orderBy: { fetchedAt: 'desc' }, take: 25 }),
+    prisma.yahooDraftCache.findUnique({ where: { id: 'singleton' } }),
+  ]);
+
+  res.status(200).json({
+    ok: true,
+    connected: true,
+    leagueName: token.leagueName,
+    standings: standings?.rawData ?? null,
+    matchups: matchups.map((m) => ({ weekKey: m.weekKey, rawData: m.rawData })),
+    rosters: rosters.map((r) => ({ teamKey: r.teamKey, teamName: r.teamName, rawData: r.rawData })),
+    transactions: transactions.map((t) => t.rawData),
+    draft: draft?.rawData ?? null,
+    fetchedAt: standings?.fetchedAt ?? null,
+  });
+}

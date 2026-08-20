@@ -70,6 +70,25 @@
       </div>
     </section>
 
+    <section class="fh-panel fh-panel-wide" id="panelLeague" hidden>
+      <div class="fh-panel-head">
+        <h2>🏒 League</h2>
+        <div class="toggle-group" id="leagueSubtabs" role="tablist" aria-label="League section">
+          <button class="toggle-btn active" data-league-tab="standings" role="tab" aria-selected="true">Standings</button>
+          <button class="toggle-btn" data-league-tab="matchups" role="tab" aria-selected="false">Matchups</button>
+          <button class="toggle-btn" data-league-tab="rosters" role="tab" aria-selected="false">Rosters</button>
+          <button class="toggle-btn" data-league-tab="transactions" role="tab" aria-selected="false">Transactions</button>
+          <button class="toggle-btn" data-league-tab="draft" role="tab" aria-selected="false">Draft</button>
+        </div>
+      </div>
+      <p id="leagueFetchedNote" class="admin-hint"></p>
+      <div id="leagueStandings" class="league-subpanel"></div>
+      <div id="leagueMatchups" class="league-subpanel" hidden></div>
+      <div id="leagueRosters" class="league-subpanel" hidden></div>
+      <div id="leagueTransactions" class="league-subpanel" hidden></div>
+      <div id="leagueDraft" class="league-subpanel" hidden></div>
+    </section>
+
     <section class="fh-panel" id="panelTransactions">
       <div class="fh-panel-head">
         <h2>📋 Recent Transactions</h2>
@@ -98,6 +117,7 @@
 <script src="data.js" defer></script>
 <script src="avatar.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
+<script src="league.js" defer></script>
 <script src="fantasy-hub.js" defer></script>
 </body>
 </html>

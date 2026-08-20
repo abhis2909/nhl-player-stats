@@ -1,9 +1,12 @@
 {
   "rewrites": [
     { "source": "/api/web/:path*", "destination": "/api/web-proxy?upstreamPath=:path*" },
-    { "source": "/api/stats/:path*", "destination": "/api/stats-proxy?upstreamPath=:path*" }
+    { "source": "/api/stats/:path*", "destination": "/api/stats-proxy?upstreamPath=:path*" },
+    { "source": "/api/yahoo/authorize", "destination": "/api/fantasy/admin-settings?type=yahoo-authorize" },
+    { "source": "/api/yahoo/callback", "destination": "/api/fantasy/admin-settings?type=yahoo-callback" }
   ],
   "crons": [
-    { "path": "/api/fantasy/snapshots", "schedule": "0 9 * * *" }
+    { "path": "/api/fantasy/snapshots", "schedule": "0 9 * * *" },
+    { "path": "/api/fantasy/admin-settings?type=yahoo-sync", "schedule": "0 11 * * *" }
   ]
 }

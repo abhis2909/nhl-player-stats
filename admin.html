@@ -62,6 +62,7 @@
       <button class="toggle-btn" data-subtab="projection" role="tab" aria-selected="false">📈 Projections</button>
       <button class="toggle-btn" data-subtab="rating" role="tab" aria-selected="false">🏅 Ratings</button>
       <button class="toggle-btn" data-subtab="jerseys" role="tab" aria-selected="false">🎽 Jerseys</button>
+      <button class="toggle-btn" data-subtab="yahoo" role="tab" aria-selected="false">🏒 Yahoo League</button>
     </div>
 
     <!-- ---------------- Columns ---------------- -->
@@ -581,6 +582,42 @@
         <div id="jerseyStagedList" class="adm-jersey-staged-list"></div>
       </section>
     </div>
+
+    <!-- ---------------- Yahoo League (import standings/matchups/rosters/transactions/draft) ---------------- -->
+    <div id="subtabYahoo" class="admin-subtab admin-main" hidden>
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Yahoo Fantasy Import</h2>
+        </div>
+        <p class="admin-hint">
+          Connects once with your own Yahoo login (commissioner-level — Yahoo's access rules are based on
+          league membership, so this one connection can read the whole league). A daily job keeps standings,
+          matchups, rosters, transactions, and draft results in sync automatically; <strong>Sync now</strong>
+          pulls a fresh copy on demand. Needs <code>YAHOO_CLIENT_ID</code>, <code>YAHOO_CLIENT_SECRET</code>,
+          and <code>YAHOO_REDIRECT_URI</code> set in Vercel first — see <code>fantasy-hub/README.md</code>.
+        </p>
+
+        <div id="yahooStatusCard" class="adm-yahoo-status-card">
+          <p class="admin-hint">Checking connection…</p>
+        </div>
+        <p id="yahooCallbackNote" class="admin-hint" hidden></p>
+
+        <div class="admin-buttons">
+          <a id="yahooConnectBtn" href="/api/yahoo/authorize" class="primary-btn">🔗 Connect to Yahoo</a>
+          <button type="button" id="yahooDiscoverBtn" class="ghost-btn" hidden>Find my leagues</button>
+          <button type="button" id="yahooSyncBtn" class="ghost-btn" hidden>⟳ Sync now</button>
+          <span id="yahooSaveStatus" class="save-status" aria-live="polite"></span>
+        </div>
+
+        <div id="yahooLeaguePicker" class="adm-yahoo-league-picker" hidden>
+          <label for="yahooLeagueSelect">Which league?</label>
+          <div class="fh-field-row">
+            <select id="yahooLeagueSelect" style="flex: 2;"></select>
+            <button type="button" id="yahooUseLeagueBtn" class="primary-btn">Use this league</button>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </main>
 
@@ -651,6 +688,7 @@
 <script src="admin-deployment.js" defer></script>
 <script src="admin-projection.js" defer></script>
 <script src="admin-rating.js" defer></script>
+<script src="admin-yahoo.js" defer></script>
 <script src="admin-jerseys.js" defer></script>
 </body>
 </html>
