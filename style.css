@@ -4079,6 +4079,21 @@ a.mg-game-card:hover {
    overflow:hidden; .jp-jersey-wrap stays overflow:visible one level
    up so the badge/count-chip/sparkles positioned just outside the
    photo's edges aren't clipped along with it. */
+/* Uploaded jersey photos each carry whatever background color they
+   happened to be shot/generated on (grey, tan, flat black, ...) —
+   cropped to a hard rectangle, that background used to sit as an
+   obvious mismatched block against the slab panel behind it. The mask
+   below feathers the photo's own edges to transparent before they
+   reach the box's true edge, so whatever's actually behind it (the
+   slab panel's tier-colored gradient/glow) shows through at the
+   fringe instead — the photo blends into the panel it's sitting in
+   regardless of its own background color, no per-image editing or
+   per-team color-matching needed. box-shadow (the tier glow) is
+   unaffected by mask-image — it's still drawn from the full
+   rounded-rect box, so the glow traces the card's true bounds even
+   though the visible photo content fades in before reaching them,
+   reading as a lit window the jersey sits inside rather than a
+   sticker pasted on top. */
 .jp-jersey-photo {
   position: relative;
   z-index: 1;
@@ -4086,6 +4101,8 @@ a.mg-game-card:hover {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--glow), 0 10px 20px rgba(0, 0, 0, 0.45);
+  -webkit-mask-image: radial-gradient(ellipse 65% 68% at 50% 46%, #000 30%, transparent 88%);
+  mask-image: radial-gradient(ellipse 65% 68% at 50% 46%, #000 30%, transparent 88%);
 }
 
 .jp-jersey-img {

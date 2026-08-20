@@ -77,7 +77,16 @@ const TEAM_COLORS = {
 // copy an entry here verbatim to actually publish it site-wide, since this
 // file (not localStorage) is what every visitor loads.
 const JERSEY_ART = {
-  BOS: { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png' },
+  BOS: [
+    { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png' },
+    // Published via Admin -> Jerseys with the team dropdown left on its
+    // default (Anaheim) — the jersey itself is unmistakably Boston
+    // (black/gold, ORR #4), so it's filed here rather than under ANA.
+    // Filename kept as originally published (ana-bobby-orr.png); only
+    // this registry entry's team placement was corrected.
+    { name: 'Bobby Orr — #4 (alt)', image: 'jerseys/ana-bobby-orr.png' },
+    { name: 'Ray Bourque — #77', image: 'jerseys/bos-ray-bourque.png' },
+  ],
   BUF: [
     { name: 'Perreault — #11', image: 'jerseys/buf-perreault-11.png' },
     { name: 'Hasek — #39', image: 'jerseys/buf-hasek-39.png' },
