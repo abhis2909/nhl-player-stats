@@ -65,21 +65,48 @@ const TEAM_COLORS = {
   WSH: ['#C8102E', '#041E42'], WPG: ['#041E42', '#004C97'],
 };
 
-// Jersey art registry — one explicit entry per team, `name` and `image`
-// both set deliberately (by the Jerseys tab on admin.html, or by hand
-// here) rather than guessed from the picture. A team with no entry
-// falls back to FALLBACK_JERSEY so every pull still renders something.
-// Mirrors the shape admin-jerseys.js's localStorage-staged entries use
-// (see admin.html) — copy an entry here verbatim to actually publish it
-// site-wide, since this file (not localStorage) is what every visitor
-// loads.
+// Jersey art registry — `name` and `image` both set deliberately (by the
+// Jerseys tab on admin.html, or by hand here) rather than guessed from the
+// picture. A team maps to either one entry (BOS below) or an array of them
+// (BUF below, sliced from a "Top 20" grid via the admin Grid Splitter) —
+// a pull for that team picks a random one from the array, so a team with
+// a deep roster of jerseys shows a different player each time instead of
+// always the same face. A team with no entry falls back to FALLBACK_JERSEY
+// so every pull still renders something. Mirrors the shape
+// admin-jerseys.js's localStorage-staged entries use (see admin.html) —
+// copy an entry here verbatim to actually publish it site-wide, since this
+// file (not localStorage) is what every visitor loads.
 const JERSEY_ART = {
   BOS: { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png' },
+  BUF: [
+    { name: 'Perreault — #11', image: 'jerseys/buf-perreault-11.png' },
+    { name: 'Hasek — #39', image: 'jerseys/buf-hasek-39.png' },
+    { name: 'Lafontaine — #16', image: 'jerseys/buf-lafontaine-16.png' },
+    { name: 'Gare — #18', image: 'jerseys/buf-gare-18.png' },
+    { name: 'Andreychuk — #26', image: 'jerseys/buf-andreychuk-26.png' },
+    { name: 'Ruff — #22', image: 'jerseys/buf-ruff-22.png' },
+    { name: 'Ramsay — #14', image: 'jerseys/buf-ramsay-14.png' },
+    { name: 'Martin — #7', image: 'jerseys/buf-martin-7.png' },
+    { name: 'Robert — #8', image: 'jerseys/buf-robert-8.png' },
+    { name: 'Miller — #30', image: 'jerseys/buf-miller-30.png' },
+    { name: 'Vanek — #26', image: 'jerseys/buf-vanek-26.png' },
+    { name: 'Drury — #23', image: 'jerseys/buf-drury-23.png' },
+    { name: 'Briere — #48', image: 'jerseys/buf-briere-48.png' },
+    { name: 'Pominville — #29', image: 'jerseys/buf-pominville-29.png' },
+    { name: 'Afinogenov — #61', image: 'jerseys/buf-afinogenov-61.png' },
+    { name: 'Roy — #9', image: 'jerseys/buf-roy-9.png' },
+    { name: 'Thompson — #72', image: 'jerseys/buf-thompson-72.png' },
+    { name: 'Schoenfeld — #6', image: 'jerseys/buf-schoenfeld-6.png' },
+    { name: 'Korab — #4', image: 'jerseys/buf-korab-4.png' },
+    { name: 'Dahlin — #26', image: 'jerseys/buf-dahlin-26.png' },
+  ],
 };
 const FALLBACK_JERSEY = { name: '', image: 'jerseys/borr-transparent.png' };
 
 function jerseyArtFor(team) {
-  return JERSEY_ART[team] || FALLBACK_JERSEY;
+  const entry = JERSEY_ART[team];
+  if (!entry) return FALLBACK_JERSEY;
+  return Array.isArray(entry) ? entry[Math.floor(Math.random() * entry.length)] : entry;
 }
 
 const el = {
