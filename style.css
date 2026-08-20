@@ -3996,20 +3996,27 @@ a.mg-game-card:hover {
 }
 
 /* Jersey art (see packs.js's JERSEY_ART registry — one shared sample
-   image for any team without a real entry yet). Since it's a raster
-   image, not a colorable CSS shape, tier rarity comes through as a
-   glow wrapped around its actual alpha silhouette (filter: drop-shadow
-   follows transparency, unlike box-shadow) plus a sheen sweep clipped
-   to that same silhouette via mask-image using the image itself as the
-   mask — packs.js sets both the <img> src and the mask-image inline
-   per pull, so this rule's url() is only the pre-JS/no-JS fallback. */
-.jp-jersey-img {
+   image for any team without a real entry yet) rendered as a plain
+   rectangular photo card — background included, no transparency
+   required. .jp-jersey-photo owns the rounded corners + tier glow (a
+   normal box-shadow, since there's no alpha silhouette to follow
+   anymore) and clips the sheen sweep to that same rectangle via
+   overflow:hidden; .jp-jersey-wrap stays overflow:visible one level
+   up so the badge/count-chip/sparkles positioned just outside the
+   photo's edges aren't clipped along with it. */
+.jp-jersey-photo {
   position: relative;
   z-index: 1;
-  display: block;
   width: 172px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--glow), 0 10px 20px rgba(0, 0, 0, 0.45);
+}
+
+.jp-jersey-img {
+  display: block;
+  width: 100%;
   height: auto;
-  filter: drop-shadow(var(--glow)) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.45));
 }
 
 .jp-jersey-sheen {
@@ -4017,14 +4024,6 @@ a.mg-game-card:hover {
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  -webkit-mask-image: url("jerseys/borr-transparent.png");
-  mask-image: url("jerseys/borr-transparent.png");
-  -webkit-mask-size: 172px auto;
-  mask-size: 172px auto;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
   background: linear-gradient(
     120deg,
     transparent 38%,
@@ -4282,4 +4281,66 @@ a.mg-game-card:hover {
   padding: 8px 10px;
   color: var(--text-dim);
   resize: vertical;
+}
+
+/* ---------- Admin: grid splitter (admin-jerseys.js) ---------- */
+
+.adm-grid-preview-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 14px 0;
+  display: inline-block;
+}
+
+.adm-grid-preview-wrap[hidden] { display: none; }
+
+.adm-grid-preview-wrap canvas { display: block; }
+
+.adm-grid-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.adm-grid-cell {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adm-grid-cell .adm-jersey-checker { padding: 2px; }
+.adm-grid-cell canvas { display: block; width: 100%; height: auto; border-radius: 4px; }
+
+.adm-grid-cell-team,
+.adm-grid-cell-name {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.adm-grid-cell-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.adm-grid-cell-actions button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 11.5px;
+}
+
+.adm-grid-cell-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-height: 13px;
 }

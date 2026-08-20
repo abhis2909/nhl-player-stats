@@ -193,8 +193,10 @@ function buildJerseyPiece(team, tier, opts = {}) {
             <span class="jp-sparkle" style="top:80%; left:12%; animation-delay:1.6s;"></span>
             ${opts.badge ? `<div class="jp-badge jp-badge-${opts.badge === 'NEW' ? 'new' : 'dupe'}">${opts.badge}</div>` : ''}
             ${opts.count ? `<div class="jp-count-chip">×${opts.count}</div>` : ''}
-            <img class="jp-jersey-img" src="${art.image}" alt="">
-            <span class="jp-jersey-sheen" style="-webkit-mask-image:url('${art.image}'); mask-image:url('${art.image}');"></span>
+            <div class="jp-jersey-photo">
+              <img class="jp-jersey-img" src="${art.image}" alt="">
+              <span class="jp-jersey-sheen"></span>
+            </div>
           </div>
           <div class="jp-info">
             ${meta?.logo ? `<img class="jp-team-logo" src="${meta.logo}" alt="" loading="lazy">` : ''}

@@ -1,35 +1,35 @@
 'use strict';
 
-/* Admin page — Jerseys sub-tab: turns a jersey photo into the
-   transparent-background PNG the Player Jersey Packs stage wants
-   (see packs.js's JERSEY_ART / buildJerseyPiece), entirely client-side
-   — no upload, no server round-trip. This is a PREPARATION tool, not a
-   publish pipeline: there's no live backend to write into the repo
-   (see jerseys/README.md), so it ends at "download this PNG + here's
-   the code to paste" rather than actually landing the file on the
-   site. "Staged" entries are localStorage only, one browser, purely so
-   the person doing this doesn't lose track of names/teams they've
-   already processed mid-session.
+/* Admin page — Jerseys sub-tab: prepares jersey art for the Player
+   Jersey Packs stage (see packs.js's JERSEY_ART / buildJerseyPiece)
+   and, via "Publish to GitHub", commits it straight into this repo's
+   jerseys/ folder. Two tools, both entirely client-side (Canvas), no
+   upload until Publish is clicked:
 
-   The background-removal algorithm (border-seeded flood fill, tolerant
-   of a gradual halo/vignette a flat chroma-key would miss; a light box
-   blur for feathered edges; a strong-alpha bbox for the crop so faint
-   stray fringe doesn't leak into it; a final low-alpha floor to kill
-   JPEG-ringing noise; edge decontamination against local luminance) is
-   the same one used to produce jerseys/borr-transparent.png — that was
-   done as a one-off Python script; this is that same approach ported
-   to run live in the browser via Canvas, tuned from the same trial run
-   against that image.
+   1. Single jersey (this section) — by default the photo is used
+      as-is, background included: packs.js now renders jersey art as a
+      plain rounded-rect photo card (box-shadow tier glow, no alpha
+      masking needed), so there's no requirement for a cutout anymore.
+      The "Remove background" checkbox is an opt-in for anyone who
+      still wants that floating-cutout look — it runs a border-seeded
+      flood fill (tolerant of a gradual halo/vignette a flat chroma-key
+      would miss; box blur for feathered edges; a strong-alpha bbox for
+      the crop so faint stray fringe doesn't leak into it; a low-alpha
+      floor to kill JPEG-ringing noise; edge decontamination against
+      local luminance) — originally a one-off Python script (see
+      jerseys/borr-transparent.png), ported to run live here.
 
-   The "already transparent" checkbox skips all of that and routes to
-   trimTransparent() instead — for a PNG someone already cut out
-   elsewhere. Running the flood-fill remover on one of those would be
-   actively harmful (it reasons purely off RGB, with no idea the alpha
-   channel is already doing the real work, so it could reclassify parts
-   of an already-clean cutout as background); trimTransparent() only
-   trusts the existing alpha and crops the excess margin.
+   2. Grid splitter (below) — for a poster-style sheet of many jerseys
+      in one image (e.g. a generated "Top 20" grid): set rows/columns
+      and trim margins, preview the slice lines, then cut it into one
+      canvas per cell (plain rectangular crops, same as the single-photo
+      default — no background removal) so each player just needs its
+      team/name confirmed instead of a separate upload.
 
-   Lazy-loaded (window.__adminJerseysTab.ensureLoaded()). */
+   "Staged" entries are localStorage only, one browser, purely so the
+   person doing this doesn't lose track of names/teams they've already
+   processed mid-session. Lazy-loaded
+   (window.__adminJerseysTab.ensureLoaded()). */
 (function () {
   const TEAMS = [
     ['ANA', 'Anaheim Ducks'], ['BOS', 'Boston Bruins'], ['BUF', 'Buffalo Sabres'],
@@ -63,8 +63,7 @@
     stagedEmpty: document.getElementById('jerseyStagedEmpty'),
     stagedList: document.getElementById('jerseyStagedList'),
     clearStagedBtn: document.getElementById('jerseyClearStagedBtn'),
-    alreadyTransparent: document.getElementById('jerseyAlreadyTransparent'),
-    opaqueWarning: document.getElementById('jerseyOpaqueWarning'),
+    removeBg: document.getElementById('jerseyRemoveBackground'),
   };
 
   let loaded = false;
@@ -202,58 +201,16 @@
     return cropped;
   }
 
-  /** For a PNG that's already had its background removed elsewhere —
-   *  trusts the existing alpha channel completely (no flood fill, no
-   *  decontamination, no floor) and only trims the excess transparent
-   *  margin down to the real content, same as removeBackground()'s
-   *  crop step. Running the flood-fill remover on an image like this
-   *  would be actively harmful: it only looks at RGB, not the alpha
-   *  that's already doing the real work, so it could reclassify parts
-   *  of an already-clean cutout as "background." Returns
-   *  { canvas, hasTransparency } — hasTransparency false means nothing
-   *  in the file was actually transparent, which the caller surfaces
-   *  as a warning rather than silently shipping an opaque "cutout." */
-  function trimTransparent(imageData) {
-    const { width: w, height: h, data } = imageData;
-    let x0 = w, y0 = h, x1 = -1, y1 = -1;
-    let hasTransparency = false;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const a = data[(y * w + x) * 4 + 3];
-        if (a < 250) hasTransparency = true;
-        if (a > 5) {
-          if (x < x0) x0 = x;
-          if (x > x1) x1 = x;
-          if (y < y0) y0 = y;
-          if (y > y1) y1 = y;
-        }
-      }
-    }
-    if (x1 < x0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; } // fully transparent file — nothing to trim to, bail to the full frame
-
-    const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = w; srcCanvas.height = h;
-    srcCanvas.getContext('2d').putImageData(imageData, 0, 0);
-
-    const bw = x1 - x0 + 1;
-    const bh = y1 - y0 + 1;
-    const cropped = document.createElement('canvas');
-    cropped.width = bw; cropped.height = bh;
-    cropped.getContext('2d').drawImage(srcCanvas, x0, y0, bw, bh, 0, 0, bw, bh);
-    return { canvas: cropped, hasTransparency };
-  }
-
   function processFile(file) {
     el.processingNote.hidden = false;
     el.previewRow.hidden = true;
     el.downloadBtn.disabled = true;
     el.publishBtn.disabled = true;
     el.stageBtn.disabled = true;
-    el.opaqueWarning.hidden = true;
     processedBlob = null;
     processedThumb = null;
 
-    const skipRemoval = el.alreadyTransparent.checked;
+    const removeBg = el.removeBg.checked;
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -270,15 +227,13 @@
         const sctx = srcCanvas.getContext('2d');
         sctx.drawImage(img, 0, 0, w, h);
 
+        // Default: used exactly as uploaded (background included) — the
+        // pack-opening stage renders jersey art as a plain photo card
+        // now, no cutout required. "Remove background" is opt-in for
+        // whoever still wants that floating look.
         let outCanvas;
         try {
-          if (skipRemoval) {
-            const { canvas, hasTransparency } = trimTransparent(sctx.getImageData(0, 0, w, h));
-            outCanvas = canvas;
-            el.opaqueWarning.hidden = hasTransparency;
-          } else {
-            outCanvas = removeBackground(sctx.getImageData(0, 0, w, h));
-          }
+          outCanvas = removeBg ? removeBackground(sctx.getImageData(0, 0, w, h)) : srcCanvas;
         } catch (err) {
           el.processingNote.textContent = `Couldn't process that image: ${err.message}`;
           return;
@@ -298,19 +253,10 @@
           el.stageBtn.disabled = false;
         }, 'image/png');
 
-        // Small thumbnail for the staged-list row, kept modest so a
-        // handful of staged entries don't blow past localStorage's
-        // per-origin quota (each thumb is a few KB as a dataURL, vs.
-        // the full processed PNG which can be 100KB+).
-        const thumbCanvas = document.createElement('canvas');
-        const thumbSize = 64;
-        thumbCanvas.width = thumbSize; thumbCanvas.height = thumbSize;
-        const tctx = thumbCanvas.getContext('2d');
-        const scale = Math.min(thumbSize / outCanvas.width, thumbSize / outCanvas.height);
-        const tw = outCanvas.width * scale;
-        const th = outCanvas.height * scale;
-        tctx.drawImage(outCanvas, (thumbSize - tw) / 2, (thumbSize - th) / 2, tw, th);
-        processedThumb = thumbCanvas.toDataURL('image/png');
+        // Kept modest (64px) so a handful of staged entries don't blow
+        // past localStorage's per-origin quota (each thumb is a few KB
+        // as a dataURL, vs. the full processed PNG which can be 100KB+).
+        processedThumb = thumbFromCanvas(outCanvas);
       };
       img.onerror = () => { el.processingNote.textContent = "Couldn't load that file as an image."; };
       img.src = reader.result;
@@ -319,47 +265,57 @@
     reader.readAsDataURL(file);
   }
 
-  function downloadFilename() {
-    const team = el.teamSelect.value || 'jersey';
-    const name = el.nameInput.value.trim();
-    return `${slugify(team)}${name ? '-' + slugify(name) : ''}.png`;
+  function teamOptionsHtml() {
+    return TEAMS.map(([abbrev, name]) => `<option value="${abbrev}">${escapeHtmlLocal(name)} (${abbrev})</option>`).join('');
   }
 
-  function downloadProcessed() {
-    if (!processedBlob) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(processedBlob);
-    a.download = downloadFilename();
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  function filenameFor(team, name) {
+    return `${slugify(team || 'jersey')}${name ? '-' + slugify(name) : ''}.png`;
   }
 
-  /** Commits the currently-processed image to jerseys/<filename> on
-   *  GitHub via POST /api/fantasy/admin-settings (type: 'jersey-image'
-   *  — see that file's handleJerseyImagePublish()). Image only: this
-   *  does NOT touch packs.js's JERSEY_ART, so the snippet below still
-   *  needs pasting in by hand (or via Claude) to actually put the
-   *  published jersey in the game — see the tab's intro text. */
-  async function publishToGithub() {
-    if (el.outCanvas.width === 0) return;
-    el.publishBtn.disabled = true;
-    el.saveStatus.textContent = 'Publishing…';
+  function thumbFromCanvas(canvas, size = 64) {
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = size; thumbCanvas.height = size;
+    const tctx = thumbCanvas.getContext('2d');
+    const scale = Math.min(size / canvas.width, size / canvas.height);
+    const tw = canvas.width * scale;
+    const th = canvas.height * scale;
+    tctx.drawImage(canvas, (size - tw) / 2, (size - th) / 2, tw, th);
+    return thumbCanvas.toDataURL('image/png');
+  }
+
+  function downloadCanvas(canvas, filename) {
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }, 'image/png');
+  }
+
+  /** Commits `canvas` to jerseys/<filename> on GitHub via POST
+   *  /api/fantasy/admin-settings (type: 'jersey-image' — see that
+   *  file's handleJerseyImagePublish()). Image only: this does NOT
+   *  touch packs.js's JERSEY_ART, so the snippet below still needs
+   *  pasting in by hand (or via Claude) to actually put the published
+   *  jersey in the game — see the tab's intro text. Returns
+   *  { ok, message } rather than throwing, so callers (single-image or
+   *  a grid cell) can show the result inline without a try/catch each. */
+  async function publishCanvasToGithub(canvas, filename) {
     try {
-      const dataUrl = el.outCanvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/png');
       const res = await fetch('/api/fantasy/admin-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'jersey-image', filename: downloadFilename(), dataUrl }),
+        body: JSON.stringify({ type: 'jersey-image', filename, dataUrl }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || `HTTP ${res.status}`);
-      el.saveStatus.textContent = `Published jerseys/${downloadFilename()} to GitHub. Still needs the JERSEY_ART snippet below wired into packs.js.`;
+      return { ok: true, message: `Published jerseys/${filename}.` };
     } catch (err) {
-      el.saveStatus.textContent = `Couldn't publish: ${err.message}`;
-    } finally {
-      el.publishBtn.disabled = false;
-      setTimeout(() => { el.saveStatus.textContent = ''; }, 8000);
+      return { ok: false, message: `Couldn't publish: ${err.message}` };
     }
   }
 
@@ -394,6 +350,31 @@
     `).join('');
   }
 
+  function stageEntry(team, name, filename, thumb) {
+    const list = loadStaged();
+    list.push({ team, name, filename, thumb });
+    saveStaged(list);
+    renderStaged();
+  }
+
+  function downloadProcessed() {
+    if (!processedBlob) return;
+    downloadCanvas(el.outCanvas, filenameFor(el.teamSelect.value, el.nameInput.value.trim()));
+  }
+
+  async function publishToGithub() {
+    if (el.outCanvas.width === 0) return;
+    el.publishBtn.disabled = true;
+    el.saveStatus.textContent = 'Publishing…';
+    const filename = filenameFor(el.teamSelect.value, el.nameInput.value.trim());
+    const result = await publishCanvasToGithub(el.outCanvas, filename);
+    el.saveStatus.textContent = result.ok
+      ? `${result.message} Still needs the JERSEY_ART snippet below wired into packs.js.`
+      : result.message;
+    el.publishBtn.disabled = false;
+    setTimeout(() => { el.saveStatus.textContent = ''; }, 8000);
+  }
+
   function stageCurrent() {
     if (!processedThumb) return;
     const team = el.teamSelect.value;
@@ -403,12 +384,196 @@
       setTimeout(() => { el.saveStatus.textContent = ''; }, 2500);
       return;
     }
-    const list = loadStaged();
-    list.push({ team, name, filename: downloadFilename(), thumb: processedThumb });
-    saveStaged(list);
-    renderStaged();
+    stageEntry(team, name, filenameFor(team, name), processedThumb);
     el.saveStatus.textContent = 'Staged. Download the PNG above if you haven’t already.';
     setTimeout(() => { el.saveStatus.textContent = ''; }, 3500);
+  }
+
+  /* ---------------------------------------------------------------
+     Grid splitter: upload a poster-style sheet of many jerseys, set
+     rows/cols + trim margins, preview the slice lines, cut it into one
+     plain rectangular canvas per cell (no background removal — same
+     "used as-is" default as the single-photo tool above), then let
+     each cell get its own team/name and Download/Publish/Stage,
+     reusing the exact same helpers the single-photo flow uses.
+     --------------------------------------------------------------- */
+  let gridImg = null; // the loaded <img>, source of truth for both the preview and the actual slice (slicing reads pixels straight from this, not from the scaled preview canvas)
+  let gridCells = []; // [{ canvas, blob, team, name }] — one per sliced cell, in row-major order
+
+  function gridTrimRect() {
+    const top = Number(document.getElementById('gridTrimTop').value) || 0;
+    const bottom = Number(document.getElementById('gridTrimBottom').value) || 0;
+    const left = Number(document.getElementById('gridTrimLeft').value) || 0;
+    const right = Number(document.getElementById('gridTrimRight').value) || 0;
+    const rows = Math.max(1, Number(document.getElementById('gridRows').value) || 1);
+    const cols = Math.max(1, Number(document.getElementById('gridCols').value) || 1);
+    return { top, bottom, left, right, rows, cols };
+  }
+
+  /** Draws the loaded grid image plus red gridlines at the current
+   *  rows/cols/trim settings, so misalignment (a title bar not fully
+   *  trimmed, an off-by-one row) is obvious before committing to a
+   *  slice — recomputed live on every input change. */
+  function renderGridPreview() {
+    if (!gridImg) return;
+    const canvas = document.getElementById('gridPreviewCanvas');
+    const maxW = 760;
+    const scale = Math.min(1, maxW / gridImg.naturalWidth);
+    const w = Math.round(gridImg.naturalWidth * scale);
+    const h = Math.round(gridImg.naturalHeight * scale);
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(gridImg, 0, 0, w, h);
+
+    const { top, bottom, left, right, rows, cols } = gridTrimRect();
+    const x0 = (left / 100) * w;
+    const x1 = w - (right / 100) * w;
+    const y0 = (top / 100) * h;
+    const y1 = h - (bottom / 100) * h;
+
+    ctx.strokeStyle = 'rgba(255, 60, 60, 0.85)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    for (let c = 1; c < cols; c++) {
+      const x = x0 + ((x1 - x0) * c) / cols;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let r = 1; r < rows; r++) {
+      const y = y0 + ((y1 - y0) * r) / rows;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    document.getElementById('gridPreviewWrap').hidden = false;
+    document.getElementById('gridSliceBtn').disabled = false;
+  }
+
+  function sliceGrid() {
+    if (!gridImg) return;
+    const { top, bottom, left, right, rows, cols } = gridTrimRect();
+    const W = gridImg.naturalWidth;
+    const H = gridImg.naturalHeight;
+    const x0 = (left / 100) * W;
+    const x1 = W - (right / 100) * W;
+    const y0 = (top / 100) * H;
+    const y1 = H - (bottom / 100) * H;
+    const cellW = (x1 - x0) / cols;
+    const cellH = (y1 - y0) / rows;
+
+    gridCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(cellW);
+        canvas.height = Math.round(cellH);
+        canvas.getContext('2d').drawImage(
+          gridImg,
+          x0 + c * cellW, y0 + r * cellH, cellW, cellH,
+          0, 0, canvas.width, canvas.height,
+        );
+        gridCells.push({ canvas, team: TEAMS[0][0], name: '' });
+      }
+    }
+    document.getElementById('gridSliceStatus').textContent = `Sliced into ${gridCells.length} cells.`;
+    setTimeout(() => { document.getElementById('gridSliceStatus').textContent = ''; }, 3000);
+    renderGridCells();
+  }
+
+  function renderGridCells() {
+    const list = document.getElementById('gridCellsList');
+    list.innerHTML = gridCells.map((cell, i) => `
+      <div class="adm-grid-cell" data-index="${i}">
+        <div class="adm-jersey-checker"><canvas class="adm-grid-cell-canvas" width="${cell.canvas.width}" height="${cell.canvas.height}"></canvas></div>
+        <select class="adm-grid-cell-team" data-cell-team="${i}">${teamOptionsHtml()}</select>
+        <input type="text" class="adm-grid-cell-name" data-cell-name="${i}" placeholder="Name / label" value="${escapeHtmlLocal(cell.name)}">
+        <div class="adm-grid-cell-actions">
+          <button type="button" class="ghost-btn" data-cell-download="${i}">⬇</button>
+          <button type="button" class="primary-btn" data-cell-publish="${i}">☁ Publish</button>
+          <button type="button" class="ghost-btn" data-cell-stage="${i}">Stage</button>
+        </div>
+        <span class="adm-grid-cell-status" data-cell-status="${i}"></span>
+      </div>
+    `).join('');
+
+    // Paint each cell's already-sliced canvas into its display <canvas>
+    // (rebuilt fresh by innerHTML above, so this can't be done inline).
+    gridCells.forEach((cell, i) => {
+      const target = list.querySelector(`.adm-grid-cell[data-index="${i}"] .adm-grid-cell-canvas`);
+      target.getContext('2d').drawImage(cell.canvas, 0, 0);
+      const teamSelect = list.querySelector(`[data-cell-team="${i}"]`);
+      teamSelect.value = cell.team;
+    });
+  }
+
+  function wireGridEvents() {
+    const rowsEl = document.getElementById('gridRows');
+    const colsEl = document.getElementById('gridCols');
+    const trimTop = document.getElementById('gridTrimTop');
+    const trimBottom = document.getElementById('gridTrimBottom');
+    const trimLeft = document.getElementById('gridTrimLeft');
+    const trimRight = document.getElementById('gridTrimRight');
+    [rowsEl, colsEl, trimTop, trimBottom, trimLeft, trimRight].forEach((input) => {
+      input.addEventListener('input', renderGridPreview);
+    });
+
+    document.getElementById('gridFileInput').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => { gridImg = img; renderGridPreview(); };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('gridSliceBtn').addEventListener('click', sliceGrid);
+
+    const list = document.getElementById('gridCellsList');
+    list.addEventListener('change', (e) => {
+      const teamI = e.target.dataset.cellTeam;
+      if (teamI !== undefined) { gridCells[Number(teamI)].team = e.target.value; return; }
+      const nameI = e.target.dataset.cellName;
+      if (nameI !== undefined) { gridCells[Number(nameI)].name = e.target.value; return; }
+    });
+    list.addEventListener('input', (e) => {
+      const nameI = e.target.dataset.cellName;
+      if (nameI !== undefined) gridCells[Number(nameI)].name = e.target.value;
+    });
+    list.addEventListener('click', async (e) => {
+      const statusFor = (i) => list.querySelector(`[data-cell-status="${i}"]`);
+
+      const dlBtn = e.target.closest('[data-cell-download]');
+      if (dlBtn) {
+        const i = Number(dlBtn.dataset.cellDownload);
+        const cell = gridCells[i];
+        downloadCanvas(cell.canvas, filenameFor(cell.team, cell.name));
+        return;
+      }
+
+      const stageBtn = e.target.closest('[data-cell-stage]');
+      if (stageBtn) {
+        const i = Number(stageBtn.dataset.cellStage);
+        const cell = gridCells[i];
+        if (!cell.name.trim()) { statusFor(i).textContent = 'Give it a name first.'; return; }
+        const filename = filenameFor(cell.team, cell.name);
+        stageEntry(cell.team, cell.name, filename, thumbFromCanvas(cell.canvas));
+        statusFor(i).textContent = 'Staged.';
+        return;
+      }
+
+      const pubBtn = e.target.closest('[data-cell-publish]');
+      if (pubBtn) {
+        const i = Number(pubBtn.dataset.cellPublish);
+        const cell = gridCells[i];
+        pubBtn.disabled = true;
+        statusFor(i).textContent = 'Publishing…';
+        const filename = filenameFor(cell.team, cell.name);
+        const result = await publishCanvasToGithub(cell.canvas, filename);
+        statusFor(i).textContent = result.message;
+        pubBtn.disabled = false;
+      }
+    });
   }
 
   function wireEvents() {
@@ -432,10 +597,11 @@
       saveStaged(list);
       renderStaged();
     });
+    wireGridEvents();
   }
 
   function init() {
-    el.teamSelect.innerHTML = TEAMS.map(([abbrev, name]) => `<option value="${abbrev}">${escapeHtmlLocal(name)} (${abbrev})</option>`).join('');
+    el.teamSelect.innerHTML = teamOptionsHtml();
     wireEvents();
     renderStaged();
   }
