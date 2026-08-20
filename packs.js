@@ -253,9 +253,6 @@ function buildJerseyPiece(player, opts = {}) {
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
         <div class="jp-slab-top">
-          <div class="jp-slab-logo">
-            ${meta?.logo ? `<img src="${meta.logo}" alt="" loading="lazy">` : `<span>${escapeHtml((teamName || '?').slice(0, 1))}</span>`}
-          </div>
           <div class="jp-slab-heading">
             <div class="jp-slab-player-name">${escapeHtml(player.name || teamName)}</div>
             <div class="jp-slab-subtitle">${TIER_LABEL[tier]} Collectible</div>
@@ -279,15 +276,6 @@ function buildJerseyPiece(player, opts = {}) {
               <img class="jp-jersey-img" src="${player.image}" alt="">
               <span class="jp-jersey-sheen"></span>
             </div>
-          </div>
-          <div class="jp-slab-side-icon" aria-hidden="true">
-            <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round">
-              <line x1="20" y1="80" x2="80" y2="20" />
-              <line x1="20" y1="20" x2="80" y2="80" />
-              <line x1="20" y1="80" x2="35" y2="85" />
-              <line x1="80" y1="80" x2="65" y2="85" />
-              <ellipse cx="50" cy="88" rx="7" ry="3.4" fill="currentColor" stroke="none" />
-            </svg>
           </div>
         </div>
         <div class="jp-slab-bottom">
