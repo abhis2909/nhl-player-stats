@@ -85,7 +85,10 @@ const STORAGE_KEY = 'pk_jersey_collection_v1';
 // nothing's classified into the other five yet — expected, not a bug.
 const JERSEY_ART = {
   BOS: [
-    { name: 'Bobby Orr — #4', image: 'jerseys/borr-transparent.png', tier: 'silver' },
+    // borr-transparent.png (the original placeholder used since this
+    // feature's earliest prototype) was deleted directly on GitHub and
+    // replaced with a properly-published, correctly-tagged upload.
+    { name: 'Bobby Orr — #4', image: 'jerseys/bos-bobby-orr.png', tier: 'silver' },
     // Published via Admin -> Jerseys with the team dropdown left on its
     // default (Anaheim) — the jersey itself is unmistakably Boston
     // (black/gold, ORR #4), so it's filed here rather than under ANA.
