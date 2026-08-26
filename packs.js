@@ -59,7 +59,14 @@ const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: '
 const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
 const GRADE_WEIGHTS = { '7': 17, '8': 28, '8.5': 25, '9': 17, '9.5': 9, '10': 4 };
 const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'PRISTINE' };
-const GRADE_COLOR = { '7': '#8b98ab', '8': '#aab0ba', '8.5': '#c7cdd6', '9': '#e8edf4', '9.5': '#ffffff', '10': '#ffd76a' };
+
+/** `opts.grade` ("7".."10") -> the CSS class carrying that grade's own
+ *  metal color + shimmer ramp (see style.css's .grade-7..grade-10, next
+ *  to .jp-grade-strip) — a "." isn't valid in a class name, so 8.5/9.5
+ *  become grade-8-5/grade-9-5. */
+function gradeClass(grade) {
+  return `grade-${String(grade).replace('.', '-')}`;
+}
 
 const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
@@ -230,8 +237,9 @@ function confettiHTML() {
   return html;
 }
 
-/** Builds one jersey slab — a real graded-collectible layout (header
- *  strip with team monogram/player name/rating box, a middle display
+/** Builds one jersey slab — a real graded-collectible layout (a BGS-
+ *  style grade strip across the top when a grade was rolled, then the
+ *  header strip with player name/rarity subtitle, a middle display
  *  window with the jersey art + a decorative side icon, a footer with
  *  team name + item id + tier pill), as a DOM node. Takes the player
  *  object straight from ALL_PLAYERS/pullOne() — tier comes from
@@ -239,7 +247,7 @@ function confettiHTML() {
  *  roll now (see pullOne()). `opts.badge` ("NEW"/"+1"), if given,
  *  renders a pull-result ribbon. `opts.count`, if given, renders an
  *  owned-count chip instead (collection context). `opts.grade`, if
- *  given, renders the rating box (omitted in some static previews
+ *  given, renders the grade strip (omitted in some static previews
  *  where no grade was rolled — see openJerseyModal). `opts.animate`
  *  plays the stage entrance (rise-in + confetti burst + idle hover);
  *  omit it for a static, already-settled render. */
@@ -255,18 +263,18 @@ function buildJerseyPiece(player, opts = {}) {
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
+        ${opts.grade ? `
+          <div class="jp-grade-strip ${gradeClass(opts.grade)}">
+            <span class="jp-grade-label">Grade</span>
+            <span class="jp-grade-value">${opts.grade}</span>
+            <span class="jp-grade-desc">${GRADE_LABEL[opts.grade]}</span>
+          </div>
+        ` : ''}
         <div class="jp-slab-top">
           <div class="jp-slab-heading">
             <div class="jp-slab-player-name">${escapeHtml(player.name || teamName)}</div>
             <div class="jp-slab-subtitle">${TIER_LABEL[tier]} Collectible</div>
           </div>
-          ${opts.grade ? `
-            <div class="jp-rating-box">
-              <span class="jp-rating-title">Card Rating</span>
-              <span class="jp-rating-score" style="color:${GRADE_COLOR[opts.grade]};">${opts.grade}</span>
-              <span class="jp-rating-desc">${GRADE_LABEL[opts.grade]}</span>
-            </div>
-          ` : ''}
         </div>
         <div class="jp-slab-middle">
           <div class="jp-jersey-wrap">

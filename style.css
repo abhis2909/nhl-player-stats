@@ -17,6 +17,7 @@
   --radius-sm: 6px;
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-pixel: 'Silkscreen', ui-monospace, Consolas, monospace; /* retro bitmap font — jersey-piece slab accents only (packs.html loads it), see ~line 3790 */
 }
 
 * { box-sizing: border-box; }
@@ -3787,27 +3788,49 @@ a.mg-game-card:hover {
   100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
-/* ---- The slab itself: a real collectible-case layout — header strip
-   (player name + rarity subtitle, rating box) / display window
-   (centered jersey) / footer strip (team name, item id, tier pill) —
-   rather than a generic bordered rectangle. Inspired by a reference
-   the user shared (a goldish-tan graded-slab mockup); the structure
-   carries over, but the color is generalized from that reference's
-   single fixed gold-tan to every tier's own --t1/--t2/
-   --t-accent, since this site has six rarities to support, not one. ---- */
+/* ---- The slab itself: a real graded-collectible-case layout — a full-
+   width GRADE STRIP across the very top (BGS-style: the condition
+   rating gets top billing, its own metal tone + shimmer independent of
+   tier — see .jp-grade-strip below), then the header strip (player name
+   + rarity subtitle) / display window (centered jersey) / footer strip
+   (team name, item id, tier pill). Originally a smooth-cornered case
+   inspired by a reference the user shared (a goldish-tan graded-slab
+   mockup); corners are now single-notch "pixel cuts" (.pixel-notch,
+   below) and the jersey photo renders pixelated (see .jp-jersey-img) so
+   the case itself echoes the jerseys' own 8-bit sprite look instead of
+   just housing it. Tier still drives the body's own color/shimmer via
+   --t1/--t2/--t-accent, generalized across all six rarities. ---- */
+
+/* Single-step "pixel corner" cut, shared by every slab surface that
+   wants an 8-bit case edge instead of a smooth border-radius — size set
+   per-element via --notch (falls back to 10px if unset). */
+.jp-slab,
+.jp-jersey-photo,
+.jp-slab-middle,
+.jp-tier-tag {
+  border-radius: 0;
+  clip-path: polygon(
+    0 var(--notch, 10px), var(--notch, 10px) var(--notch, 10px), var(--notch, 10px) 0,
+    calc(100% - var(--notch, 10px)) 0, calc(100% - var(--notch, 10px)) var(--notch, 10px), 100% var(--notch, 10px),
+    100% calc(100% - var(--notch, 10px)), calc(100% - var(--notch, 10px)) calc(100% - var(--notch, 10px)), calc(100% - var(--notch, 10px)) 100%,
+    var(--notch, 10px) 100%, var(--notch, 10px) calc(100% - var(--notch, 10px)), 0 calc(100% - var(--notch, 10px))
+  );
+}
 
 .jp-slab {
+  --notch: 14px;
   position: relative;
   width: 264px;
-  border-radius: 20px;
   padding: 0;
   overflow: hidden;
   background: linear-gradient(165deg, var(--t1) 0%, var(--t2) 55%, #05070a 100%);
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 34px 60px rgba(10, 6, 2, 0.65),
-    0 0 46px rgba(255, 180, 90, 0.12);
+    inset 2px 2px 0 rgba(255, 255, 255, 0.22),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.4),
+    5px 5px 0 rgba(0, 0, 0, 0.45),
+    0 34px 60px rgba(10, 6, 2, 0.55),
+    var(--glow);
 }
 
 /* Contact shadow grounding the slab against the floor — separate from
@@ -3841,6 +3864,7 @@ a.mg-game-card:hover {
   pointer-events: none;
 }
 
+.jp-grade-strip,
 .jp-slab-top,
 .jp-slab-middle,
 .jp-slab-bottom {
@@ -3848,20 +3872,103 @@ a.mg-game-card:hover {
   z-index: 1;
 }
 
-/* ---- Header: player name + rarity subtitle on the left, and (when a
-   grade was rolled) the rating box on the right — no separate team
-   monogram; the team itself is named in the footer instead. ---- */
-.jp-slab-top {
+/* ---- Grade strip: the condition rating, BGS-style — a full-width
+   metal band across the very top of the case, ahead of the player-name
+   header, rather than a small badge tucked beside it. Its own color +
+   shimmer ramp (--g1/--g2/--g-accent/--g-shimmer-speed/--g-sheen-peak/
+   --g-glow, set per .grade-* class below) is independent of tier: a
+   Silver jersey graded a 10 still gets the full gold-metal treatment
+   here, and a Diamond jersey graded a 7 gets a flat, dull one — the two
+   ratings read as two separate premium signals, exactly like a real
+   BGS label reads independently of the card inside it. Omitted
+   entirely when no grade was rolled (see buildJerseyPiece's opts.grade
+   in packs.js) rather than left as dead space. */
+.jp-grade-strip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  overflow: hidden;
+  background: linear-gradient(100deg, var(--g2), var(--g1) 45%, var(--g-accent) 50%, var(--g1) 55%, var(--g2));
+  border-bottom: 2px solid rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 var(--g-glow-size) var(--g-glow-color);
 }
 
-.jp-slab-heading {
-  flex: 1 1 auto;
-  min-width: 0;
+.jp-grade-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, calc(var(--g-sheen-peak) * 0.6)) 46%,
+    rgba(255, 255, 255, var(--g-sheen-peak)) 50%,
+    rgba(255, 255, 255, calc(var(--g-sheen-peak) * 0.6)) 54%,
+    transparent 70%
+  );
+  background-size: 260% 260%;
+  mix-blend-mode: overlay;
+  animation: pc-shimmer var(--g-shimmer-speed) ease infinite;
+  pointer-events: none;
+}
+
+.jp-grade-label, .jp-grade-desc {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  color: #0b0f14;
+  white-space: nowrap;
+}
+
+.jp-grade-value {
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  color: #0b0f14;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Near Mint (7) — the "silver, basically no shimmer" floor of the
+   ramp, same philosophy as .tier-silver. */
+.grade-7 {
+  --g1: #7c8798; --g2: #333a46; --g-accent: #b7c0cd;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.06;
+  --g-glow-size: 0px; --g-glow-color: transparent;
+}
+.grade-8 {
+  --g1: #92a0b3; --g2: #3a4453; --g-accent: #dbe2ec;
+  --g-shimmer-speed: 12s; --g-sheen-peak: 0.16;
+  --g-glow-size: 6px; --g-glow-color: rgba(146, 160, 179, 0.4);
+}
+.grade-8-5 {
+  --g1: #b7c1d1; --g2: #444e60; --g-accent: #f1f5f9;
+  --g-shimmer-speed: 9s; --g-sheen-peak: 0.22;
+  --g-glow-size: 10px; --g-glow-color: rgba(183, 193, 209, 0.5);
+}
+.grade-9 {
+  --g1: #e7ecf3; --g2: #5b6b82; --g-accent: #ffffff;
+  --g-shimmer-speed: 6.5s; --g-sheen-peak: 0.3;
+  --g-glow-size: 15px; --g-glow-color: rgba(231, 236, 243, 0.6);
+}
+/* Gem Mint (9.5) and Pristine (10) — the two grades worth a real
+   metallic moment: brighter platinum shimmering into full gold. */
+.grade-9-5 {
+  --g1: #ffffff; --g2: #8a97ac; --g-accent: #eaf6ff;
+  --g-shimmer-speed: 4.5s; --g-sheen-peak: 0.4;
+  --g-glow-size: 20px; --g-glow-color: rgba(255, 255, 255, 0.7);
+}
+.grade-10 {
+  --g1: #ffd76a; --g2: #7a5310; --g-accent: #fff6d8;
+  --g-shimmer-speed: 3s; --g-sheen-peak: 0.5;
+  --g-glow-size: 30px; --g-glow-color: rgba(255, 215, 106, 0.8);
+}
+
+/* ---- Header: player name + rarity subtitle — the rating now lives in
+   .jp-grade-strip above, so this row is just identity, no longer split
+   with a badge on the right. ---- */
+.jp-slab-top {
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .jp-slab-player-name {
@@ -3883,43 +3990,16 @@ a.mg-game-card:hover {
   opacity: 0.9;
 }
 
-.jp-rating-box {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: rgba(5, 7, 10, 0.55);
-  border: 1px solid var(--t-accent);
-}
-
-.jp-rating-title, .jp-rating-desc {
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--t-accent);
-}
-
-.jp-rating-score {
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
 /* ---- Middle: the display window (jersey photo), centered, inside an
    etched panel — the "trim ring where the case meets the window" idea
    frames the whole middle section rather than the photo alone. ---- */
 .jp-slab-middle {
+  --notch: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px 14px;
   margin: 10px 12px;
-  border-radius: 12px;
   background: rgba(5, 7, 10, 0.25);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 2px 10px rgba(0, 0, 0, 0.3);
 }
@@ -3955,15 +4035,15 @@ a.mg-game-card:hover {
 }
 
 .jp-tier-tag {
+  --notch: 4px;
   flex: 0 0 auto;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--t2);
   background: linear-gradient(120deg, var(--t-accent), var(--t1));
-  padding: 3px 10px;
-  border-radius: 20px;
+  padding: 4px 10px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
@@ -4025,19 +4105,26 @@ a.mg-game-card:hover {
    positioned just outside the photo's edges aren't clipped along with
    it. */
 .jp-jersey-photo {
+  --notch: 6px;
   position: relative;
   z-index: 1;
   width: 176px;
-  border-radius: 10px;
   overflow: hidden;
   border: 2px solid var(--t-accent);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 18px var(--t1), var(--glow), 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
+/* image-rendering: pixelated keeps the jerseys' own 8-bit sprite edges
+   crisp instead of letting the browser's default smoothing blur them
+   when scaled down from their source size — the single biggest lever
+   for the case actually reading as "pixel art" rather than just a
+   holo-foil card that happens to contain one. */
 .jp-jersey-img {
   display: block;
   width: 100%;
   height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .jp-jersey-sheen {
