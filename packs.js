@@ -58,7 +58,11 @@ const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: '
 // symmetrically-ish in both directions (matching "8 most common").
 const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
 const GRADE_WEIGHTS = { '7': 17, '8': 28, '8.5': 25, '9': 17, '9.5': 9, '10': 4 };
-const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'PRISTINE' };
+// 10's label calls out the strip's own Black Label treatment (see
+// style.css's .grade-10) rather than the usual condition-only wording,
+// same way a real BGS Black Label is a distinct named tier, not just
+// "a really good Pristine."
+const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'BLACK LABEL' };
 
 /** `opts.grade` ("7".."10") -> the CSS class carrying that grade's own
  *  metal color + shimmer ramp (see style.css's .grade-7..grade-10, next
@@ -292,7 +296,10 @@ function buildJerseyPiece(player, opts = {}) {
         <div class="jp-slab-bottom">
           <div class="jp-slab-footer-text">
             <div class="jp-slab-team-name">${escapeHtml(teamName)}</div>
-            <div class="jp-slab-item-id">#${escapeHtml(itemId)}</div>
+            <div class="jp-slab-cert-row">
+              <span class="jp-slab-item-id">#${escapeHtml(itemId)}</span>
+              <span class="jp-slab-barcode" aria-hidden="true"></span>
+            </div>
           </div>
           <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
         </div>
