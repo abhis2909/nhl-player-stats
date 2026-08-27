@@ -41,64 +41,32 @@ const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: '
 // The slab's glow size at each tier — same magnitudes the shared
 // .tier-silver..diamond gem system (style.css, ~line 1250) already used
 // for --glow, just pulled out here as plain numbers so buildJerseyPiece
-// can recombine them with a TEAM color instead of that system's own
-// fixed per-tier hue (see TEAM_PALETTE below and its use there).
+// can recombine them with the case's own finish color instead of that
+// system's own fixed per-tier hue (see CASE_FINISH below and its use
+// there).
 const TIER_GLOW_SIZE = { silver: 0, gold: 10, emerald: 16, ruby: 20, amethyst: 26, diamond: 34 };
 
-/** #rrggbb -> "rgba(r, g, b, alpha)". No validation — every TEAM_PALETTE
- *  entry below is a hand-written literal, not user input. */
+/** #rrggbb -> "rgba(r, g, b, alpha)". No validation — CASE_FINISH's
+ *  colors are hand-written literals, not user input. */
 function hexToRgba(hex, alpha) {
   const h = hex.replace('#', '');
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Each team's own jersey colors — a vivid primary (c1, the slab's top
-// gradient stop + shimmer/glow hue), a dark base (c2, the gradient's
-// low end), and a bright accent (text/tag/sheen highlight) — set as
-// inline --t1/--t2/--t-accent overrides per piece (see buildJerseyPiece)
-// so the CASE matches the JERSEY inside it instead of an arbitrary
-// rarity hue. Tier still drives how INTENSE the shimmer/glow reads
-// (--shimmer-speed/--sheen-peak from the shared .tier-* class, --glow's
-// SIZE from TIER_GLOW_SIZE above) — only the color itself moves from
-// "rarity" to "team." Approximate brand colors, not exact Pantone/hex
-// values — close enough for the vibe to read as that team at a glance.
-// DEFAULT covers any team not yet listed (or a bad/missing abbrev).
-const TEAM_PALETTE = {
-  ANA: { c1: '#F47A38', c2: '#101010', accent: '#B9975B' },
-  BOS: { c1: '#FFB81C', c2: '#000000', accent: '#FFFFFF' },
-  BUF: { c1: '#FCB514', c2: '#002654', accent: '#FFFFFF' },
-  CGY: { c1: '#C8102E', c2: '#1A1A1A', accent: '#F1BE48' },
-  CAR: { c1: '#E03A3E', c2: '#000000', accent: '#A4A9AD' },
-  CHI: { c1: '#CF0A2C', c2: '#101010', accent: '#FFD100' },
-  COL: { c1: '#6F263D', c2: '#14213D', accent: '#A2AAAD' },
-  CBJ: { c1: '#CE1126', c2: '#002654', accent: '#A4A9AD' },
-  DAL: { c1: '#006847', c2: '#111111', accent: '#A2AAAD' },
-  DET: { c1: '#CE1126', c2: '#1A1A1A', accent: '#FFFFFF' },
-  EDM: { c1: '#FF4C00', c2: '#041E42', accent: '#FFFFFF' },
-  FLA: { c1: '#C8102E', c2: '#041E42', accent: '#B9975B' },
-  LAK: { c1: '#A2AAAD', c2: '#111111', accent: '#FFFFFF' },
-  MIN: { c1: '#A6192E', c2: '#154734', accent: '#EAAA00' },
-  MTL: { c1: '#AF1E2D', c2: '#001E62', accent: '#FFFFFF' },
-  NSH: { c1: '#FFB81C', c2: '#041E42', accent: '#FFFFFF' },
-  NJD: { c1: '#CE1126', c2: '#000000', accent: '#FFFFFF' },
-  NYI: { c1: '#00539B', c2: '#001B3A', accent: '#F47D30' },
-  NYR: { c1: '#0038A8', c2: '#061A34', accent: '#CE1126' },
-  OTT: { c1: '#C8102E', c2: '#000000', accent: '#C69214' },
-  PHI: { c1: '#F74902', c2: '#000000', accent: '#FFFFFF' },
-  PIT: { c1: '#FCB514', c2: '#000000', accent: '#CFC493' },
-  SJS: { c1: '#006D75', c2: '#0A0A0A', accent: '#EA7200' },
-  SEA: { c1: '#99D9D9', c2: '#001628', accent: '#E9072B' },
-  STL: { c1: '#002F87', c2: '#041E42', accent: '#FCB514' },
-  TBL: { c1: '#002868', c2: '#000000', accent: '#FFFFFF' },
-  TOR: { c1: '#00205B', c2: '#041C2C', accent: '#FFFFFF' },
-  UTA: { c1: '#71AFE5', c2: '#0F0F0F', accent: '#FFFFFF' },
-  VAN: { c1: '#00843D', c2: '#08315C', accent: '#97D9F6' },
-  VGK: { c1: '#B4975A', c2: '#333F42', accent: '#C8102E' },
-  WSH: { c1: '#C8102E', c2: '#041E42', accent: '#FFFFFF' },
-  WPG: { c1: '#004C97', c2: '#041E42', accent: '#AC162C' },
-  DEFAULT: { c1: '#8b98ab', c2: '#1e293b', accent: '#e2e8f0' },
-};
+// One black finish for every jersey, regardless of team or tier — a
+// graphite-to-black gradient (c1/c2) with a cool light-silver trim
+// (accent, used for the jersey window's border, the tier tag, and the
+// slab's small text) instead of a per-team or per-rarity hue. Set as
+// inline --t1/--t2/--t-accent overrides per piece (see buildJerseyPiece),
+// same mechanism a team palette or a special opts.finish would use —
+// this just always resolves to the same values now. The point is
+// contrast: a neutral case makes the jersey's own team colors and the
+// grade strip's own color ramp (style.css's .grade-7..grade-10) the
+// only things pulling the eye, rather than a third, competing case hue.
+// Tier still drives shimmer speed/sheen strength (from the shared
+// .tier-* class) and the glow's SIZE (TIER_GLOW_SIZE above).
+const CASE_FINISH = { c1: '#3a3d42', c2: '#000000', accent: '#c9ccd1' };
 
 // A second, independent roll on top of tier — a BGS-style grading slab
 // layered onto the pull, same "weighted odds" mechanic as tier but
@@ -318,36 +286,37 @@ function confettiHTML() {
  *  plays the stage entrance (rise-in + confetti burst + idle hover);
  *  omit it for a static, already-settled render. `opts.finish`, if
  *  given (e.g. 'damascus'), adds a second `tier-<finish>` class after
- *  the normal tier one and skips the team-palette override below —
+ *  the normal tier one and skips the CASE_FINISH override below —
  *  EXPERIMENTAL, for eyeballing a special case texture by hand (see
  *  style.css's .tier-damascus), not a real pull outcome: nothing in
  *  packs.js's TIERS/TIER_WEIGHTS ever sets this.
  *
- *  The case's own COLOR normally comes from the player's TEAM
- *  (TEAM_PALETTE), not tier — set as inline --t1/--t2/--t-accent/--glow
- *  overrides on the piece, which win over the .tier-* class's own
- *  values for this element without touching that shared class (still
- *  used as-is by the Stats page's player-rating-card modal). Tier keeps
- *  driving the shimmer speed/sheen strength (still read off .tier-*
- *  itself) and the glow's SIZE (TIER_GLOW_SIZE) — so a Diamond pull
- *  still shimmers faster and glows bigger than a Silver one, just in
- *  that jersey's own team colors instead of a fixed rarity hue. */
+ *  The case's own color is CASE_FINISH's black finish for every jersey
+ *  — deliberately not team- or tier-colored, so the jersey art's own
+ *  team colors and the grade strip's own color ramp are the only things
+ *  pulling the eye, not a third competing case hue. Set as inline
+ *  --t1/--t2/--t-accent/--glow overrides on the piece, which win over
+ *  the .tier-* class's own color values for this element without
+ *  touching that shared class (still used as-is by the Stats page's
+ *  player-rating-card modal). Tier keeps driving the shimmer speed/
+ *  sheen strength (still read off .tier-* itself) and the glow's SIZE
+ *  (TIER_GLOW_SIZE) — so a Diamond pull still shimmers faster and
+ *  glows bigger than a Silver one. */
 function buildJerseyPiece(player, opts = {}) {
   const tier = player.tier;
   const meta = state.teamMeta?.get(player.team);
   const teamName = meta?.common || meta?.name || player.team;
   const itemId = player.image.split('/').pop().replace(/\.[a-z0-9]+$/i, '').toUpperCase();
-  const palette = TEAM_PALETTE[player.team] || TEAM_PALETTE.DEFAULT;
   const glowSize = TIER_GLOW_SIZE[tier] ?? 0;
 
   const piece = document.createElement('div');
   piece.className = `jersey-piece tier-${tier}${opts.finish ? ` tier-${opts.finish}` : ''}${opts.animate ? ' jp-rise-in' : ''}`;
   if (!opts.animate) piece.style.opacity = '1'; // skip the entrance's initial hidden state
   if (!opts.finish) {
-    piece.style.setProperty('--t1', palette.c1);
-    piece.style.setProperty('--t2', palette.c2);
-    piece.style.setProperty('--t-accent', palette.accent);
-    piece.style.setProperty('--glow', glowSize ? `0 0 ${glowSize}px ${hexToRgba(palette.c1, 0.55)}` : '0 0 0 transparent');
+    piece.style.setProperty('--t1', CASE_FINISH.c1);
+    piece.style.setProperty('--t2', CASE_FINISH.c2);
+    piece.style.setProperty('--t-accent', CASE_FINISH.accent);
+    piece.style.setProperty('--glow', glowSize ? `0 0 ${glowSize}px ${hexToRgba(CASE_FINISH.c1, 0.55)}` : '0 0 0 transparent');
   }
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
