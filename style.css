@@ -1282,6 +1282,21 @@ td.stat-num {
   --sheen-peak: 0.4; --glow: 0 0 34px rgba(125, 211, 252, 0.65);
 }
 
+/* EXPERIMENTAL — a Damascus-steel "skin," not a real rarity: deliberately
+   NOT in packs.js's TIERS/TIER_WEIGHTS, so it never appears in an actual
+   pack pull or affects odds. Applied by hand (see buildJerseyPiece's
+   opts.finish in packs.js) to preview what a folded-steel case looks
+   like next to the pixel-art jerseys. Sets the same --t1/--t2/--t-accent/
+   --shimmer-speed/--sheen-peak/--glow every real tier uses, so it slots
+   into the existing shimmer/sparkle machinery for free — only the
+   slab's flat gradient itself gets replaced (.tier-damascus .jp-slab
+   below) with an actual folded-metal texture. */
+.tier-damascus {
+  --t1: #b8c4d1; --t2: #141a22; --t-accent: #eef4fa;
+  --shimmer-speed: 3.5s; --shimmer-opacity: 1;
+  --sheen-peak: 0.4; --glow: 0 0 26px rgba(184, 196, 209, 0.55);
+}
+
 .player-card::before {
   content: "";
   position: absolute;
@@ -3836,6 +3851,23 @@ a.mg-game-card:hover {
     6px 6px 0 rgba(0, 0, 0, 0.5),
     0 40px 70px rgba(5, 3, 1, 0.6),
     var(--glow);
+}
+
+/* Damascus finish (see .tier-damascus above and buildJerseyPiece's
+   opts.finish in packs.js) — replaces the flat two-stop tier gradient
+   with an actual folded-steel texture: two layered SVG feTurbulence
+   passes (one for the wavy bands, a second, much-lower-frequency one
+   that warps the first via feDisplacementMap into the swirling
+   "watering" pattern real pattern-welded steel has), tinted cool
+   steel-blue via feColorMatrix and pushed to hard tonal bands via a
+   gamma feComponentTransfer so it reads as folded metal rather than a
+   smooth cloud. Self-contained (no separate <filter> element needed in
+   the page) — the whole thing lives in this one data: URI. */
+.tier-damascus .jp-slab {
+  background:
+    linear-gradient(165deg, rgba(20, 26, 34, 0.15) 0%, rgba(5, 7, 10, 0.6) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cfilter id='d' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.013 0.1' numOctaves='6' seed='8' result='bands'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0055' numOctaves='2' seed='71' result='warp'/%3E%3CfeDisplacementMap in='bands' in2='warp' scale='150' xChannelSelector='R' yChannelSelector='G' result='warped'/%3E%3CfeColorMatrix in='warped' type='matrix' values='0 0 0 0 0.5  0 0 0 0 0.57  0 0 0 0 0.65  0 0 0 1 0' result='tinted'/%3E%3CfeComponentTransfer in='tinted'%3E%3CfeFuncR type='gamma' exponent='3.4'/%3E%3CfeFuncG type='gamma' exponent='3.4'/%3E%3CfeFuncB type='gamma' exponent='3.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23d)'/%3E%3C/svg%3E");
+  background-size: cover, cover;
 }
 
 /* A fixed (non-animated) glass-glare band on top of everything else in

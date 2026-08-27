@@ -316,17 +316,22 @@ function confettiHTML() {
  *  given, renders the grade strip (omitted in some static previews
  *  where no grade was rolled — see openJerseyModal). `opts.animate`
  *  plays the stage entrance (rise-in + confetti burst + idle hover);
- *  omit it for a static, already-settled render.
+ *  omit it for a static, already-settled render. `opts.finish`, if
+ *  given (e.g. 'damascus'), adds a second `tier-<finish>` class after
+ *  the normal tier one and skips the team-palette override below —
+ *  EXPERIMENTAL, for eyeballing a special case texture by hand (see
+ *  style.css's .tier-damascus), not a real pull outcome: nothing in
+ *  packs.js's TIERS/TIER_WEIGHTS ever sets this.
  *
- *  The case's own COLOR comes from the player's TEAM (TEAM_PALETTE),
- *  not tier — set as inline --t1/--t2/--t-accent/--glow overrides on
- *  the piece, which win over the .tier-* class's own values for this
- *  element without touching that shared class (still used as-is by the
- *  Stats page's player-rating-card modal). Tier keeps driving the
- *  shimmer speed/sheen strength (still read off .tier-* itself) and the
- *  glow's SIZE (TIER_GLOW_SIZE) — so a Diamond pull still shimmers
- *  faster and glows bigger than a Silver one, just in that jersey's own
- *  team colors instead of a fixed rarity hue. */
+ *  The case's own COLOR normally comes from the player's TEAM
+ *  (TEAM_PALETTE), not tier — set as inline --t1/--t2/--t-accent/--glow
+ *  overrides on the piece, which win over the .tier-* class's own
+ *  values for this element without touching that shared class (still
+ *  used as-is by the Stats page's player-rating-card modal). Tier keeps
+ *  driving the shimmer speed/sheen strength (still read off .tier-*
+ *  itself) and the glow's SIZE (TIER_GLOW_SIZE) — so a Diamond pull
+ *  still shimmers faster and glows bigger than a Silver one, just in
+ *  that jersey's own team colors instead of a fixed rarity hue. */
 function buildJerseyPiece(player, opts = {}) {
   const tier = player.tier;
   const meta = state.teamMeta?.get(player.team);
@@ -336,12 +341,14 @@ function buildJerseyPiece(player, opts = {}) {
   const glowSize = TIER_GLOW_SIZE[tier] ?? 0;
 
   const piece = document.createElement('div');
-  piece.className = `jersey-piece tier-${tier}${opts.animate ? ' jp-rise-in' : ''}`;
+  piece.className = `jersey-piece tier-${tier}${opts.finish ? ` tier-${opts.finish}` : ''}${opts.animate ? ' jp-rise-in' : ''}`;
   if (!opts.animate) piece.style.opacity = '1'; // skip the entrance's initial hidden state
-  piece.style.setProperty('--t1', palette.c1);
-  piece.style.setProperty('--t2', palette.c2);
-  piece.style.setProperty('--t-accent', palette.accent);
-  piece.style.setProperty('--glow', glowSize ? `0 0 ${glowSize}px ${hexToRgba(palette.c1, 0.55)}` : '0 0 0 transparent');
+  if (!opts.finish) {
+    piece.style.setProperty('--t1', palette.c1);
+    piece.style.setProperty('--t2', palette.c2);
+    piece.style.setProperty('--t-accent', palette.accent);
+    piece.style.setProperty('--glow', glowSize ? `0 0 ${glowSize}px ${hexToRgba(palette.c1, 0.55)}` : '0 0 0 transparent');
+  }
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
