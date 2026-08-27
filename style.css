@@ -1301,11 +1301,20 @@ td.stat-num {
    above: not in TIERS/TIER_WEIGHTS, applied by hand via
    buildJerseyPiece's opts.finish for a look preview only. The slab's
    flat gradient (.tier-topographic .jp-slab below) is replaced with
-   actual elevation-contour rings. */
+   actual elevation-contour rings.
+
+   Deliberately MATTE, unlike every other finish here — a glossy/holo
+   case fights the flat, printed-map look contour lines are supposed to
+   have. --shimmer-speed effectively frozen and --shimmer-opacity/
+   --sheen-peak both near zero kill the moving shine every other tier
+   gets (same "basically off" trick .tier-silver uses), --glow is small
+   and dim instead of a bright halo, and the case's own bevel/glass-
+   glare are separately dulled below (.tier-topographic .jp-slab and
+   ::after) instead of the shared glossy-plastic defaults. */
 .tier-topographic {
-  --t1: #4fd1e0; --t2: #0a1420; --t-accent: #bdf3fb;
-  --shimmer-speed: 5s; --shimmer-opacity: 1;
-  --sheen-peak: 0.3; --glow: 0 0 24px rgba(79, 209, 224, 0.5);
+  --t1: #3c545c; --t2: #0a1318; --t-accent: #a9ccd3;
+  --shimmer-speed: 999s; --shimmer-opacity: 0.15;
+  --sheen-peak: 0.05; --glow: 0 0 10px rgba(79, 209, 224, 0.2);
 }
 
 .player-card::before {
@@ -3895,9 +3904,36 @@ a.mg-game-card:hover {
    a dense field of small loops. */
 .tier-topographic .jp-slab {
   background:
-    linear-gradient(165deg, rgba(20, 30, 34, 0.1) 0%, rgba(5, 7, 10, 0.55) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cdefs%3E%3Cpattern id='rings' width='170' height='170' patternUnits='userSpaceOnUse'%3E%3Crect width='170' height='170' fill='%230a1420'/%3E%3Ccircle cx='85' cy='85' r='74' fill='none' stroke='%233fa9d1' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='40' fill='none' stroke='%233fa9d1' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='11' fill='none' stroke='%233fa9d1' stroke-width='2' opacity='0.5'/%3E%3C/pattern%3E%3Cfilter id='warp' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0019' numOctaves='3' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='250' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23rings)' filter='url(%23warp)'/%3E%3C/svg%3E");
+    linear-gradient(165deg, rgba(20, 30, 34, 0.3) 0%, rgba(5, 7, 10, 0.72) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cdefs%3E%3Cpattern id='rings' width='170' height='170' patternUnits='userSpaceOnUse'%3E%3Crect width='170' height='170' fill='%230a1420'/%3E%3Ccircle cx='85' cy='85' r='74' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='40' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='11' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3C/pattern%3E%3Cfilter id='warp' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0019' numOctaves='3' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='250' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23rings)' filter='url(%23warp)'/%3E%3C/svg%3E");
   background-size: cover, cover;
+  /* A softer, duller bevel than the shared glossy-plastic default
+     (compare .jp-slab's own box-shadow above) — matte surfaces don't
+     throw a crisp bright highlight off their edge the way polished
+     acrylic does. */
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.12),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    6px 6px 0 rgba(0, 0, 0, 0.5),
+    0 40px 70px rgba(5, 3, 1, 0.6),
+    var(--glow);
+}
+
+/* Muted glass-glare — the shared .jp-slab::after below assumes a
+   glossy clear-plastic case; a matte one barely catches light at all,
+   so this knocks every highlight in it down to a fraction of the
+   default. */
+.tier-topographic .jp-slab::after {
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 10%,
+    transparent 24%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.02) 90%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
 }
 
 /* A fixed (non-animated) glass-glare band on top of everything else in
