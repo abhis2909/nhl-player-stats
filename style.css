@@ -1290,11 +1290,18 @@ td.stat-num {
    --shimmer-speed/--sheen-peak/--glow every real tier uses, so it slots
    into the existing shimmer/sparkle machinery for free — only the
    slab's flat gradient itself gets replaced (.tier-damascus .jp-slab
-   below) with an actual folded-metal texture. */
+   below) with an actual folded-metal texture, and its shimmer sweep
+   gets replaced with a color-shifting one (.tier-damascus .jp-slab::before
+   below) for a titanium-flame-anodized look rather than plain gray
+   steel — real Damascus/mokume-gane titanium often finishes exactly
+   this way (heat- or anodize-tinted blue/purple/pink/gold), which is
+   also where this palette's pink comes from: --t-accent (the jersey
+   photo's border ring + slab text) is pink here, not white/icy like
+   every other tier. */
 .tier-damascus {
-  --t1: #b8c4d1; --t2: #141a22; --t-accent: #eef4fa;
+  --t1: #9db4d8; --t2: #150f22; --t-accent: #ff8fd6;
   --shimmer-speed: 3.5s; --shimmer-opacity: 1;
-  --sheen-peak: 0.4; --glow: 0 0 26px rgba(184, 196, 209, 0.55);
+  --sheen-peak: 0.4; --glow: 0 0 30px rgba(255, 143, 214, 0.5);
 }
 
 .player-card::before {
@@ -3925,6 +3932,44 @@ a.mg-game-card:hover {
   mix-blend-mode: overlay;
   animation: pc-shimmer var(--shimmer-speed) ease infinite;
   pointer-events: none;
+}
+
+/* Damascus's own shimmer: a genuinely METALLIC color-shift sweep
+   (blue -> purple -> pink -> gold -> back to blue) instead of the
+   plain single-hue highlight every other tier uses — the "tilt it and
+   the color changes" effect real anodized-titanium Damascus has,
+   layered over the folded-steel texture via mix-blend-mode: color so
+   only the HUE changes and the texture's own light/dark banding (its
+   luminance) still shows through underneath. One-directional and
+   looping (damascus-shift, not the back-and-forth pc-shimmer) so the
+   color reads as continuously flowing rather than swinging in place. */
+.tier-damascus .jp-slab::before {
+  background: linear-gradient(100deg, #49c6ff, #a06bff, #ff6fc4, #ffd76a, #49c6ff);
+  background-size: 300% 300%;
+  opacity: 0.7;
+  mix-blend-mode: color;
+  animation: damascus-shift 5s linear infinite;
+}
+
+@keyframes damascus-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* A brighter glass-glare than the shared default (below) — Damascus is
+   meant to read as a genuinely reflective, polished metal finish, not
+   just a tinted texture, so its "light catching the case" highlight
+   gets a real boost over the standard acrylic-case glare. */
+.tier-damascus .jp-slab::after {
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.18) 10%,
+    transparent 24%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.12) 90%,
+    rgba(255, 255, 255, 0.32) 100%
+  );
 }
 
 .jp-grade-strip,
