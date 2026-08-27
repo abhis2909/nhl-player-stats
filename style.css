@@ -1297,6 +1297,17 @@ td.stat-num {
   --sheen-peak: 0.4; --glow: 0 0 26px rgba(184, 196, 209, 0.55);
 }
 
+/* EXPERIMENTAL — a topographic-map "skin," same deal as .tier-damascus
+   above: not in TIERS/TIER_WEIGHTS, applied by hand via
+   buildJerseyPiece's opts.finish for a look preview only. The slab's
+   flat gradient (.tier-topographic .jp-slab below) is replaced with
+   actual elevation-contour rings. */
+.tier-topographic {
+  --t1: #4fd1e0; --t2: #0a1420; --t-accent: #bdf3fb;
+  --shimmer-speed: 5s; --shimmer-opacity: 1;
+  --sheen-peak: 0.3; --glow: 0 0 24px rgba(79, 209, 224, 0.5);
+}
+
 .player-card::before {
   content: "";
   position: absolute;
@@ -3867,6 +3878,20 @@ a.mg-game-card:hover {
   background:
     linear-gradient(165deg, rgba(20, 26, 34, 0.15) 0%, rgba(5, 7, 10, 0.6) 100%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cfilter id='d' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.013 0.1' numOctaves='6' seed='8' result='bands'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0055' numOctaves='2' seed='71' result='warp'/%3E%3CfeDisplacementMap in='bands' in2='warp' scale='150' xChannelSelector='R' yChannelSelector='G' result='warped'/%3E%3CfeColorMatrix in='warped' type='matrix' values='0 0 0 0 0.5  0 0 0 0 0.57  0 0 0 0 0.65  0 0 0 1 0' result='tinted'/%3E%3CfeComponentTransfer in='tinted'%3E%3CfeFuncR type='gamma' exponent='3.4'/%3E%3CfeFuncG type='gamma' exponent='3.4'/%3E%3CfeFuncB type='gamma' exponent='3.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23d)'/%3E%3C/svg%3E");
+  background-size: cover, cover;
+}
+
+/* Topographic finish (see .tier-topographic above and buildJerseyPiece's
+   opts.finish in packs.js) — a tiled pattern of small concentric rings
+   (a regular "contour" grid, defs > pattern below) globally warped by
+   one feTurbulence + feDisplacementMap pass into the closed, organic
+   loops a real elevation-contour map has — regular rings in, wavy
+   "peaks and basins" out, entirely from the warp; no edge-detection or
+   posterizing involved. Self-contained data: URI, same as Damascus. */
+.tier-topographic .jp-slab {
+  background:
+    linear-gradient(165deg, rgba(20, 30, 34, 0.1) 0%, rgba(5, 7, 10, 0.55) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cdefs%3E%3Cpattern id='rings' width='46' height='46' patternUnits='userSpaceOnUse'%3E%3Crect width='46' height='46' fill='%230a1420'/%3E%3Ccircle cx='23' cy='23' r='20' fill='none' stroke='%233fa9d1' stroke-width='1.6' opacity='0.85'/%3E%3Ccircle cx='23' cy='23' r='11' fill='none' stroke='%233fa9d1' stroke-width='1.6' opacity='0.85'/%3E%3Ccircle cx='23' cy='23' r='2.5' fill='none' stroke='%233fa9d1' stroke-width='1.6' opacity='0.85'/%3E%3C/pattern%3E%3Cfilter id='warp' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.007' numOctaves='3' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='70' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23rings)' filter='url(%23warp)'/%3E%3C/svg%3E");
   background-size: cover, cover;
 }
 
