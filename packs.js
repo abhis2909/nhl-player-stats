@@ -354,9 +354,11 @@ function buildJerseyPiece(player, opts = {}) {
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
         ${opts.grade ? `
           <div class="jp-grade-strip ${gradeClass(opts.grade)}">
-            <span class="jp-grade-label">Grade</span>
+            <div class="jp-grade-text">
+              <span class="jp-grade-label">Grade</span>
+              <span class="jp-grade-desc">${GRADE_LABEL[opts.grade]}</span>
+            </div>
             <span class="jp-grade-value">${opts.grade}</span>
-            <span class="jp-grade-desc">${GRADE_LABEL[opts.grade]}</span>
           </div>
         ` : ''}
         <div class="jp-slab-top">
