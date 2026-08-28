@@ -4181,8 +4181,8 @@ a.mg-game-card:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px 12px;
-  margin: 10px 10px;
+  padding: 7px;
+  margin: 5px;
   background: linear-gradient(
     100deg,
     var(--g2, #d9d0bd),
