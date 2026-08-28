@@ -4167,25 +4167,30 @@ a.mg-game-card:hover {
 }
 
 /* ---- Middle: a picture-frame MAT around the display window, not just
-   a dark etched panel — a wide board between the case's own "molding"
-   and the jersey itself, with a beveled inset shadow simulating the
-   angled cut real mat board has around its window. Widened margin/
-   padding over the old panel gives that mat actual visible width
-   instead of a thin trim ring. Colored from the grade strip's own
-   ramp (--g-accent -> --g1, same as .jp-jersey-photo's border below it
-   uses --g1 alone) rather than a fixed neutral cream, so the WHOLE
-   frame — not just the thin trim ring right at the window — reads as
-   that grade's color: a light Bronze/Silver/Platinum/Gold/Rose-Gold
-   board for grades 7-9.5, a dark charcoal one for Black Label. Falls
-   back to the original cream tones when no grade was rolled. ---- */
+   a dark etched panel — a board between the case's own "molding" and
+   the jersey itself, with a beveled inset shadow simulating the
+   angled cut real mat board has around its window. Uses the EXACT same
+   gradient recipe as .jp-grade-strip itself (dark g2 edges, g1 at
+   45/55%, a bright g-accent streak at 50%) rather than a different
+   two-stop version that merely shared variables — so the mat reads as
+   a literal continuation of the grade strip's own material, not just a
+   similarly-colored surface. Falls back to the original cream tones
+   when no grade was rolled. ---- */
 .jp-slab-middle {
   --notch: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 22px 20px;
-  margin: 16px 16px;
-  background: linear-gradient(155deg, var(--g-accent, #ece5d6) 0%, var(--g1, #d9d0bd) 100%);
+  padding: 14px 12px;
+  margin: 10px 10px;
+  background: linear-gradient(
+    100deg,
+    var(--g2, #d9d0bd),
+    var(--g1, #ece5d6) 45%,
+    var(--g-accent, #fff8ec) 50%,
+    var(--g1, #ece5d6) 55%,
+    var(--g2, #d9d0bd)
+  );
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.12),
     inset 3px 3px 10px rgba(0, 0, 0, 0.18),
