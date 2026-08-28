@@ -3520,7 +3520,13 @@ a.mg-game-card:hover {
    piece itself. */
 .pk-stage {
   position: relative;
-  height: 460px;
+  /* Tall enough for the jersey slab's own height (grown over several
+     redesigns — grade strip, wider mat, etc.) plus the idle float
+     animation's +7px bob and the landing brightness pulse's drop-
+     shadow halo, measured from the piece's bottom-anchor point
+     (.pk-stage-piece's padding-bottom) up — was clipping the top of
+     the slab before this bump. */
+  height: 520px;
   border-radius: var(--radius);
   overflow: hidden;
   background:
@@ -4317,13 +4323,20 @@ a.mg-game-card:hover {
   z-index: 1;
   width: 176px;
   overflow: hidden;
-  border: 2px solid var(--t-accent);
-  /* The exposed-core "bevel ring" a real mat's angled cut reveals right
-     at the window opening, before the case's own tier/team glow takes
-     over further out. */
+  /* Colored to match the grade strip's own dominant metal tone (--g1,
+     inherited from the .grade-* class buildJerseyPiece also puts on
+     .jp-slab itself, not just .jp-grade-strip, precisely so it reaches
+     down here) instead of the case's own neutral accent: Bronze/Silver/
+     Platinum/Gold/Rose-Gold for grades 7-9.5, near-black for a Black
+     Label 10 — the window literally picks up the grade's own color.
+     Falls back to the case accent when no grade was rolled (--g1
+     unset, e.g. the collection view's static previews). A real border,
+     not a box-shadow ring, since box-shadow doesn't reliably paint
+     outside an element that also has a clip-path (see the shared
+     pixel-notch rule above) in every browser. */
+  border: 3px solid var(--g1, var(--t-accent));
   box-shadow:
-    0 0 0 3px rgba(250, 248, 240, 0.9),
-    0 0 0 4px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.4),
     0 0 18px var(--t1),
     var(--glow),
     0 10px 20px rgba(0, 0, 0, 0.5);
