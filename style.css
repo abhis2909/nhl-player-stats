@@ -4177,7 +4177,7 @@ a.mg-game-card:hover {
    similarly-colored surface. Falls back to the original cream tones
    when no grade was rolled. ---- */
 .jp-slab-middle {
-  --notch: 8px;
+  --notch: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4328,7 +4328,7 @@ a.mg-game-card:hover {
    positioned just outside the photo's edges aren't clipped along with
    it. */
 .jp-jersey-photo {
-  --notch: 6px;
+  --notch: 3px;
   position: relative;
   z-index: 1;
   width: 176px;
