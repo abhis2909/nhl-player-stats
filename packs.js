@@ -132,6 +132,7 @@ const el = {
   packCount: document.getElementById('pkPackCount'),
   odds: document.getElementById('pkOdds'),
   gradeOdds: document.getElementById('pkGradeOdds'),
+  noJerseysNote: document.getElementById('pkNoJerseysNote'),
   pack: document.getElementById('pkPack'),
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
@@ -461,6 +462,15 @@ async function init() {
   el.packCount.textContent = `${PACK.cardCount} jersey${PACK.cardCount === 1 ? '' : 's'}`;
   renderOdds();
   el.packSection.hidden = false;
+
+  // JERSEY_ART is empty between "cleared the old test entries" and
+  // "the real per-team art is published" — pullOne() has nothing to
+  // draw from then, so keep Open Pack disabled with an explanation
+  // rather than letting it throw.
+  if (!ALL_PLAYERS.length) {
+    el.openBtn.disabled = true;
+    el.noJerseysNote.hidden = false;
+  }
 
   if (Object.keys(state.collection).length) renderCollection();
 }
