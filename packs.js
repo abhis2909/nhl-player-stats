@@ -38,6 +38,36 @@ const TIERS = ['silver', 'gold', 'emerald', 'ruby', 'amethyst', 'diamond'];
 const TIER_WEIGHTS = { silver: 45, gold: 28, emerald: 15, ruby: 7, amethyst: 4, diamond: 1 };
 const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: 'Ruby', amethyst: 'Amethyst', diamond: 'Diamond' };
 
+// The slab's glow size at each tier — same magnitudes the shared
+// .tier-silver..diamond gem system (style.css, ~line 1250) already used
+// for --glow, just pulled out here as plain numbers so buildJerseyPiece
+// can recombine them with the case's own finish color instead of that
+// system's own fixed per-tier hue (see CASE_FINISH below and its use
+// there).
+const TIER_GLOW_SIZE = { silver: 0, gold: 10, emerald: 16, ruby: 20, amethyst: 26, diamond: 34 };
+
+/** #rrggbb -> "rgba(r, g, b, alpha)". No validation — CASE_FINISH's
+ *  colors are hand-written literals, not user input. */
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// One black finish for every jersey, regardless of team or tier — a
+// graphite-to-black gradient (c1/c2) with a cool light-silver trim
+// (accent, used for the jersey window's border, the tier tag, and the
+// slab's small text) instead of a per-team or per-rarity hue. Set as
+// inline --t1/--t2/--t-accent overrides per piece (see buildJerseyPiece),
+// same mechanism a team palette or a special opts.finish would use —
+// this just always resolves to the same values now. The point is
+// contrast: a neutral case makes the jersey's own team colors and the
+// grade strip's own color ramp (style.css's .grade-7..grade-10) the
+// only things pulling the eye, rather than a third, competing case hue.
+// Tier still drives shimmer speed/sheen strength (from the shared
+// .tier-* class) and the glow's SIZE (TIER_GLOW_SIZE above).
+const CASE_FINISH = { c1: '#3a3d42', c2: '#000000', accent: '#c9ccd1' };
+
 // A second, independent roll on top of tier — a BGS-style grading slab
 // layered onto the pull, same "weighted odds" mechanic as tier but
 // deliberately its own axis: two Diamond pulls can still differ by
@@ -47,79 +77,43 @@ const TIER_LABEL = { silver: 'Silver', gold: 'Gold', emerald: 'Emerald', ruby: '
 // pack open rather than persisted.
 //
 // Weights are a discretized normal distribution — mean 8, sigma 1 —
-// sampled at each grade's actual numeric value (so 8.5 and 9 are only
-// half a point apart while 7 and 8 are a full point, matching real BGS
+// sampled at each grade's actual numeric value (so half-point grades
+// are only half as far apart as whole-point ones, matching real BGS
 // grade spacing) and normalized to sum to 100:
 //   python3 -c "import math; mean=8; sigma=1
-//   xs=[7,8,8.5,9,9.5,10]
+//   xs=[7,7.5,8,8.5,9,9.5,10]
 //   raw=[math.exp(-((x-mean)**2)/(2*sigma**2)) for x in xs]
 //   print([round(r/sum(raw)*100) for r in raw])"
-// -> [17, 28, 25, 17, 9, 4] — 8 is the clear peak, tapering off
-// symmetrically-ish in both directions (matching "8 most common").
-const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
-const GRADE_WEIGHTS = { '7': 17, '8': 28, '8.5': 25, '9': 17, '9.5': 9, '10': 4 };
-const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'PRISTINE' };
-const GRADE_COLOR = { '7': '#8b98ab', '8': '#aab0ba', '8.5': '#c7cdd6', '9': '#e8edf4', '9.5': '#ffffff', '10': '#ffd76a' };
+// -> [14, 20, 23, 20, 14, 7, 3], rounded down to 22 at the peak (8) to
+// land exactly on 100 — 8 is the clear peak, tapering off
+// symmetrically in both directions (matching "8 most common").
+const GRADES = ['7', '7.5', '8', '8.5', '9', '9.5', '10'];
+const GRADE_WEIGHTS = { '7': 14, '7.5': 20, '8': 22, '8.5': 20, '9': 14, '9.5': 7, '10': 3 };
+// 10's label calls out the strip's own Black Label treatment (see
+// style.css's .grade-10) rather than the usual condition-only wording,
+// same way a real BGS Black Label is a distinct named tier, not just
+// "a really good Pristine."
+const GRADE_LABEL = {
+  '7': 'NEAR MINT', '7.5': 'NEAR MINT+', '8': 'NM-MT', '8.5': 'NM-MT+',
+  '9': 'MINT', '9.5': 'GEM MINT', '10': 'BLACK LABEL',
+};
+
+/** `opts.grade` ("7".."10") -> the CSS class carrying that grade's own
+ *  metal color + shimmer ramp (see style.css's .grade-7..grade-10, next
+ *  to .jp-grade-strip) — a "." isn't valid in a class name, so 8.5/9.5
+ *  become grade-8-5/grade-9-5. */
+function gradeClass(grade) {
+  return `grade-${String(grade).replace('.', '-')}`;
+}
 
 const PACK = { name: 'Standard Jersey Pack', cardCount: 1 };
 
 const STORAGE_KEY = 'pk_jersey_collection_v1';
 
-// Jersey art registry — `name`, `image`, and `tier` all set deliberately
-// (by the Jerseys tab on admin.html's "Rarity class" select, or by hand
-// here) rather than guessed. A team maps to either one entry (a single
-// object) or an array of them (BOS/BUF below) — every entry, regardless
-// of team, is one card in the pool a pull draws from (see ALL_PLAYERS):
-// there's no per-team pull step anymore, so a team with zero entries
-// just never comes up rather than falling back to a placeholder. Mirrors
-// the shape admin-jerseys.js's localStorage-staged entries use (see
-// admin.html) — copy an entry here verbatim to actually publish it
-// site-wide, since this file (not localStorage) is what every visitor
-// loads.
-//
-// `tier` currently defaults every entry below to 'silver' — real
-// classification (which of these are actually Diamond-caliber legends
-// vs. depth guys) is a call for the site owner to make via Admin ->
-// Jerseys, not something to guess at here. Until that happens, every
-// pull will land on silver (TIER_WEIGHTS' by-far-largest bucket) since
-// nothing's classified into the other five yet — expected, not a bug.
-const JERSEY_ART = {
-  BOS: [
-    // borr-transparent.png (the original placeholder used since this
-    // feature's earliest prototype) was deleted directly on GitHub and
-    // replaced with a properly-published, correctly-tagged upload.
-    { name: 'Bobby Orr — #4', image: 'jerseys/bos-bobby-orr.png', tier: 'silver' },
-    // Published via Admin -> Jerseys with the team dropdown left on its
-    // default (Anaheim) — the jersey itself is unmistakably Boston
-    // (black/gold, ORR #4), so it's filed here rather than under ANA.
-    // Filename kept as originally published (ana-bobby-orr.png); only
-    // this registry entry's team placement was corrected.
-    { name: 'Bobby Orr — #4 (alt)', image: 'jerseys/ana-bobby-orr.png', tier: 'silver' },
-    { name: 'Ray Bourque — #77', image: 'jerseys/bos-ray-bourque.png', tier: 'silver' },
-  ],
-  BUF: [
-    { name: 'Perreault — #11', image: 'jerseys/buf-perreault-11.png', tier: 'silver' },
-    { name: 'Hasek — #39', image: 'jerseys/buf-hasek-39.png', tier: 'silver' },
-    { name: 'Lafontaine — #16', image: 'jerseys/buf-lafontaine-16.png', tier: 'silver' },
-    { name: 'Gare — #18', image: 'jerseys/buf-gare-18.png', tier: 'silver' },
-    { name: 'Andreychuk — #26', image: 'jerseys/buf-andreychuk-26.png', tier: 'silver' },
-    { name: 'Ruff — #22', image: 'jerseys/buf-ruff-22.png', tier: 'silver' },
-    { name: 'Ramsay — #14', image: 'jerseys/buf-ramsay-14.png', tier: 'silver' },
-    { name: 'Martin — #7', image: 'jerseys/buf-martin-7.png', tier: 'silver' },
-    { name: 'Robert — #8', image: 'jerseys/buf-robert-8.png', tier: 'silver' },
-    { name: 'Miller — #30', image: 'jerseys/buf-miller-30.png', tier: 'silver' },
-    { name: 'Vanek — #26', image: 'jerseys/buf-vanek-26.png', tier: 'silver' },
-    { name: 'Drury — #23', image: 'jerseys/buf-drury-23.png', tier: 'silver' },
-    { name: 'Briere — #48', image: 'jerseys/buf-briere-48.png', tier: 'silver' },
-    { name: 'Pominville — #29', image: 'jerseys/buf-pominville-29.png', tier: 'silver' },
-    { name: 'Afinogenov — #61', image: 'jerseys/buf-afinogenov-61.png', tier: 'silver' },
-    { name: 'Roy — #9', image: 'jerseys/buf-roy-9.png', tier: 'silver' },
-    { name: 'Thompson — #72', image: 'jerseys/buf-thompson-72.png', tier: 'silver' },
-    { name: 'Schoenfeld — #6', image: 'jerseys/buf-schoenfeld-6.png', tier: 'silver' },
-    { name: 'Korab — #4', image: 'jerseys/buf-korab-4.png', tier: 'silver' },
-    { name: 'Dahlin — #26', image: 'jerseys/buf-dahlin-26.png', tier: 'silver' },
-  ],
-};
+// JERSEY_ART lives in jersey-art.js now (loaded before this file, see
+// packs.html) — split out so admin.html's "Reclassify Existing Jerseys"
+// tool (admin-jerseys.js) can read the same registry without loading
+// all of this file's pack-opening game logic too.
 
 // Flattened once at load: every JERSEY_ART entry, from every team,
 // as one flat list of pullable players — this (not JERSEY_ART directly)
@@ -138,6 +132,7 @@ const el = {
   packCount: document.getElementById('pkPackCount'),
   odds: document.getElementById('pkOdds'),
   gradeOdds: document.getElementById('pkGradeOdds'),
+  noJerseysNote: document.getElementById('pkNoJerseysNote'),
   pack: document.getElementById('pkPack'),
   openBtn: document.getElementById('pkOpenBtn'),
   revealSection: document.getElementById('pkRevealSection'),
@@ -230,8 +225,9 @@ function confettiHTML() {
   return html;
 }
 
-/** Builds one jersey slab — a real graded-collectible layout (header
- *  strip with team monogram/player name/rating box, a middle display
+/** Builds one jersey slab — a real graded-collectible layout (a BGS-
+ *  style grade strip across the top when a grade was rolled, then the
+ *  header strip with player name/rarity subtitle, a middle display
  *  window with the jersey art + a decorative side icon, a footer with
  *  team name + item id + tier pill), as a DOM node. Takes the player
  *  object straight from ALL_PLAYERS/pullOne() — tier comes from
@@ -239,34 +235,60 @@ function confettiHTML() {
  *  roll now (see pullOne()). `opts.badge` ("NEW"/"+1"), if given,
  *  renders a pull-result ribbon. `opts.count`, if given, renders an
  *  owned-count chip instead (collection context). `opts.grade`, if
- *  given, renders the rating box (omitted in some static previews
+ *  given, renders the grade strip (omitted in some static previews
  *  where no grade was rolled — see openJerseyModal). `opts.animate`
  *  plays the stage entrance (rise-in + confetti burst + idle hover);
- *  omit it for a static, already-settled render. */
+ *  omit it for a static, already-settled render. `opts.finish`, if
+ *  given (e.g. 'damascus'), adds a second `tier-<finish>` class after
+ *  the normal tier one and skips the CASE_FINISH override below —
+ *  EXPERIMENTAL, for eyeballing a special case texture by hand (see
+ *  style.css's .tier-damascus), not a real pull outcome: nothing in
+ *  packs.js's TIERS/TIER_WEIGHTS ever sets this.
+ *
+ *  The case's own color is CASE_FINISH's black finish for every jersey
+ *  — deliberately not team- or tier-colored, so the jersey art's own
+ *  team colors and the grade strip's own color ramp are the only things
+ *  pulling the eye, not a third competing case hue. Set as inline
+ *  --t1/--t2/--t-accent/--glow overrides on the piece, which win over
+ *  the .tier-* class's own color values for this element without
+ *  touching that shared class (still used as-is by the Stats page's
+ *  player-rating-card modal). Tier keeps driving the shimmer speed/
+ *  sheen strength (still read off .tier-* itself) and the glow's SIZE
+ *  (TIER_GLOW_SIZE) — so a Diamond pull still shimmers faster and
+ *  glows bigger than a Silver one. */
 function buildJerseyPiece(player, opts = {}) {
   const tier = player.tier;
   const meta = state.teamMeta?.get(player.team);
   const teamName = meta?.common || meta?.name || player.team;
   const itemId = player.image.split('/').pop().replace(/\.[a-z0-9]+$/i, '').toUpperCase();
+  const glowSize = TIER_GLOW_SIZE[tier] ?? 0;
 
   const piece = document.createElement('div');
-  piece.className = `jersey-piece tier-${tier}${opts.animate ? ' jp-rise-in' : ''}`;
+  piece.className = `jersey-piece tier-${tier}${opts.finish ? ` tier-${opts.finish}` : ''}${opts.animate ? ' jp-rise-in' : ''}`;
   if (!opts.animate) piece.style.opacity = '1'; // skip the entrance's initial hidden state
+  if (!opts.finish) {
+    piece.style.setProperty('--t1', CASE_FINISH.c1);
+    piece.style.setProperty('--t2', CASE_FINISH.c2);
+    piece.style.setProperty('--t-accent', CASE_FINISH.accent);
+    piece.style.setProperty('--glow', glowSize ? `0 0 ${glowSize}px ${hexToRgba(CASE_FINISH.c1, 0.55)}` : '0 0 0 transparent');
+  }
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
       <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
+        ${opts.grade ? `
+          <div class="jp-grade-strip ${gradeClass(opts.grade)}">
+            <div class="jp-grade-text">
+              <span class="jp-grade-label">Grade</span>
+              <span class="jp-grade-desc">${GRADE_LABEL[opts.grade]}</span>
+            </div>
+            <span class="jp-grade-value">${opts.grade}</span>
+          </div>
+        ` : ''}
         <div class="jp-slab-top">
           <div class="jp-slab-heading">
             <div class="jp-slab-player-name">${escapeHtml(player.name || teamName)}</div>
             <div class="jp-slab-subtitle">${TIER_LABEL[tier]} Collectible</div>
           </div>
-          ${opts.grade ? `
-            <div class="jp-rating-box">
-              <span class="jp-rating-title">Card Rating</span>
-              <span class="jp-rating-score" style="color:${GRADE_COLOR[opts.grade]};">${opts.grade}</span>
-              <span class="jp-rating-desc">${GRADE_LABEL[opts.grade]}</span>
-            </div>
-          ` : ''}
         </div>
         <div class="jp-slab-middle">
           <div class="jp-jersey-wrap">
@@ -284,7 +306,10 @@ function buildJerseyPiece(player, opts = {}) {
         <div class="jp-slab-bottom">
           <div class="jp-slab-footer-text">
             <div class="jp-slab-team-name">${escapeHtml(teamName)}</div>
-            <div class="jp-slab-item-id">#${escapeHtml(itemId)}</div>
+            <div class="jp-slab-cert-row">
+              <span class="jp-slab-item-id">#${escapeHtml(itemId)}</span>
+              <span class="jp-slab-barcode" aria-hidden="true"></span>
+            </div>
           </div>
           <div class="jp-tier-tag">${TIER_LABEL[tier]}</div>
         </div>
@@ -437,6 +462,15 @@ async function init() {
   el.packCount.textContent = `${PACK.cardCount} jersey${PACK.cardCount === 1 ? '' : 's'}`;
   renderOdds();
   el.packSection.hidden = false;
+
+  // JERSEY_ART is empty between "cleared the old test entries" and
+  // "the real per-team art is published" — pullOne() has nothing to
+  // draw from then, so keep Open Pack disabled with an explanation
+  // rather than letting it throw.
+  if (!ALL_PLAYERS.length) {
+    el.openBtn.disabled = true;
+    el.noJerseysNote.hidden = false;
+  }
 
   if (Object.keys(state.collection).length) renderCollection();
 }

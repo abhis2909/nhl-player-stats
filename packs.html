@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Player Jersey Packs — Mini-Games</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎽</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Retro bitmap font for the jersey-piece slab's grade strip/tier tag —
+     matches the jersey art's own pixel-sprite look (see style.css's
+     --font-pixel, ~line 20). -->
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +28,6 @@
   </div>
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Player Stats</a>
-    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
     <a href="minigames.html" class="nav-tab active">🎮 Mini-Games</a>
     <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
     <a href="admin.html" class="nav-tab">⚙ Admin</a>
@@ -54,6 +59,7 @@
           Player Ratings cards — plus an independent graded-slab rating, BGS-style.</p>
         <p class="pk-odds" id="pkOdds"></p>
         <p class="pk-odds" id="pkGradeOdds"></p>
+        <p class="pk-odds" id="pkNoJerseysNote" hidden>No jerseys published yet — check back soon.</p>
         <button type="button" id="pkOpenBtn" class="primary-btn">Open Pack</button>
       </div>
     </div>
@@ -123,6 +129,7 @@
 <script src="data.js" defer></script>
 <script src="avatar.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
+<script src="jersey-art.js" defer></script>
 <script src="packs.js" defer></script>
 </body>
 </html>

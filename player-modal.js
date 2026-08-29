@@ -12,7 +12,7 @@
    MIN_GAMES_PLAYED_GOALIES/INVERT_STATS respectively) — and the modalRoot/modalOverlay/
    modalClose/modalContent + compareModalRoot/compareModalOverlay/
    compareModalClose/compareModalContent markup in its HTML (see
-   cards.html or index.html for the exact shape).
+   index.html for the exact shape).
 
    Call initPlayerModal(ctx) once after data loads, and again whenever
    the host page's active season/context changes (e.g. app.js's
@@ -28,7 +28,7 @@ let pmCtx = {
   seasonDataCache: new Map(), // seasonId -> { skaters, goalies } raw — shared by reference with the host page's own cache where possible, so nothing gets fetched twice
   currentSeasonRatedSkaters: [],
   currentSeasonRatedGoalies: [],
-  historicalSeasonIds: [], // season ids the Rating Trend chart's "Historical" tab walks — cards.html passes back to 2021-22, index.html passes its own 2-season Historical range
+  historicalSeasonIds: [], // season ids the Rating Trend chart's "Historical" tab walks — index.html passes 2023-24 through 2025-26
   searchPool: [], // combined, already-rated skaters+goalies — what the in-modal "Compare with..." search filters over
 };
 
@@ -441,11 +441,39 @@ function buildGameLogTable(games, categories, isGoalie) {
 
 /* ------------------------------ rating trend ------------------------------ */
 
-/** Builds the rating-trend chart's data points from saved weekly
- *  snapshots (see snapshots.js), NOT from the game log — this is a trend
- *  of "what would this player's overall rating have been at each
- *  snapshot", not a per-game breakdown. Each snapshot is re-rated
- *  independently against its OWN eligibility pool (same
+/** Groups `entries` (oldest -> newest, `{ snap, full }` pairs already
+ *  filtered to one season) into one per calendar month — keeping the
+ *  LAST (most recent) entry in each month, i.e. "where the rating stood
+ *  by the end of that month" — instead of one point per individual
+ *  saved snapshot. Snapshot keys are plain YYYY-MM-DD dates (see
+ *  snapshots.js); a key that doesn't look like a date (very old,
+ *  pre-database local data) falls back to being its own bucket rather
+ *  than crashing. */
+function monthlySnapshots(entries) {
+  const byMonth = new Map();
+  for (const entry of entries) {
+    const key = /^\d{4}-\d{2}/.test(entry.snap.key) ? entry.snap.key.slice(0, 7) : entry.snap.key;
+    byMonth.set(key, entry); // later (more recent) entry in the same month overwrites
+  }
+  return Array.from(byMonth.values());
+}
+
+/** "Aug 2026" from a YYYY-MM(-DD) snapshot key. Falls back to the raw
+ *  key if it doesn't parse as a date (see monthlySnapshots()). */
+function monthLabel(dateKey) {
+  const d = new Date(`${dateKey.slice(0, 7)}-01T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return dateKey;
+  return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** Builds the rating-trend chart's data points from saved snapshots (see
+ *  snapshots.js), NOT from the game log — this is a trend of "what would
+ *  this player's overall rating have been around each point in the
+ *  season", not a per-game breakdown. Snapshots are bucketed to one per
+ *  CALENDAR MONTH (monthlySnapshots(), above) rather than the raw one-
+ *  per-day granularity the underlying snapshots are saved at — a season-
+ *  long trend reads as noise at daily resolution. Each month's snapshot
+ *  is re-rated independently against its OWN eligibility pool (same
  *  MIN_GAMES_PLAYED_SKATERS/GOALIES rule as the live pool) so the
  *  comparison is always fair for that point in time. Only snapshots
  *  from pmCtx.seasonId are included. The
@@ -462,16 +490,20 @@ function buildSnapshotTrendPoints(player) {
   const points = [];
 
   const chronological = listSnapshots().slice().reverse(); // listSnapshots() is newest-first
+  const seasonSnaps = [];
   for (const snap of chronological) {
     const full = getSnapshotByKey(snap.key);
     if (!full || full.data.seasonId !== pmCtx.seasonId) continue;
+    seasonSnaps.push({ snap, full });
+  }
 
+  for (const { snap, full } of monthlySnapshots(seasonSnaps)) {
     const rawPool = isGoalie ? full.data.goalies : full.data.skaters;
     const eligible = rawPool.filter((p) => p.gamesPlayed >= minGP);
 
     const rated = ratePool(eligible, mode, pmCtx.ratingConfig);
     const found = rated.find((p) => p.playerId === player.playerId);
-    if (found) points.push({ label: snap.label, value: found.overall });
+    if (found) points.push({ label: monthLabel(snap.key), value: found.overall });
   }
 
   const livePool = isGoalie ? pmCtx.currentSeasonRatedGoalies : pmCtx.currentSeasonRatedSkaters;

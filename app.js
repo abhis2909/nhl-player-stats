@@ -83,6 +83,16 @@ function historicalSeasonIdsUI() {
   return [state.seasonId, state.seasonId - 10001]; // newest -> oldest
 }
 
+// The shared player-modal.js's Rating Trend chart's "Historical" tab
+// walks exactly 3 seasons — 2023-24 through 2025-26 as of the 2025-26
+// season, and shifts forward one season each year after, since it's
+// computed off state.seasonId rather than hardcoded — independently of
+// the Historical period's own (2-season) picker above. Newest -> oldest,
+// same convention as historicalSeasonIdsUI().
+function trendHistoricalSeasonIds() {
+  return [state.seasonId, state.seasonId - 10001, state.seasonId - 20002];
+}
+
 // The season one ahead of "current" — the Current Season view's target,
 // shown as a preseason projection until it has real games (see
 // loadCurrentSeasonView()), then as a live rest-of-season blend. Its
@@ -539,7 +549,7 @@ async function init() {
       seasonDataCache: state.seasonDataCache,
       currentSeasonRatedSkaters: state.currentSeasonRatedSkaters,
       currentSeasonRatedGoalies: state.currentSeasonRatedGoalies,
-      historicalSeasonIds: historicalSeasonIdsUI(),
+      historicalSeasonIds: trendHistoricalSeasonIds(),
       searchPool: [...state.currentSeasonRatedSkaters, ...state.currentSeasonRatedGoalies],
     });
 

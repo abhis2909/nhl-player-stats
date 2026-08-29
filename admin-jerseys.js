@@ -91,6 +91,11 @@
     repoFilenameInput: document.getElementById('jerseyRepoFilename'),
     repoLoadBtn: document.getElementById('jerseyLoadRepoBtn'),
     repoLoadStatus: document.getElementById('jerseyRepoLoadStatus'),
+    reclassifyList: document.getElementById('jerseyReclassifyList'),
+    reclassifyAutoBtn: document.getElementById('jerseyReclassifyAutoBtn'),
+    reclassifyGenerateBtn: document.getElementById('jerseyReclassifyGenerateBtn'),
+    reclassifyStatus: document.getElementById('jerseyReclassifyStatus'),
+    reclassifyOutput: document.getElementById('jerseyReclassifyOutput'),
   };
 
   let loaded = false;
@@ -627,7 +632,15 @@
     });
     list.addEventListener('input', (e) => {
       const nameI = e.target.dataset.cellName;
-      if (nameI !== undefined) gridCells[Number(nameI)].name = e.target.value;
+      if (nameI === undefined) return;
+      const i = Number(nameI);
+      gridCells[i].name = e.target.value;
+      const suggestion = suggestTierForName(e.target.value);
+      if (suggestion) {
+        gridCells[i].tier = suggestion;
+        const tierSelect = list.querySelector(`[data-cell-tier="${i}"]`);
+        if (tierSelect) tierSelect.value = suggestion;
+      }
     });
     list.addEventListener('click', async (e) => {
       const statusFor = (i) => list.querySelector(`[data-cell-status="${i}"]`);
@@ -665,10 +678,212 @@
     });
   }
 
+  /* ---------------------------------------------------------------
+     Auto-suggested rarity, based on a rough hand-maintained sense of a
+     player's historical significance — inner-circle all-time legends
+     vs. Hall of Famers/franchise icons vs. very good regulars vs.
+     solid depth guys — not a live stats lookup (this page has no
+     network access to anything that would actually score that, and
+     "significance" isn't something derivable from raw career stats
+     alone anyway). A starting point the admin can always override
+     before staging/generating anything, never applied silently.
+
+     Keyed by normalized last name where that's unambiguous enough
+     across NHL history to trust alone; deliberately left OUT for
+     surnames that could mean more than one very different player
+     (e.g. "Roy" — Patrick Roy is an inner-circle legend, but a bare
+     "Roy — #9" jersey in this registry isn't necessarily him) rather
+     than risk a confidently wrong high-rarity guess. Those go in
+     PLAYER_SIGNIFICANCE_FULL_NAME instead, matched only on the full
+     name. */
+  const PLAYER_SIGNIFICANCE = {
+    // Inner-circle, all-time legends
+    gretzky: 'diamond', orr: 'diamond', howe: 'diamond', lemieux: 'diamond',
+    hasek: 'diamond', messier: 'diamond', yzerman: 'diamond', crosby: 'diamond',
+    ovechkin: 'diamond', lidstrom: 'diamond', beliveau: 'diamond', richard: 'diamond',
+    hull: 'diamond', mikita: 'diamond', harvey: 'diamond', plante: 'diamond',
+    sawchuk: 'diamond', trottier: 'diamond', bossy: 'diamond', sakic: 'diamond',
+    forsberg: 'diamond',
+
+    // Hall of Fame / franchise-icon caliber
+    bourque: 'amethyst', lafontaine: 'amethyst', perreault: 'amethyst',
+    andreychuk: 'amethyst', esposito: 'amethyst', potvin: 'amethyst',
+    robinson: 'amethyst', park: 'amethyst', dionne: 'amethyst', clarke: 'amethyst',
+    fedorov: 'amethyst', datsyuk: 'amethyst', zetterberg: 'amethyst',
+    chelios: 'amethyst', macinnis: 'amethyst', coffey: 'amethyst', leetch: 'amethyst',
+    pronger: 'amethyst', niedermayer: 'amethyst', selanne: 'amethyst', kariya: 'amethyst',
+    iginla: 'amethyst', sundin: 'amethyst', naslund: 'amethyst', oates: 'amethyst',
+    francis: 'amethyst', nieuwendyk: 'amethyst', recchi: 'amethyst', stastny: 'amethyst',
+    federko: 'amethyst', housley: 'amethyst',
+
+    // Very good / star-level, franchise-cornerstone caliber
+    vanek: 'ruby', drury: 'ruby', briere: 'ruby', dahlin: 'ruby', miller: 'ruby',
+    thompson: 'ruby', martin: 'ruby', robert: 'ruby',
+
+    // Solid, well-regarded regulars
+    pominville: 'emerald', afinogenov: 'emerald', gare: 'emerald',
+    ramsay: 'emerald', schoenfeld: 'emerald', korab: 'emerald', ruff: 'emerald',
+  };
+
+  const PLAYER_SIGNIFICANCE_FULL_NAME = {
+    'patrick roy': 'diamond',
+  };
+
+  function normalizeNameKey(str) {
+    return String(str || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Best-effort rarity suggestion for a player name (e.g. "Bobby Orr —
+   *  #4", "Perreault — #11", or a bare name typed into the grid
+   *  splitter) — see PLAYER_SIGNIFICANCE above. Returns a tier string,
+   *  or null when nothing matches (leave the dropdown alone rather
+   *  than defaulting to silver — "no match" and "definitely a depth
+   *  player" aren't the same thing). */
+  function suggestTierForName(rawName) {
+    const cleaned = String(rawName || '')
+      .replace(/—.*$/, '') // drop " — #NN" / " — #NN (alt)" trailing bits
+      .replace(/\(.*?\)/g, '')
+      .trim();
+    if (!cleaned) return null;
+    const full = normalizeNameKey(cleaned);
+    if (!full) return null;
+    if (PLAYER_SIGNIFICANCE_FULL_NAME[full]) return PLAYER_SIGNIFICANCE_FULL_NAME[full];
+    const words = full.split(' ').filter(Boolean);
+    const lastName = words[words.length - 1];
+    return PLAYER_SIGNIFICANCE[lastName] || null;
+  }
+
+  /* ---------------------------------------------------------------
+     Reclassify existing jerseys — everything already published, read
+     straight from jersey-art.js's JERSEY_ART (loaded before this file
+     on admin.html, see that file's header comment). JERSEY_ART is a
+     plain source file, not a database, so there's nothing to save
+     here directly — this builds a plain-text summary of just the
+     *changed* tiers for the admin to hand to Claude (or apply to
+     jersey-art.js by hand), the same "generate a snippet, apply it to
+     source" pattern the two tools above use for staged entries.
+     --------------------------------------------------------------- */
+  let reclassifyState = []; // [{ team, name, image, originalTier, tier }]
+
+  function flattenJerseyArtForReclassify() {
+    if (typeof JERSEY_ART !== 'object' || !JERSEY_ART) return [];
+    return Object.entries(JERSEY_ART).flatMap(([team, entries]) => {
+      const arr = Array.isArray(entries) ? entries : [entries];
+      return arr.map((entry) => ({
+        team, name: entry.name, image: entry.image,
+        originalTier: entry.tier, tier: entry.tier,
+      }));
+    });
+  }
+
+  function renderReclassifyList() {
+    reclassifyState = flattenJerseyArtForReclassify();
+    const list = el.reclassifyList;
+    if (!reclassifyState.length) {
+      list.innerHTML = '<p class="admin-hint">No jerseys published yet — see jersey-art.js.</p>';
+      return;
+    }
+
+    const byTeam = new Map();
+    reclassifyState.forEach((row, i) => {
+      if (!byTeam.has(row.team)) byTeam.set(row.team, []);
+      byTeam.get(row.team).push(i);
+    });
+
+    let html = '';
+    for (const [team, indices] of byTeam) {
+      const teamLabel = TEAMS.find(([abbrev]) => abbrev === team)?.[1] || team;
+      html += `<div class="adm-jersey-reclassify-team-head">${escapeHtmlLocal(teamLabel)} (${escapeHtmlLocal(team)})</div>`;
+      for (const i of indices) {
+        const row = reclassifyState[i];
+        const suggestion = suggestTierForName(row.name);
+        const showSuggestion = suggestion && suggestion !== row.tier;
+        html += `
+          <div class="adm-jersey-reclassify-row" data-row-index="${i}">
+            <img class="adm-jersey-staged-thumb" src="${row.image}" alt="" onerror="this.style.visibility='hidden'">
+            <div class="adm-jersey-staged-info">
+              <strong>${escapeHtmlLocal(row.name)}</strong>
+              <span>${escapeHtmlLocal(row.image)}</span>
+            </div>
+            <span class="adm-jersey-reclassify-suggested" data-suggest-note="${i}" ${showSuggestion ? '' : 'hidden'}>Suggested: ${suggestion ? TIER_LABEL[suggestion] : ''}</span>
+            <select class="adm-jersey-reclassify-tier" data-row-index="${i}">${tierOptionsHtml()}</select>
+          </div>
+        `;
+      }
+    }
+    list.innerHTML = html;
+    list.querySelectorAll('select[data-row-index]').forEach((select) => {
+      const i = Number(select.dataset.rowIndex);
+      select.value = reclassifyState[i].tier;
+    });
+  }
+
+  function markReclassifyRow(i) {
+    const row = reclassifyState[i];
+    const rowEl = el.reclassifyList.querySelector(`.adm-jersey-reclassify-row[data-row-index="${i}"]`);
+    if (rowEl) rowEl.classList.toggle('is-changed', row.tier !== row.originalTier);
+    const note = el.reclassifyList.querySelector(`[data-suggest-note="${i}"]`);
+    if (note) {
+      const suggestion = suggestTierForName(row.name);
+      note.hidden = !suggestion || suggestion === row.tier;
+    }
+    updateReclassifyGenerateEnabled();
+  }
+
+  function updateReclassifyGenerateEnabled() {
+    el.reclassifyGenerateBtn.disabled = !reclassifyState.some((r) => r.tier !== r.originalTier);
+  }
+
+  /** Sets every row with a known suggestion (see suggestTierForName) to
+   *  that suggested tier — a starting point based on a hand-maintained
+   *  sense of historical significance, not a verdict: every row stays
+   *  a plain <select> the admin can override before generating
+   *  anything, and rows with no match in PLAYER_SIGNIFICANCE are left
+   *  exactly as they were. */
+  function autoSuggestReclassify() {
+    let applied = 0;
+    reclassifyState.forEach((row, i) => {
+      const suggestion = suggestTierForName(row.name);
+      if (!suggestion || suggestion === row.tier) return;
+      row.tier = suggestion;
+      applied++;
+      const select = el.reclassifyList.querySelector(`select[data-row-index="${i}"]`);
+      if (select) select.value = suggestion;
+      markReclassifyRow(i);
+    });
+    el.reclassifyStatus.textContent = applied
+      ? `Applied ${applied} suggestion${applied === 1 ? '' : 's'} — review before generating.`
+      : 'No new suggestions for the players in this list.';
+    setTimeout(() => { el.reclassifyStatus.textContent = ''; }, 4000);
+  }
+
+  function generateReclassifyChanges() {
+    const changes = reclassifyState.filter((r) => r.tier !== r.originalTier);
+    if (!changes.length) {
+      el.reclassifyOutput.hidden = true;
+      return;
+    }
+    el.reclassifyOutput.value = changes
+      .map((r) => `${r.team} — "${r.name}" (${r.image}): ${TIER_LABEL[r.originalTier] || r.originalTier} -> ${TIER_LABEL[r.tier] || r.tier}`)
+      .join('\n');
+    el.reclassifyOutput.hidden = false;
+    el.reclassifyOutput.rows = Math.min(12, Math.max(3, changes.length + 1));
+    el.reclassifyStatus.textContent = `${changes.length} change${changes.length === 1 ? '' : 's'} — copy the summary below and hand it to Claude (or edit jersey-art.js yourself).`;
+  }
+
   function wireEvents() {
     el.fileInput.addEventListener('change', () => {
       const file = el.fileInput.files?.[0];
       if (file) processFile(file);
+    });
+    el.nameInput.addEventListener('change', () => {
+      const suggestion = suggestTierForName(el.nameInput.value);
+      if (suggestion) el.tierSelect.value = suggestion;
     });
     el.downloadBtn.addEventListener('click', downloadProcessed);
     el.publishBtn.addEventListener('click', publishToGithub);
@@ -699,6 +914,15 @@
       saveStaged(list);
       renderStaged();
     });
+    el.reclassifyList.addEventListener('change', (e) => {
+      const select = e.target.closest('select[data-row-index]');
+      if (!select) return;
+      const i = Number(select.dataset.rowIndex);
+      reclassifyState[i].tier = select.value;
+      markReclassifyRow(i);
+    });
+    el.reclassifyAutoBtn.addEventListener('click', autoSuggestReclassify);
+    el.reclassifyGenerateBtn.addEventListener('click', generateReclassifyChanges);
     wireGridEvents();
   }
 
@@ -707,6 +931,7 @@
     el.tierSelect.innerHTML = tierOptionsHtml();
     wireEvents();
     renderStaged();
+    renderReclassifyList();
   }
 
   window.__adminJerseysTab = {

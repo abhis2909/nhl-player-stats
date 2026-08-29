@@ -22,7 +22,6 @@
   </div>
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Player Stats</a>
-    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
     <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
     <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
     <a href="admin.html" class="nav-tab active">⚙ Admin</a>
@@ -590,6 +589,30 @@
         <p class="admin-hint" id="jerseyStagedEmpty">Nothing staged yet — process a jersey above and add it.</p>
         <div id="jerseyStagedList" class="adm-jersey-staged-list"></div>
       </section>
+
+      <section class="admin-section">
+        <div class="admin-section-head">
+          <h2>Reclassify Existing Jerseys</h2>
+        </div>
+        <p class="admin-hint">
+          Every jersey already published — see <code>jersey-art.js</code>'s <code>JERSEY_ART</code> —
+          with its current rarity class. Change any dropdown below, or use <strong>Auto-suggest</strong>
+          to fill in a starting guess for recognized names based on historical significance (a small
+          hand-maintained list of inner-circle legends, Hall of Famers, and other notable players —
+          not a live stats lookup, and never applied without you seeing it first). Then
+          <strong>Generate changes</strong> for a plain summary of just what changed, to hand to
+          Claude (or apply by hand) the same way a new jersey's snippet gets applied above.
+          <code>JERSEY_ART</code> is a plain file in this repo, not a database, so nothing here
+          saves on its own.
+        </p>
+        <div id="jerseyReclassifyList" class="adm-jersey-reclassify-list"></div>
+        <div class="admin-buttons">
+          <button type="button" id="jerseyReclassifyAutoBtn" class="ghost-btn">✨ Auto-suggest</button>
+          <button type="button" id="jerseyReclassifyGenerateBtn" class="primary-btn" disabled>Generate changes</button>
+          <span id="jerseyReclassifyStatus" class="save-status" aria-live="polite"></span>
+        </div>
+        <textarea id="jerseyReclassifyOutput" class="adm-jersey-staged-snippet" rows="6" readonly hidden onclick="this.select()"></textarea>
+      </section>
     </div>
 
     <!-- ---------------- Yahoo League (import standings/matchups/rosters/transactions/draft) ---------------- -->
@@ -698,6 +721,7 @@
 <script src="admin-projection.js" defer></script>
 <script src="admin-rating.js" defer></script>
 <script src="admin-yahoo.js" defer></script>
+<script src="jersey-art.js" defer></script>
 <script src="admin-jerseys.js" defer></script>
 </body>
 </html>

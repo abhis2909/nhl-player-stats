@@ -21,9 +21,9 @@
    Model: "Live" is always available (fetches straight from the NHL API,
    nothing saved). Snapshots are one per CALENDAR DAY (server-side) —
    see retrieveAndSaveSnapshot() for the (now legacy but still
-   functional) local-only weekly-key version cards.html's own data-bar
-   still uses. Switching the dropdown just changes which already-synced
-   data the Stats/Cards/Range pages compute from — no network call.
+   functional) local-only weekly-key version admin.html's data-bar still
+   uses. Switching the dropdown just changes which already-synced
+   data the Stats/Range pages compute from — no network call.
    ====================================================================== */
 
 const SNAPSHOT_STORAGE_KEY = 'nhlStats.snapshots.v1';

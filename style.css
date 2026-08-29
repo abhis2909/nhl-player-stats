@@ -17,6 +17,7 @@
   --radius-sm: 6px;
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-pixel: 'Silkscreen', ui-monospace, Consolas, monospace; /* retro bitmap font — jersey-piece slab accents only (packs.html loads it), see ~line 3790 */
 }
 
 * { box-sizing: border-box; }
@@ -203,8 +204,8 @@ main {
 }
 
 /* Wraps the mode/position/team .controls into a bar of its own, matching
-   .data-bar's shape — used on index.html and cards.html, sitting right
-   below the search bar rather than up in the header. */
+   .data-bar's shape — used on index.html, sitting right below the search
+   bar rather than up in the header. */
 .filter-bar {
   margin-bottom: 18px;
   padding: 10px 14px;
@@ -1225,51 +1226,6 @@ td.stat-num {
 
 .cards-skeleton[hidden] { display: none; }
 
-/* Player Ratings grid (cards.html only — Range Ratings shares the same
-   #cardsGrid id/markup shape on its own page, so this is scoped to the
-   pr-grid/pr-skeleton classes cards.html adds, not #cardsGrid itself).
-   214px columns fit exactly 5 across #cardsGrid's real content width
-   (main's 1200px max-width minus its 20px side padding = 1160px; 5*214 +
-   4*18 gap = 1142, comfortably under that). Each .player-card renders at
-   its normal fixed-pixel design size (280x440 — same as everywhere else)
-   inside a smaller cropped box and is visually scaled down as a whole
-   unit via transform, rather than re-tuning every pc-* rule's
-   font-size/padding/badge-size by hand. */
-.pr-grid {
-  grid-template-columns: repeat(auto-fill, 214px);
-  gap: 18px;
-}
-
-.pr-card-wrap {
-  display: flex;
-  flex-direction: column;
-}
-
-.pr-card-scale {
-  width: 100%;
-  height: 336px;
-  overflow: hidden;
-  position: relative;
-  border-radius: 20px;
-}
-
-.pr-card-scale .player-card {
-  width: 280px;
-  height: 440px;
-  transform: scale(0.76429); /* 214/280 */
-  transform-origin: top left;
-}
-
-.pr-skeleton {
-  grid-template-columns: repeat(auto-fill, 214px);
-  gap: 18px;
-}
-
-.pr-skeleton .card-skel {
-  height: 336px;
-  border-radius: 20px;
-}
-
 .card-skel {
   height: 440px;
   border-radius: 16px;
@@ -1324,6 +1280,41 @@ td.stat-num {
   --t1: #7dd3fc; --t2: #0c2f4a; --t-accent: #e0f7ff;
   --shimmer-speed: 4s; --shimmer-opacity: 1;
   --sheen-peak: 0.4; --glow: 0 0 34px rgba(125, 211, 252, 0.65);
+}
+
+/* EXPERIMENTAL — a Damascus-steel "skin," not a real rarity: deliberately
+   NOT in packs.js's TIERS/TIER_WEIGHTS, so it never appears in an actual
+   pack pull or affects odds. Applied by hand (see buildJerseyPiece's
+   opts.finish in packs.js) to preview what a folded-steel case looks
+   like next to the pixel-art jerseys. Sets the same --t1/--t2/--t-accent/
+   --shimmer-speed/--sheen-peak/--glow every real tier uses, so it slots
+   into the existing shimmer/sparkle machinery for free — only the
+   slab's flat gradient itself gets replaced (.tier-damascus .jp-slab
+   below) with an actual folded-metal texture. */
+.tier-damascus {
+  --t1: #b8c4d1; --t2: #141a22; --t-accent: #eef4fa;
+  --shimmer-speed: 3.5s; --shimmer-opacity: 1;
+  --sheen-peak: 0.4; --glow: 0 0 26px rgba(184, 196, 209, 0.55);
+}
+
+/* EXPERIMENTAL — a topographic-map "skin," same deal as .tier-damascus
+   above: not in TIERS/TIER_WEIGHTS, applied by hand via
+   buildJerseyPiece's opts.finish for a look preview only. The slab's
+   flat gradient (.tier-topographic .jp-slab below) is replaced with
+   actual elevation-contour rings.
+
+   Deliberately MATTE, unlike every other finish here — a glossy/holo
+   case fights the flat, printed-map look contour lines are supposed to
+   have. --shimmer-speed effectively frozen and --shimmer-opacity/
+   --sheen-peak both near zero kill the moving shine every other tier
+   gets (same "basically off" trick .tier-silver uses), --glow is small
+   and dim instead of a bright halo, and the case's own bevel/glass-
+   glare are separately dulled below (.tier-topographic .jp-slab and
+   ::after) instead of the shared glossy-plastic defaults. */
+.tier-topographic {
+  --t1: #3c545c; --t2: #0a1318; --t-accent: #a9ccd3;
+  --shimmer-speed: 999s; --shimmer-opacity: 0.15;
+  --sheen-peak: 0.05; --glow: 0 0 10px rgba(79, 209, 224, 0.2);
 }
 
 .player-card::before {
@@ -1610,7 +1601,7 @@ td.stat-num {
   50% { opacity: 1; transform: scale(1); }
 }
 
-/* ---------- Player card detail modal (cards.html) ---------- */
+/* ---------- Player card detail modal (index.html) ---------- */
 .pcard-modal-panel {
   max-width: 940px;
 }
@@ -2259,60 +2250,6 @@ td.stat-num {
   .totw-reveal-btn { font-size: 13px; padding: 12px 18px; }
 }
 
-/* ---------- Compare players (cards.html) ---------- */
-.pc-compare-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.pc-compare-bar:hover { color: var(--text); border-color: var(--accent-dim); }
-
-.pc-compare-bar input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.compare-bar[hidden] { display: none; }
-
-.compare-bar {
-  position: fixed;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--accent-dim);
-  border-radius: 999px;
-  box-shadow: var(--shadow);
-  font-size: 13px;
-  font-weight: 600;
-  max-width: calc(100vw - 32px);
-}
-
-.compare-bar span {
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .compare-modal-panel { max-width: 900px; }
 
 .compare-heads {
@@ -2405,10 +2342,6 @@ td.stat-num {
 }
 
 .compare-table .cmp-overall-row .cmp-val.cmp-win { color: #59d97c; }
-
-@media (max-width: 720px) {
-  .compare-bar { flex-wrap: wrap; justify-content: center; text-align: center; }
-}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
@@ -3587,7 +3520,13 @@ a.mg-game-card:hover {
    piece itself. */
 .pk-stage {
   position: relative;
-  height: 460px;
+  /* Tall enough for the jersey slab's own height (grown over several
+     redesigns — grade strip, wider mat, etc.) plus the idle float
+     animation's +7px bob and the landing brightness pulse's drop-
+     shadow halo, measured from the piece's bottom-anchor point
+     (.pk-stage-piece's padding-bottom) up — was clipping the top of
+     the slab before this bump. */
+  height: 520px;
   border-radius: var(--radius);
   overflow: hidden;
   background:
@@ -3890,27 +3829,143 @@ a.mg-game-card:hover {
   100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
-/* ---- The slab itself: a real collectible-case layout — header strip
-   (player name + rarity subtitle, rating box) / display window
-   (centered jersey) / footer strip (team name, item id, tier pill) —
-   rather than a generic bordered rectangle. Inspired by a reference
-   the user shared (a goldish-tan graded-slab mockup); the structure
-   carries over, but the color is generalized from that reference's
-   single fixed gold-tan to every tier's own --t1/--t2/
-   --t-accent, since this site has six rarities to support, not one. ---- */
+/* ---- The slab itself: a real graded-collectible-case layout — a full-
+   width GRADE STRIP across the very top (BGS-style: the condition
+   rating gets top billing, its own metal tone + shimmer independent of
+   tier — see .jp-grade-strip below), then the header strip (player name
+   + rarity subtitle) / display window (centered jersey) / footer strip
+   (team name, item id, tier pill). Originally a smooth-cornered case
+   inspired by a reference the user shared (a goldish-tan graded-slab
+   mockup); corners are now single-notch "pixel cuts" (.pixel-notch,
+   below) and the jersey photo renders pixelated (see .jp-jersey-img) so
+   the case itself echoes the jerseys' own 8-bit sprite look instead of
+   just housing it. Tier still drives the body's own color/shimmer via
+   --t1/--t2/--t-accent, generalized across all six rarities. ---- */
+
+/* Single-step "pixel corner" cut, shared by every slab surface that
+   wants an 8-bit case edge instead of a smooth border-radius — size set
+   per-element via --notch (falls back to 10px if unset). */
+.jp-slab,
+.jp-jersey-photo,
+.jp-slab-middle,
+.jp-tier-tag {
+  border-radius: 0;
+  clip-path: polygon(
+    0 var(--notch, 10px), var(--notch, 10px) var(--notch, 10px), var(--notch, 10px) 0,
+    calc(100% - var(--notch, 10px)) 0, calc(100% - var(--notch, 10px)) var(--notch, 10px), 100% var(--notch, 10px),
+    100% calc(100% - var(--notch, 10px)), calc(100% - var(--notch, 10px)) calc(100% - var(--notch, 10px)), calc(100% - var(--notch, 10px)) 100%,
+    var(--notch, 10px) 100%, var(--notch, 10px) calc(100% - var(--notch, 10px)), 0 calc(100% - var(--notch, 10px))
+  );
+}
 
 .jp-slab {
+  --notch: 14px;
   position: relative;
   width: 264px;
-  border-radius: 20px;
   padding: 0;
   overflow: hidden;
   background: linear-gradient(165deg, var(--t1) 0%, var(--t2) 55%, #05070a 100%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  /* Thicker, harder-edged bevel than a flat card border — reads as the
+     actual THICKNESS of a rigid plastic case wall (bright top-left
+     edge catching light, dark bottom-right edge in its own shadow)
+     rather than a printed card outline. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 34px 60px rgba(10, 6, 2, 0.65),
-    0 0 46px rgba(255, 180, 90, 0.12);
+    inset 3px 3px 0 rgba(255, 255, 255, 0.3),
+    inset -3px -3px 0 rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    6px 6px 0 rgba(0, 0, 0, 0.5),
+    0 40px 70px rgba(5, 3, 1, 0.6),
+    var(--glow);
+}
+
+/* Damascus finish (see .tier-damascus above and buildJerseyPiece's
+   opts.finish in packs.js) — replaces the flat two-stop tier gradient
+   with an actual folded-steel texture: two layered SVG feTurbulence
+   passes (one for the wavy bands, a second, much-lower-frequency one
+   that warps the first via feDisplacementMap into the swirling
+   "watering" pattern real pattern-welded steel has), tinted cool
+   steel-blue via feColorMatrix and pushed to hard tonal bands via a
+   gamma feComponentTransfer so it reads as folded metal rather than a
+   smooth cloud. Self-contained (no separate <filter> element needed in
+   the page) — the whole thing lives in this one data: URI. */
+.tier-damascus .jp-slab {
+  background:
+    linear-gradient(165deg, rgba(20, 26, 34, 0.15) 0%, rgba(5, 7, 10, 0.6) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cfilter id='d' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.013 0.1' numOctaves='6' seed='8' result='bands'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0055' numOctaves='2' seed='71' result='warp'/%3E%3CfeDisplacementMap in='bands' in2='warp' scale='150' xChannelSelector='R' yChannelSelector='G' result='warped'/%3E%3CfeColorMatrix in='warped' type='matrix' values='0 0 0 0 0.5  0 0 0 0 0.57  0 0 0 0 0.65  0 0 0 1 0' result='tinted'/%3E%3CfeComponentTransfer in='tinted'%3E%3CfeFuncR type='gamma' exponent='3.4'/%3E%3CfeFuncG type='gamma' exponent='3.4'/%3E%3CfeFuncB type='gamma' exponent='3.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23d)'/%3E%3C/svg%3E");
+  background-size: cover, cover;
+}
+
+/* Topographic finish (see .tier-topographic above and buildJerseyPiece's
+   opts.finish in packs.js) — a tiled pattern of concentric rings (a
+   regular "contour" grid, defs > pattern below) globally warped by one
+   feTurbulence + feDisplacementMap pass into the closed, organic loops
+   a real elevation-contour map has — regular rings in, wavy "peaks and
+   basins" out, entirely from the warp; no edge-detection or posterizing
+   involved. Self-contained data: URI, same as Damascus. Tile/ring/warp
+   sizes are all scaled up together (bigger cells = a proportionally
+   bigger warp scale/lower warp frequency, or the warp would look too
+   twitchy relative to the now-larger rings) and opacity is toned down,
+   so the whole thing reads as a few big, subtle landmasses rather than
+   a dense field of small loops. */
+.tier-topographic .jp-slab {
+  background:
+    linear-gradient(165deg, rgba(20, 30, 34, 0.3) 0%, rgba(5, 7, 10, 0.72) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='264' height='420'%3E%3Cdefs%3E%3Cpattern id='rings' width='170' height='170' patternUnits='userSpaceOnUse'%3E%3Crect width='170' height='170' fill='%230a1420'/%3E%3Ccircle cx='85' cy='85' r='74' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='40' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3Ccircle cx='85' cy='85' r='11' fill='none' stroke='%236b8a91' stroke-width='2' opacity='0.5'/%3E%3C/pattern%3E%3Cfilter id='warp' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0019' numOctaves='3' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='250' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23rings)' filter='url(%23warp)'/%3E%3C/svg%3E");
+  background-size: cover, cover;
+  /* A softer, duller bevel than the shared glossy-plastic default
+     (compare .jp-slab's own box-shadow above) — matte surfaces don't
+     throw a crisp bright highlight off their edge the way polished
+     acrylic does. */
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.12),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    6px 6px 0 rgba(0, 0, 0, 0.5),
+    0 40px 70px rgba(5, 3, 1, 0.6),
+    var(--glow);
+}
+
+/* Muted glass-glare — the shared .jp-slab::after below assumes a
+   glossy clear-plastic case; a matte one barely catches light at all,
+   so this knocks every highlight in it down to a fraction of the
+   default. */
+.tier-topographic .jp-slab::after {
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 10%,
+    transparent 24%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.02) 90%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+/* A fixed (non-animated) glass-glare band on top of everything else in
+   the case — the tell that this is a rigid CLEAR PLASTIC shell over
+   the label/photo, not a flat printed surface: bright where the acrylic
+   catches light near the top-left, a dead zone through the middle, a
+   second faint catch-light near the bottom-right. Static rather than
+   swept like the tier shimmer below it, since real glare on a case
+   doesn't animate — it's just always there at whatever angle you're
+   looking from. */
+.jp-slab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.1) 10%,
+    transparent 24%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.06) 90%,
+    rgba(255, 255, 255, 0.2) 100%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 /* Contact shadow grounding the slab against the floor — separate from
@@ -3944,6 +3999,7 @@ a.mg-game-card:hover {
   pointer-events: none;
 }
 
+.jp-grade-strip,
 .jp-slab-top,
 .jp-slab-middle,
 .jp-slab-bottom {
@@ -3951,20 +4007,174 @@ a.mg-game-card:hover {
   z-index: 1;
 }
 
-/* ---- Header: player name + rarity subtitle on the left, and (when a
-   grade was rolled) the rating box on the right — no separate team
-   monogram; the team itself is named in the footer instead. ---- */
-.jp-slab-top {
+/* ---- Grade strip: the condition rating, BGS-style — a full-width
+   metal band across the very top of the case, ahead of the player-name
+   header, rather than a small badge tucked beside it. Its own color +
+   shimmer ramp (--g1/--g2/--g-accent/--g-shimmer-speed/--g-sheen-peak/
+   --g-glow/--g-ink/--g-border, set per .grade-* class below) is
+   independent of tier: a Silver-tier jersey graded a 10 still gets the
+   full Black Label treatment here, and a Diamond-tier jersey graded a
+   7 gets a dull matte-silver one — the two ratings read as two
+   separate premium signals, exactly like a real BGS label reads
+   independently of the card inside it. The ramp is a real label
+   HIERARCHY, not a brightness slider — every whole/half-point pair
+   shares a base stone/metal, matte at the whole point and metallic
+   (shiny) at the half point above it: Silver (7/7.5), Gold (8/8.5),
+   Diamond (9/9.5) — capped by BLACK LABEL at a genuinely different
+   black-and-gold design rather than "shinier" again. Grades below
+   7 fall back to Bronze via this rule's own --g1/--g2/--g-accent
+   defaults below (no .grade-* class needed to override them down
+   there — none exists yet, since nothing currently grades below 7).
+   Omitted entirely when no grade was rolled (see buildJerseyPiece's
+   opts.grade in packs.js) rather than left as dead space. */
+.jp-grade-strip {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 11px 16px;
+  overflow: hidden;
+  /* Bronze — the floor of the ramp, for any grade below 7 (a .grade-*
+     class, when present, overrides all of these; see the comment
+     above). */
+  --g1: #c98a4b; --g2: #5a3418; --g-accent: #f0c894;
+  --g-shimmer-speed: 16s; --g-sheen-peak: 0.12;
+  --g-glow-size: 4px; --g-glow-color: rgba(201, 138, 75, 0.3);
+  background: linear-gradient(100deg, var(--g2), var(--g1) 45%, var(--g-accent) 50%, var(--g1) 55%, var(--g2));
+  border-bottom: 2px solid var(--g-border, rgba(0, 0, 0, 0.45));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 var(--g-glow-size) var(--g-glow-color);
 }
 
-.jp-slab-heading {
-  flex: 1 1 auto;
+/* Label + description grouped as one left-aligned cluster instead of
+   spread to the far edge — with only this cluster and the grade value
+   as the two anchors (not three loose items across the full width),
+   plus real vertical padding above, the strip reads as a proper label
+   band instead of a thin, spread-out sliver. */
+.jp-grade-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.jp-grade-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, calc(var(--g-sheen-peak) * 0.6)) 46%,
+    rgba(255, 255, 255, var(--g-sheen-peak)) 50%,
+    rgba(255, 255, 255, calc(var(--g-sheen-peak) * 0.6)) 54%,
+    transparent 70%
+  );
+  background-size: 260% 260%;
+  mix-blend-mode: overlay;
+  animation: pc-shimmer var(--g-shimmer-speed) ease infinite;
+  pointer-events: none;
+}
+
+.jp-grade-label {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--g-ink, #0b0f14);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.jp-grade-desc {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--g-ink, #0b0f14);
+  white-space: nowrap;
+}
+
+.jp-grade-value {
+  flex: 0 0 auto;
+  /* The actual grade number stays in the site's normal font for
+     legibility — the pixel font (used for the label/desc beside it,
+     and the tier tag) reads fine at those small sizes but gets
+     harder to parse at a glance for the number that matters most. */
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--g-ink, #0b0f14);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Near Mint (7) — Silver, NON-METALLIC: flat matte gray, next to no
+   shimmer (same "basically off" treatment .tier-silver uses) — the
+   dull counterpart to 7.5's shiny version of the same base metal. */
+.grade-7 {
+  --g1: #9aa0a6; --g2: #45484c; --g-accent: #c2c6ca;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.05;
+  --g-glow-size: 0px; --g-glow-color: transparent;
+}
+/* Near Mint+ (7.5) — Silver, metallic: the same base metal as 7, but
+   bright and genuinely shiny. */
+.grade-7-5 {
+  --g1: #d7dee5; --g2: #4a5568; --g-accent: #ffffff;
+  --g-shimmer-speed: 9s; --g-sheen-peak: 0.25;
+  --g-glow-size: 8px; --g-glow-color: rgba(215, 222, 229, 0.4);
+}
+/* NM-MT (8) — Gold, NON-METALLIC: flat matte mustard/bronze-gold,
+   next to no shimmer — the dull counterpart to 8.5's shiny gold,
+   mirroring the 7/7.5 matte-vs-metallic pairing one rung up. */
+.grade-8 {
+  --g1: #b8933f; --g2: #4a3a1a; --g-accent: #d1af6b;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.06;
+  --g-glow-size: 0px; --g-glow-color: transparent;
+}
+/* NM-MT+ (8.5) — Gold, metallic: bright, genuinely shiny gold. */
+.grade-8-5 {
+  --g1: #f2c94c; --g2: #6b4a10; --g-accent: #fff3c4;
+  --g-shimmer-speed: 6s; --g-sheen-peak: 0.3;
+  --g-glow-size: 16px; --g-glow-color: rgba(242, 201, 76, 0.55);
+}
+/* MINT (9) — Diamond, NON-METALLIC: a neutral, slightly cool white-gray
+   (an uncut/raw stone, not the icy blue of 9.5's polished version),
+   flat with next to no shimmer — the same matte treatment 7 and 8 get,
+   completing a third matte/metallic pair one rung above Silver/Gold. */
+.grade-9 {
+  --g1: #e2e6ea; --g2: #6b7278; --g-accent: #f5f7f9;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.07;
+  --g-glow-size: 0px; --g-glow-color: transparent;
+}
+/* Gem Mint (9.5) — Diamond, metallic: the same stone as 9, cut and
+   polished — icy white-blue, sparkly, the most elaborate shimmer/glow
+   of any grade below Black Label. */
+.grade-9-5 {
+  --g1: #d6f3ff; --g2: #1c4f6b; --g-accent: #ffffff;
+  --g-shimmer-speed: 3.5s; --g-sheen-peak: 0.45;
+  --g-glow-size: 28px; --g-glow-color: rgba(214, 243, 255, 0.7);
+}
+/* Pristine (10) — BLACK LABEL: a genuinely different design, not just
+   the brightest metal on the ramp — matte black/graphite strip (kept
+   dark all the way across, unlike every metal grade above, so the gold
+   ink stays readable everywhere rather than washing out under a bright
+   center highlight) framed by a solid gold border and gold text, with
+   the fastest shimmer and biggest glow of any grade doing the "catches
+   the light" work instead of a gold gradient fill. This is the one
+   grade needing light text on a dark strip, hence --g-ink overridden
+   here (every other grade uses the shared dark-ink default above). */
+.grade-10 {
+  --g1: #262629; --g2: #000000; --g-accent: #3a3a40;
+  --g-shimmer-speed: 2.5s; --g-sheen-peak: 0.6;
+  --g-glow-size: 34px; --g-glow-color: rgba(244, 211, 94, 0.75);
+  --g-ink: #f4d35e; --g-border: #f4d35e;
+}
+
+/* ---- Header: player name + rarity subtitle — the rating now lives in
+   .jp-grade-strip above, so this row is just identity, no longer split
+   with a badge on the right. ---- */
+.jp-slab-top {
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .jp-slab-player-name {
@@ -3986,45 +4196,23 @@ a.mg-game-card:hover {
   opacity: 0.9;
 }
 
-.jp-rating-box {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: rgba(5, 7, 10, 0.55);
-  border: 1px solid var(--t-accent);
-}
-
-.jp-rating-title, .jp-rating-desc {
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--t-accent);
-}
-
-.jp-rating-score {
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-/* ---- Middle: the display window (jersey photo), centered, inside an
-   etched panel — the "trim ring where the case meets the window" idea
-   frames the whole middle section rather than the photo alone. ---- */
+/* ---- Middle: the display window (jersey photo), centered, inside a
+   neutral etched panel — no distinct frame/mat around it (tried a
+   grade-colored picture-frame treatment here for a while; removed by
+   request), just a recessed dark panel so the window reads as sitting
+   slightly below the case surface. ---- */
 .jp-slab-middle {
+  --notch: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px 14px;
   margin: 10px 12px;
-  border-radius: 12px;
   background: rgba(5, 7, 10, 0.25);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 2px 10px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 3px 3px 8px rgba(0, 0, 0, 0.45),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* ---- Footer: team name + a flavor item id, and the tier pill. ---- */
@@ -4049,24 +4237,53 @@ a.mg-game-card:hover {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
+/* Cert number + a decorative barcode underneath the team name — the
+   "this is a serialized, certified item" detail every real graded slab
+   carries on its label. Purely visual (not a real scannable barcode,
+   just the stripe pattern read as one at a glance). */
+.jp-slab-cert-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+}
+
 .jp-slab-item-id {
   font-size: 9px;
   font-family: 'SFMono-Regular', Consolas, monospace;
   color: var(--t-accent);
   opacity: 0.85;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.jp-slab-barcode {
+  flex: 1 1 auto;
+  min-width: 28px;
+  max-width: 46px;
+  height: 10px;
+  opacity: 0.8;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--t-accent) 0, var(--t-accent) 1px,
+    transparent 1px, transparent 2px,
+    var(--t-accent) 2px, var(--t-accent) 3px,
+    transparent 3px, transparent 5px,
+    var(--t-accent) 5px, var(--t-accent) 7px,
+    transparent 7px, transparent 8px
+  );
 }
 
 .jp-tier-tag {
+  --notch: 4px;
   flex: 0 0 auto;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--t2);
   background: linear-gradient(120deg, var(--t-accent), var(--t1));
-  padding: 3px 10px;
-  border-radius: 20px;
+  padding: 4px 10px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
@@ -4128,19 +4345,32 @@ a.mg-game-card:hover {
    positioned just outside the photo's edges aren't clipped along with
    it. */
 .jp-jersey-photo {
+  --notch: 6px;
   position: relative;
   z-index: 1;
   width: 176px;
-  border-radius: 10px;
   overflow: hidden;
-  border: 2px solid var(--t-accent);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 18px var(--t1), var(--glow), 0 10px 20px rgba(0, 0, 0, 0.5);
+  /* No border/frame around the window (tried a grade-colored one for a
+     while; removed by request) — just the tier glow grounding it in
+     the case. */
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 18px var(--t1),
+    var(--glow),
+    0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
+/* image-rendering: pixelated keeps the jerseys' own 8-bit sprite edges
+   crisp instead of letting the browser's default smoothing blur them
+   when scaled down from their source size — the single biggest lever
+   for the case actually reading as "pixel art" rather than just a
+   holo-foil card that happens to contain one. */
 .jp-jersey-img {
   display: block;
   width: 100%;
   height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .jp-jersey-sheen {
@@ -4431,6 +4661,62 @@ a.mg-game-card:hover {
   padding: 8px 10px;
   color: var(--text-dim);
   resize: vertical;
+}
+
+/* ---------- Admin: reclassify existing jerseys (admin-jerseys.js) ---------- */
+
+.adm-jersey-reclassify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 480px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.adm-jersey-reclassify-team-head {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 2px 2px;
+}
+
+.adm-jersey-reclassify-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.adm-jersey-reclassify-row.is-changed { border-color: var(--accent-dim); }
+
+.adm-jersey-reclassify-tier {
+  flex: none;
+  width: 130px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* Auto-suggest badge (see admin-jerseys.js's suggestTierForName) — sits
+   between the name and the tier <select>, only shown when a suggestion
+   exists and differs from the row's current tier. */
+.adm-jersey-reclassify-suggested {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--accent);
+  white-space: nowrap;
 }
 
 /* ---------- Admin: grid splitter (admin-jerseys.js) ---------- */

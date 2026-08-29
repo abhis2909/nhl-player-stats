@@ -15,14 +15,13 @@
       <span class="brand-icon" aria-hidden="true">🏅</span>
       <div>
         <h1>Hockey Hub</h1>
-        <p class="subtitle">Live leaderboard, same rating engine as Player Ratings.</p>
+        <p class="subtitle">Projected leaderboard, same rating engine as the Stats page.</p>
       </div>
     </div>
     <div id="fhAuthSlot" class="fh-auth-slot"></div>
   </div>
   <nav class="site-nav" aria-label="Site">
     <a href="index.html" class="nav-tab">📊 Player Stats</a>
-    <a href="cards.html" class="nav-tab">🃏 Player Ratings</a>
     <a href="minigames.html" class="nav-tab">🎮 Mini-Games</a>
     <a href="fantasy-hub.html" class="nav-tab">🤝 Fantasy Hub</a>
     <a href="admin.html" class="nav-tab">⚙ Admin</a>
@@ -43,14 +42,14 @@
         </div>
       </div>
       <ol class="fh-rank-list" id="powerRankList"></ol>
-      <a href="cards.html" class="fh-panel-link">View full Player Ratings →</a>
     </section>
   </div>
 </main>
 
 <footer class="site-footer">
   <p>
-    Same percentile-based rating engine as Player Ratings and the Stats page's Power Ranking column — see
+    Ranked on projected stats (see <a href="admin.html">Admin → Projection Methodology</a>) run through the
+    same percentile-based rating engine as the Stats page's Power Ranking column — see
     <a href="admin.html">Admin → Rating Methodology</a> to tune it. Data via the unofficial
     <a href="https://api-web.nhle.com/" target="_blank" rel="noopener">NHL API</a>.
   </p>
@@ -59,6 +58,7 @@
 <script src="data.js" defer></script>
 <script src="columns.js" defer></script>
 <script src="ratings.js" defer></script>
+<script src="projections.js" defer></script>
 <script src="avatar.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
 <script src="power-rankings.js" defer></script>
