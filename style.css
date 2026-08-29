@@ -4177,11 +4177,11 @@ a.mg-game-card:hover {
    similarly-colored surface. Falls back to the original cream tones
    when no grade was rolled. ---- */
 .jp-slab-middle {
-  --notch: 3px;
+  --notch: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3px;
+  padding: 1px;
   margin: 3px;
   background: linear-gradient(
     100deg,
@@ -4328,7 +4328,7 @@ a.mg-game-card:hover {
    positioned just outside the photo's edges aren't clipped along with
    it. */
 .jp-jersey-photo {
-  --notch: 3px;
+  --notch: 2px;
   position: relative;
   z-index: 1;
   width: 176px;
@@ -4344,7 +4344,7 @@ a.mg-game-card:hover {
      not a box-shadow ring, since box-shadow doesn't reliably paint
      outside an element that also has a clip-path (see the shared
      pixel-notch rule above) in every browser. */
-  border: 3px solid var(--g1, var(--t-accent));
+  border: 1px solid var(--g1, var(--t-accent));
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.4),
     0 0 18px var(--t1),
