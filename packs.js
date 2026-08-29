@@ -320,7 +320,7 @@ function buildJerseyPiece(player, opts = {}) {
   }
   piece.innerHTML = `
     <div class="jp-float-wrap ${opts.animate ? 'jp-float' : ''}">
-      <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''} ${opts.grade ? gradeClass(opts.grade) : ''}">
+      <div class="jp-slab ${opts.animate ? 'jp-spotlit' : ''}">
         ${opts.grade ? `
           <div class="jp-grade-strip ${gradeClass(opts.grade)}">
             <div class="jp-grade-text">
