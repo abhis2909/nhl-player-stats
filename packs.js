@@ -77,22 +77,26 @@ const CASE_FINISH = { c1: '#3a3d42', c2: '#000000', accent: '#c9ccd1' };
 // pack open rather than persisted.
 //
 // Weights are a discretized normal distribution — mean 8, sigma 1 —
-// sampled at each grade's actual numeric value (so 8.5 and 9 are only
-// half a point apart while 7 and 8 are a full point, matching real BGS
+// sampled at each grade's actual numeric value (so half-point grades
+// are only half as far apart as whole-point ones, matching real BGS
 // grade spacing) and normalized to sum to 100:
 //   python3 -c "import math; mean=8; sigma=1
-//   xs=[7,8,8.5,9,9.5,10]
+//   xs=[7,7.5,8,8.5,9,9.5,10]
 //   raw=[math.exp(-((x-mean)**2)/(2*sigma**2)) for x in xs]
 //   print([round(r/sum(raw)*100) for r in raw])"
-// -> [17, 28, 25, 17, 9, 4] — 8 is the clear peak, tapering off
-// symmetrically-ish in both directions (matching "8 most common").
-const GRADES = ['7', '8', '8.5', '9', '9.5', '10'];
-const GRADE_WEIGHTS = { '7': 17, '8': 28, '8.5': 25, '9': 17, '9.5': 9, '10': 4 };
+// -> [14, 20, 23, 20, 14, 7, 3], rounded down to 22 at the peak (8) to
+// land exactly on 100 — 8 is the clear peak, tapering off
+// symmetrically in both directions (matching "8 most common").
+const GRADES = ['7', '7.5', '8', '8.5', '9', '9.5', '10'];
+const GRADE_WEIGHTS = { '7': 14, '7.5': 20, '8': 22, '8.5': 20, '9': 14, '9.5': 7, '10': 3 };
 // 10's label calls out the strip's own Black Label treatment (see
 // style.css's .grade-10) rather than the usual condition-only wording,
 // same way a real BGS Black Label is a distinct named tier, not just
 // "a really good Pristine."
-const GRADE_LABEL = { '7': 'NEAR MINT', '8': 'NM-MT', '8.5': 'NM-MT+', '9': 'MINT', '9.5': 'GEM MINT', '10': 'BLACK LABEL' };
+const GRADE_LABEL = {
+  '7': 'NEAR MINT', '7.5': 'NEAR MINT+', '8': 'NM-MT', '8.5': 'NM-MT+',
+  '9': 'MINT', '9.5': 'GEM MINT', '10': 'BLACK LABEL',
+};
 
 /** `opts.grade` ("7".."10") -> the CSS class carrying that grade's own
  *  metal color + shimmer ramp (see style.css's .grade-7..grade-10, next

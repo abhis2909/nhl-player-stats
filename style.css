@@ -4012,16 +4012,21 @@ a.mg-game-card:hover {
    header, rather than a small badge tucked beside it. Its own color +
    shimmer ramp (--g1/--g2/--g-accent/--g-shimmer-speed/--g-sheen-peak/
    --g-glow/--g-ink/--g-border, set per .grade-* class below) is
-   independent of tier: a Silver jersey graded a 10 still gets the full
-   Black Label treatment here, and a Diamond jersey graded a 7 gets a
-   dull bronze one — the two ratings read as two separate premium
-   signals, exactly like a real BGS label reads independently of the
-   card inside it. The ramp is a real label HIERARCHY, not just a
-   brightness slider — Bronze -> Silver -> Platinum -> Gold -> Rose Gold
-   -> BLACK LABEL, mirroring how BGS's own rare all-10-subgrades label
-   is a distinct black-and-gold design, not just "shinier gold." Omitted
-   entirely when no grade was rolled (see buildJerseyPiece's opts.grade
-   in packs.js) rather than left as dead space. */
+   independent of tier: a Silver-tier jersey graded a 10 still gets the
+   full Black Label treatment here, and a Diamond-tier jersey graded a
+   7 gets a dull matte-silver one — the two ratings read as two
+   separate premium signals, exactly like a real BGS label reads
+   independently of the card inside it. The ramp is a real label
+   HIERARCHY, not a brightness slider — every whole/half-point pair
+   below Sapphire shares a base metal (Silver: 7 matte, 7.5 shiny; Gold:
+   8 matte, 8.5 shiny), then Sapphire and Diamond are their own distinct
+   colors above that, capped by BLACK LABEL at a genuinely different
+   black-and-gold design rather than "shinier gold" again. Grades below
+   7 fall back to Bronze via this rule's own --g1/--g2/--g-accent
+   defaults below (no .grade-* class needed to override them down
+   there — none exists yet, since nothing currently grades below 7).
+   Omitted entirely when no grade was rolled (see buildJerseyPiece's
+   opts.grade in packs.js) rather than left as dead space. */
 .jp-grade-strip {
   display: flex;
   align-items: center;
@@ -4029,6 +4034,12 @@ a.mg-game-card:hover {
   gap: 10px;
   padding: 11px 16px;
   overflow: hidden;
+  /* Bronze — the floor of the ramp, for any grade below 7 (a .grade-*
+     class, when present, overrides all of these; see the comment
+     above). */
+  --g1: #c98a4b; --g2: #5a3418; --g-accent: #f0c894;
+  --g-shimmer-speed: 16s; --g-sheen-peak: 0.12;
+  --g-glow-size: 4px; --g-glow-color: rgba(201, 138, 75, 0.3);
   background: linear-gradient(100deg, var(--g2), var(--g1) 45%, var(--g-accent) 50%, var(--g1) 55%, var(--g2));
   border-bottom: 2px solid var(--g-border, rgba(0, 0, 0, 0.45));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 var(--g-glow-size) var(--g-glow-color);
@@ -4096,37 +4107,51 @@ a.mg-game-card:hover {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
-/* Near Mint (7) — Bronze. Below Silver, so it reads as the "entry"
-   rung of the ladder rather than just a duller version of it. */
+/* Near Mint (7) — Silver, NON-METALLIC: flat matte gray, next to no
+   shimmer (same "basically off" treatment .tier-silver uses) — the
+   dull counterpart to 7.5's shiny version of the same base metal. */
 .grade-7 {
-  --g1: #c98a4b; --g2: #5a3418; --g-accent: #f0c894;
-  --g-shimmer-speed: 16s; --g-sheen-peak: 0.12;
-  --g-glow-size: 4px; --g-glow-color: rgba(201, 138, 75, 0.3);
+  --g1: #9aa0a6; --g2: #45484c; --g-accent: #c2c6ca;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.05;
+  --g-glow-size: 0px; --g-glow-color: transparent;
 }
-/* NM-MT (8) — Silver. */
+/* Near Mint+ (7.5) — Silver, metallic: the same base metal as 7, but
+   bright and genuinely shiny. */
+.grade-7-5 {
+  --g1: #d7dee5; --g2: #4a5568; --g-accent: #ffffff;
+  --g-shimmer-speed: 9s; --g-sheen-peak: 0.25;
+  --g-glow-size: 8px; --g-glow-color: rgba(215, 222, 229, 0.4);
+}
+/* NM-MT (8) — Gold, NON-METALLIC: flat matte mustard/bronze-gold,
+   next to no shimmer — the dull counterpart to 8.5's shiny gold,
+   mirroring the 7/7.5 matte-vs-metallic pairing one rung up. */
 .grade-8 {
-  --g1: #c8d0da; --g2: #4a5568; --g-accent: #f4f7fb;
-  --g-shimmer-speed: 10s; --g-sheen-peak: 0.2;
-  --g-glow-size: 8px; --g-glow-color: rgba(200, 208, 218, 0.4);
+  --g1: #b8933f; --g2: #4a3a1a; --g-accent: #d1af6b;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.06;
+  --g-glow-size: 0px; --g-glow-color: transparent;
 }
-/* NM-MT+ (8.5) — Platinum, the step between Silver and Gold. */
+/* NM-MT+ (8.5) — Gold, metallic: bright, genuinely shiny gold. */
 .grade-8-5 {
-  --g1: #eef2f6; --g2: #5b6b82; --g-accent: #ffffff;
-  --g-shimmer-speed: 8s; --g-sheen-peak: 0.26;
-  --g-glow-size: 12px; --g-glow-color: rgba(238, 242, 246, 0.5);
-}
-/* MINT (9) — Gold. */
-.grade-9 {
   --g1: #f2c94c; --g2: #6b4a10; --g-accent: #fff3c4;
   --g-shimmer-speed: 6s; --g-sheen-peak: 0.3;
   --g-glow-size: 16px; --g-glow-color: rgba(242, 201, 76, 0.55);
 }
-/* Gem Mint (9.5) — Rose Gold, one notch past plain Gold and the last
-   stop before Black Label. */
+/* MINT (9) — Sapphire: a deep rich blue, its own color rather than a
+   metal pairing — the first rung above the Silver/Gold ladder. Light
+   ink instead of the shared dark-ink default, same reasoning as Black
+   Label: this base is dark enough that dark text would wash out. */
+.grade-9 {
+  --g1: #2f5fdd; --g2: #0a1747; --g-accent: #9fc2ff;
+  --g-shimmer-speed: 5s; --g-sheen-peak: 0.35;
+  --g-glow-size: 22px; --g-glow-color: rgba(47, 95, 221, 0.6);
+  --g-ink: #ffffff; --g-border: #9fc2ff;
+}
+/* Gem Mint (9.5) — Diamond: icy white-blue, sparkly, the most
+   elaborate shimmer/glow of any grade below Black Label. */
 .grade-9-5 {
-  --g1: #ffb347; --g2: #7a3a12; --g-accent: #ffe0b0;
-  --g-shimmer-speed: 4s; --g-sheen-peak: 0.4;
-  --g-glow-size: 22px; --g-glow-color: rgba(255, 179, 71, 0.65);
+  --g1: #d6f3ff; --g2: #1c4f6b; --g-accent: #ffffff;
+  --g-shimmer-speed: 3.5s; --g-sheen-peak: 0.45;
+  --g-glow-size: 28px; --g-glow-color: rgba(214, 243, 255, 0.7);
 }
 /* Pristine (10) — BLACK LABEL: a genuinely different design, not just
    the brightest metal on the ramp — matte black/graphite strip (kept
