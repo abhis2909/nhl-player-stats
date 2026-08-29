@@ -4663,6 +4663,62 @@ a.mg-game-card:hover {
   resize: vertical;
 }
 
+/* ---------- Admin: reclassify existing jerseys (admin-jerseys.js) ---------- */
+
+.adm-jersey-reclassify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 480px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.adm-jersey-reclassify-team-head {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 2px 2px;
+}
+
+.adm-jersey-reclassify-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.adm-jersey-reclassify-row.is-changed { border-color: var(--accent-dim); }
+
+.adm-jersey-reclassify-tier {
+  flex: none;
+  width: 130px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* Auto-suggest badge (see admin-jerseys.js's suggestTierForName) — sits
+   between the name and the tier <select>, only shown when a suggestion
+   exists and differs from the row's current tier. */
+.adm-jersey-reclassify-suggested {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
 /* ---------- Admin: grid splitter (admin-jerseys.js) ---------- */
 
 .adm-grid-preview-wrap {
