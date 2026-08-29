@@ -4018,10 +4018,10 @@ a.mg-game-card:hover {
    separate premium signals, exactly like a real BGS label reads
    independently of the card inside it. The ramp is a real label
    HIERARCHY, not a brightness slider — every whole/half-point pair
-   below Sapphire shares a base metal (Silver: 7 matte, 7.5 shiny; Gold:
-   8 matte, 8.5 shiny), then Sapphire and Diamond are their own distinct
-   colors above that, capped by BLACK LABEL at a genuinely different
-   black-and-gold design rather than "shinier gold" again. Grades below
+   shares a base stone/metal, matte at the whole point and metallic
+   (shiny) at the half point above it: Silver (7/7.5), Gold (8/8.5),
+   Diamond (9/9.5) — capped by BLACK LABEL at a genuinely different
+   black-and-gold design rather than "shinier" again. Grades below
    7 fall back to Bronze via this rule's own --g1/--g2/--g-accent
    defaults below (no .grade-* class needed to override them down
    there — none exists yet, since nothing currently grades below 7).
@@ -4136,18 +4136,18 @@ a.mg-game-card:hover {
   --g-shimmer-speed: 6s; --g-sheen-peak: 0.3;
   --g-glow-size: 16px; --g-glow-color: rgba(242, 201, 76, 0.55);
 }
-/* MINT (9) — Sapphire: a deep rich blue, its own color rather than a
-   metal pairing — the first rung above the Silver/Gold ladder. Light
-   ink instead of the shared dark-ink default, same reasoning as Black
-   Label: this base is dark enough that dark text would wash out. */
+/* MINT (9) — Diamond, NON-METALLIC: a neutral, slightly cool white-gray
+   (an uncut/raw stone, not the icy blue of 9.5's polished version),
+   flat with next to no shimmer — the same matte treatment 7 and 8 get,
+   completing a third matte/metallic pair one rung above Silver/Gold. */
 .grade-9 {
-  --g1: #2f5fdd; --g2: #0a1747; --g-accent: #9fc2ff;
-  --g-shimmer-speed: 5s; --g-sheen-peak: 0.35;
-  --g-glow-size: 22px; --g-glow-color: rgba(47, 95, 221, 0.6);
-  --g-ink: #ffffff; --g-border: #9fc2ff;
+  --g1: #e2e6ea; --g2: #6b7278; --g-accent: #f5f7f9;
+  --g-shimmer-speed: 999s; --g-sheen-peak: 0.07;
+  --g-glow-size: 0px; --g-glow-color: transparent;
 }
-/* Gem Mint (9.5) — Diamond: icy white-blue, sparkly, the most
-   elaborate shimmer/glow of any grade below Black Label. */
+/* Gem Mint (9.5) — Diamond, metallic: the same stone as 9, cut and
+   polished — icy white-blue, sparkly, the most elaborate shimmer/glow
+   of any grade below Black Label. */
 .grade-9-5 {
   --g1: #d6f3ff; --g2: #1c4f6b; --g-accent: #ffffff;
   --g-shimmer-speed: 3.5s; --g-sheen-peak: 0.45;
