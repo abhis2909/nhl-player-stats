@@ -4084,7 +4084,12 @@ a.mg-game-card:hover {
 
 .jp-grade-value {
   flex: 0 0 auto;
-  font-family: var(--font-pixel);
+  /* The actual grade number stays in the site's normal font for
+     legibility — the pixel font (used for the label/desc beside it,
+     and the tier tag) reads fine at those small sizes but gets
+     harder to parse at a glance for the number that matters most. */
+  font-family: var(--font);
+  font-weight: 800;
   font-size: 24px;
   line-height: 1;
   color: var(--g-ink, #0b0f14);
