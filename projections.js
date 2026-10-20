@@ -41,6 +41,19 @@
         so the age curve's predicted rate IS the baseline, and
         deployment (if entered) compares against the POSITION GROUP's
         average TOI rather than a personal history that doesn't exist.
+     5. FULL-SEASON GAMES (and, for the Stats page's live Projected tab,
+        REMAINING games): a player's own % of games played in each of
+        their 3 most recent seasons, averaged and extrapolated to
+        SEASON_GAME_COUNT (see gamesPlayedPctExtrapolation()) — NOT a
+        flat weighted average of their raw historical games-played
+        totals, which has no notion of what fraction of a season they
+        actually tend to play. An explicit admin
+        PlayerDeployment.gamesProjected overrides this entirely; a true
+        rookie (no row in any of those 3 seasons) falls back to the
+        age-vs-GP curve instead (see computeProjection()'s isRookie
+        branch). Remaining games = this full-season figure minus games
+        already played, once real games exist this season (see
+        buildRestOfSeasonProjection()).
 
    Rate-type columns (columns.js's `fmt`, e.g. shootingPct/gaa/savePct)
    skip deployment scaling (role change doesn't mechanically move a
@@ -237,7 +250,7 @@ function clip(value, min, max) {
  *  step preseason mode has no equivalent of. */
 function computeProjection({
   playerId, currentInfo, history, mode, ageCurves, settings,
-  projectedAge, deployRow, groupToiAvg, defaultGamesPlayed,
+  projectedAge, deployRow, groupToiAvg, defaultGamesPlayed, seasonGameCounts,
   ytdRow, shrinkageGames,
 }) {
   const catalog = mode === 'goalies' ? GOALIE_COLUMNS : SKATER_COLUMNS;
@@ -323,7 +336,9 @@ function computeProjection({
     out[col.id] = modeledRate; // still a per-game rate here — scaled to a total below, once gamesPlayed is finalized
   }
 
-  const fullSeasonGames = deployRow?.gamesProjected ?? Math.min(historicalGP, SEASON_GAME_COUNT);
+  const gpExtrapolated = gamesPlayedPctExtrapolation(history, seasonGameCounts);
+  const fullSeasonGames = deployRow?.gamesProjected
+    ?? (gpExtrapolated != null ? Math.min(gpExtrapolated, SEASON_GAME_COUNT) : Math.min(historicalGP, SEASON_GAME_COUNT));
 
   if (isRestOfSeason) {
     const remainingGames = Math.max(0, Math.round(fullSeasonGames) - g);
@@ -420,6 +435,14 @@ function buildProjectionContext(historicalData, bioPool) {
 
   const defaultGamesPlayed = Math.max(...eligible.map((e) => seasonGameCount(e.skaters)), 0);
 
+  // Each historical season's own real length (the same "most games
+  // anyone played that season" proxy data.js's seasonGameCount() uses
+  // elsewhere, from the UNFILTERED pool so a season leader who happens
+  // to miss the ratings eligibility bar — shouldn't normally happen,
+  // but don't depend on it — still sets the true max) — what
+  // gamesPlayedPctExtrapolation() below divides each season's GP by.
+  const seasonGameCounts = new Map(historicalData.map((h) => [h.seasonId, seasonGameCount(h.skaters)]));
+
   function historyFor(playerId, isGoalie) {
     // Newest-first, matching eligible[]'s order (already newest-first).
     return eligible.map((e) => {
@@ -429,11 +452,35 @@ function buildProjectionContext(historicalData, bioPool) {
         qualifies: Boolean(row),
         toi: e.toiByPlayer.get(playerId),
         age: ageAsOfSeasonStart(bioMap.get(playerId), e.seasonId),
+        seasonId: e.seasonId,
       };
     });
   }
 
-  return { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor };
+  return { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, seasonGameCounts, historyFor };
+}
+
+/** A player's projected full-season games-played total — the average,
+ *  over their 3 MOST RECENT historical seasons (not just the ones that
+ *  met the ratings eligibility bar — a part-time/injury-prone player's
+ *  lower playing-time fraction should still count), of that season's %
+ *  of games played (their own gamesPlayed ÷ that season's real length,
+ *  seasonGameCounts), extrapolated to SEASON_GAME_COUNT. Returns null
+ *  (caller falls back to the historicalGP-based figure) if the player
+ *  has no row in any of those 3 seasons — true rookies and anyone
+ *  missing from all 3 go through the existing age-curve/weighted-
+ *  average fallback instead. */
+function gamesPlayedPctExtrapolation(history, seasonGameCounts) {
+  const pcts = [];
+  for (const h of history.slice(0, 3)) {
+    if (!h.row) continue;
+    const seasonLen = seasonGameCounts.get(h.seasonId);
+    if (!seasonLen) continue;
+    pcts.push(h.row.gamesPlayed / seasonLen);
+  }
+  if (!pcts.length) return null;
+  const avgPct = pcts.reduce((s, v) => s + v, 0) / pcts.length;
+  return avgPct * SEASON_GAME_COUNT;
 }
 
 /** Builds the full preseason-projected season (the Next-Season Preview
@@ -442,7 +489,7 @@ function buildProjectionContext(historicalData, bioPool) {
  *  fallback for anyone with no qualifying history. `deployment`/
  *  `settings` come from GET /api/fantasy/public-config. */
 function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, teamMeta, deployment, settings }) {
-  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor } = buildProjectionContext(historicalData, bioPool);
+  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, seasonGameCounts, historyFor } = buildProjectionContext(historicalData, bioPool);
   const deployMap = new Map(deployment.map((d) => [d.nhlPlayerId, d]));
 
   const skaters = [];
@@ -471,6 +518,7 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
       deployRow: deployMap.get(bio.playerId),
       groupToiAvg: isGoalie ? null : groupToiAvg[positionGroup(bio.pos)],
       defaultGamesPlayed,
+      seasonGameCounts,
     });
 
     if (isGoalie) goalies.push(projected); else skaters.push(projected);
@@ -492,7 +540,7 @@ function buildProjectedSeason({ projectedSeasonId, historicalData, bioPool, team
  *  `bioPool` supplies age. `settings.restOfSeasonShrinkageGames` is the
  *  shrinkage constant K. */
 function buildRestOfSeasonProjection({ currentSeasonId, currentRaw, historicalData, bioPool, teamMeta, deployment, settings }) {
-  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, historyFor } = buildProjectionContext(historicalData, bioPool);
+  const { bioMap, ageCurves, groupToiAvg, defaultGamesPlayed, seasonGameCounts, historyFor } = buildProjectionContext(historicalData, bioPool);
   const deployMap = new Map(deployment.map((d) => [d.nhlPlayerId, d]));
   const shrinkageGames = settings.restOfSeasonShrinkageGames || 20;
 
@@ -515,6 +563,7 @@ function buildRestOfSeasonProjection({ currentSeasonId, currentRaw, historicalDa
       deployRow: deployMap.get(ytdRow.playerId),
       groupToiAvg: isGoalie ? null : groupToiAvg[positionGroup(ytdRow.pos)],
       defaultGamesPlayed,
+      seasonGameCounts,
       ytdRow,
       shrinkageGames,
     });

@@ -214,12 +214,10 @@ main {
   border-radius: var(--radius);
 }
 
-/* ---------- Stats page: Historical / Current Season picker ----------
-   Same visual language as the Mini-Games hub cards (.mg-game-card) —
-   two big clickable boxes instead of a plain toggle-group, since this
-   is the top-level split the whole page hangs off of. Unlike the
-   Mini-Games cards (plain links), these are <button>s that toggle
-   state.period — see app.js's el.periodButtons / updateActiveStates(). */
+/* ---------- Stats page: season tab bar ----------
+   Plain toggle-group (same as the mode/pos/stat-mode toggles below it)
+   over the 4 fixed STATS_SEASON_TABS — see app.js's
+   populateSeasonTabGroup() / updateActiveStates(). */
 .period-select-row {
   margin-bottom: 18px;
   display: flex;
@@ -227,63 +225,8 @@ main {
   gap: 12px;
 }
 
-.period-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px;
-}
-
-.period-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 22px;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-  appearance: none;
-  cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s, background 0.15s;
-}
-
-.period-card:hover {
-  border-color: var(--accent-dim);
-  transform: translateY(-2px);
-}
-
-.period-card.active {
-  border-color: var(--accent);
-  background: linear-gradient(180deg, rgba(79, 179, 255, 0.12), rgba(79, 179, 255, 0.03));
-}
-
-.period-card-icon { font-size: 32px; }
-
-.period-card h2 { margin: 0; font-size: 18px; }
-
-.period-card p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 13.5px;
-  line-height: 1.5;
-  flex: 1;
-}
-
-.period-card-cta {
-  font-weight: 700;
-  font-size: 13.5px;
-  color: var(--text-faint);
-}
-
-.period-card.active .period-card-cta {
-  color: var(--accent);
-}
-
-/* Shown instead of the search/filters/table when Current Season has no
-   real games yet — see syncControlVisibility() in app.js. */
+/* Shown instead of the search/filters/table when the Current tab's
+   season has no real games yet — see syncControlVisibility() in app.js. */
 .current-placeholder {
   display: flex;
   flex-direction: column;

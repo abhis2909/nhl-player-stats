@@ -18,13 +18,10 @@ const el = {
   modeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-mode]')),
   posToggleGroup: document.getElementById('posToggleGroup'),
   posButtons: Array.from(document.querySelectorAll('.toggle-btn[data-pos]')),
-  periodButtons: Array.from(document.querySelectorAll('.period-card[data-period]')),
-  historicalCardDesc: document.getElementById('historicalCardDesc'),
+  seasonTabGroup: document.getElementById('seasonTabGroup'),
   statsContent: document.getElementById('statsContent'),
   currentPlaceholder: document.getElementById('currentPlaceholder'),
   statsListArea: document.getElementById('statsListArea'),
-  historicalSeasonGroup: document.getElementById('historicalSeasonGroup'),
-  currentSeasonSubGroup: document.getElementById('currentSeasonSubGroup'),
   statModeButtons: Array.from(document.querySelectorAll('.toggle-btn[data-statmode]')),
   qualifiedToggleBtn: document.getElementById('qualifiedToggleBtn'),
   teamSelect: document.getElementById('teamSelect'),
@@ -45,16 +42,28 @@ const el = {
   modalContent: document.getElementById('modalContent'),
 };
 
+// Fixed season tabs — hardcoded rather than derived from whatever
+// /v1/standings/now currently calls "current" (state.seasonId below),
+// which is what caused the old Historical/Current toggle's rollover
+// bug: the NHL API can flip state.seasonId over to the new season
+// before (or well after) that season actually has any games, and the
+// old code used state.seasonId itself to decide what counted as
+// "historical" vs "current." Update these 3 ids once a year.
+const STATS_SEASON_TABS = [
+  { key: 'hist2024', seasonId: 20242025, label: '2024–25' },
+  { key: 'hist2025', seasonId: 20252026, label: '2025–26' },
+  { key: 'current', seasonId: 20262027, label: 'Current 2026–27' },
+  { key: 'projected', seasonId: 20262027, label: 'Projected 2026–27' },
+];
+
 const state = {
   mode: 'skaters',
   team: 'ALL',
   pos: 'ALL',
   search: '',
-  seasonId: null,          // the CURRENT (live) season, as the NHL API sees it right now — treated as historical (the season has effectively been played)
-  period: null,            // null (nothing picked yet, landing state) | 'historical' | 'current' — the whole toggle
-  historicalSeasonId: null, // whichever of the 2 historical seasons is showing, when period === 'historical'
-  currentSubView: null,    // null (not entered yet) | 'live' | 'projected' — which of Current Season's 2 sub-tabs is showing; defaulted once via defaultCurrentSubView() the first time period becomes 'current'
-  currentIsLive: false,    // true once the upcoming season has any real recorded games — set by loadCurrentSeasonView()
+  seasonId: null,          // the CURRENT (live) season, as the NHL API sees it right now — only used for things that genuinely need "whatever's live" (the Rating Trend chart, the Compare search pool); the Stats page's own tabs use STATS_SEASON_TABS's fixed ids instead, not this
+  tabKey: null,            // null (nothing loaded yet) | one of STATS_SEASON_TABS's keys
+  currentIsLive: false,    // true once the Current tab's season has any real recorded games — set by loadCurrentTab()
   seasonDataCache: new Map(), // seasonId (or a synthetic string key for the current-season view) -> { skaters, goalies } raw totals — avoids refetching something already looked at
   statMode: 'total',       // 'total' | 'perGame' — see applyStatMode()
   qualifiedOnly: false,    // when true, hide players under MIN_GAMES_PLAYED (ratings.js) games played
@@ -66,7 +75,7 @@ const state = {
   goalies: [],
   ratedSkatersById: new Map(), // playerId -> raw-totals rated player (ratedPoolFor()) — what row clicks hand to the shared player-modal.js, never the possibly-per-game-divided state.skaters row itself
   ratedGoaliesById: new Map(),
-  currentSeasonRatedSkaters: [], // state.seasonId's own rated pool, fixed regardless of period/view — feeds player-modal.js's Rating Trend "Live" point
+  currentSeasonRatedSkaters: [], // state.seasonId's own rated pool, fixed regardless of which season tab is showing — feeds player-modal.js's Rating Trend "Live" point
   currentSeasonRatedGoalies: [],
   columns: loadColumnConfig(), // { skaters: [...ids], goalies: [...ids] } — see columns.js
   sort: {
@@ -75,52 +84,14 @@ const state = {
   },
 };
 
-// Historical is kept to exactly the 2 most recent completed seasons —
-// state.seasonId itself (the last season the NHL API has a full
-// complement of games for) and the one before it. NHL season ids follow
-// a YYYYYYYY+1 pattern, so stepping back one season is always -10001.
-function historicalSeasonIdsUI() {
-  return [state.seasonId, state.seasonId - 10001]; // newest -> oldest
-}
-
 // The shared player-modal.js's Rating Trend chart's "Historical" tab
 // walks exactly 3 seasons — 2023-24 through 2025-26 as of the 2025-26
 // season, and shifts forward one season each year after, since it's
-// computed off state.seasonId rather than hardcoded — independently of
-// the Historical period's own (2-season) picker above. Newest -> oldest,
-// same convention as historicalSeasonIdsUI().
+// computed off state.seasonId (whatever's actually live right now)
+// rather than hardcoded — independent of the Stats page's own fixed
+// STATS_SEASON_TABS above. Newest -> oldest.
 function trendHistoricalSeasonIds() {
   return [state.seasonId, state.seasonId - 10001, state.seasonId - 20002];
-}
-
-// The season one ahead of "current" — the Current Season view's target,
-// shown as a preseason projection until it has real games (see
-// loadCurrentSeasonView()), then as a live rest-of-season blend. Its
-// historical inputs (the 4 seasons feeding either version) are computed
-// by projections.js's historicalSeasonIds(), independently of this.
-//
-// CAVEAT worth knowing if this ever looks wrong right at a season
-// rollover: this is always state.seasonId + 1, and state.seasonId is
-// itself whatever /v1/standings/now currently calls "current" — if the
-// NHL API ever flips state.seasonId over to the new season BEFORE (or
-// well after) that season's stats actually start populating, there
-// could be a short mismatched window. Not observable until an actual
-// rollover happens; revisit if it ever looks off then.
-function upcomingSeasonId() {
-  return state.seasonId + 10001;
-}
-
-// Which Current Season sub-tab to land on the FIRST time it's opened
-// this page-load — 'projected' (the preseason model) up through
-// September 30th of the season's start year, since real games aren't
-// underway yet and the projection is the only useful view; 'live'
-// (the placeholder-or-blended view) from October 1st on. Purely an
-// initial default — the user can freely switch tabs afterward, and that
-// choice sticks (state.currentSubView) rather than re-defaulting.
-function defaultCurrentSubView(seasonId) {
-  const startYear = Number(String(seasonId).slice(0, 4));
-  const cutoff = new Date(startYear, 8, 30, 23, 59, 59); // Sept 30, local time
-  return new Date() <= cutoff ? 'projected' : 'live';
 }
 
 /* ---------------------------- helpers ---------------------------- */
@@ -132,9 +103,14 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-/** Active columns for a mode, in catalog order. */
+/** Active columns for a mode, in catalog order. Power Ranking ("overall")
+ *  is forced on for the Current/Projected tabs regardless of the
+ *  admin's column picker — the whole point of those 2 tabs is to read
+ *  power-ranking-first — while the historical tabs keep respecting
+ *  whatever's configured. */
 function activeColumns(mode) {
   const selected = new Set(state.columns[mode] || []);
+  if (state.tabKey === 'current' || state.tabKey === 'projected') selected.add('overall');
   return columnCatalog(mode).filter((c) => selected.has(c.id));
 }
 
@@ -252,60 +228,27 @@ function formatStatValue(col, value) {
   return formatColumnValue(col, value);
 }
 
-/** Rebuilds the Historical season picker (current-1 back to
- *  MIN_HISTORICAL_SEASON_ID) — dynamic, not static markup, since the
- *  actual years depend on what "current" resolves to. Re-run on every
- *  init() so a season rollover picks up automatically. Keeps whatever
- *  season was already selected if it's still in range, else defaults
- *  to the newest historical season. */
-function populateHistoricalSeasonGroup() {
-  const ids = historicalSeasonIdsUI();
-  if (el.historicalCardDesc) {
-    el.historicalCardDesc.textContent = `Full-season stats — ${ids.map(seasonLabel).reverse().join(' & ')}.`;
-  }
-  el.historicalSeasonGroup.innerHTML = '';
-  for (const id of [...ids].reverse()) { // render oldest -> newest (left to right), chronological
+/** Builds the 4 fixed season tabs (STATS_SEASON_TABS) — static in
+ *  content (unlike the old dynamic Historical/Current picker), but
+ *  still built here rather than in markup so the click handlers have
+ *  somewhere to attach. */
+function populateSeasonTabGroup() {
+  el.seasonTabGroup.innerHTML = '';
+  for (const tab of STATS_SEASON_TABS) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toggle-btn';
     btn.setAttribute('role', 'tab');
-    btn.dataset.season = String(id);
-    btn.textContent = seasonLabel(id);
-    btn.addEventListener('click', () => selectHistoricalSeason(id));
-    el.historicalSeasonGroup.appendChild(btn);
-  }
-  if (!ids.includes(state.historicalSeasonId)) state.historicalSeasonId = ids[0] ?? null;
-}
-
-/** Builds Current Season's 2 sub-tabs — the plain "2026–27" view
- *  (placeholder until the season has real games, then the live
- *  rest-of-season blend) and "2026–27 (Projections)" (the preseason
- *  age-curve model, always available regardless of whether the season
- *  has started). Mirrors populateHistoricalSeasonGroup()'s pattern. */
-function populateCurrentSeasonSubGroup() {
-  const seasonId = upcomingSeasonId();
-  const label = seasonLabel(seasonId);
-  el.currentSeasonSubGroup.innerHTML = '';
-  const views = [
-    { key: 'live', text: label },
-    { key: 'projected', text: `${label} (Projections)` },
-  ];
-  for (const v of views) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'toggle-btn';
-    btn.setAttribute('role', 'tab');
-    btn.dataset.currentView = v.key;
-    btn.textContent = v.text;
-    btn.addEventListener('click', () => selectCurrentSubView(v.key));
-    el.currentSeasonSubGroup.appendChild(btn);
+    btn.dataset.tabKey = tab.key;
+    btn.textContent = tab.label;
+    btn.addEventListener('click', () => selectTab(tab.key));
+    el.seasonTabGroup.appendChild(btn);
   }
 }
 
-async function selectCurrentSubView(view) {
-  if (state.period === 'current' && state.currentSubView === view) return;
-  state.currentSubView = view;
-  await activateView('current');
+function selectTab(tabKey) {
+  if (state.tabKey === tabKey) return;
+  activateView(tabKey);
 }
 
 /** Fetches the 4 historical seasons + bio pool + admin settings that
@@ -331,15 +274,32 @@ async function loadProjectionInputs(seasonId) {
   return { historicalData, bioPool, deployment: configRes.deployment, settings: configRes.settings };
 }
 
-/** Current Season's "2026–27" sub-tab: a placeholder until the season
- *  has any real recorded games (no projection fetch happens at all,
- *  only the one lightweight stats call needed to check), then
- *  AUTOMATICALLY a live rest-of-season blend (buildRestOfSeasonProjection(),
- *  projections.js — real results so far + a modeled rate for the rest,
- *  updating every time more games are played). Sets state.currentIsLive
- *  so updateSeasonLabel()/syncControlVisibility() know which applies. */
-async function loadLiveCurrentSeasonView(seasonId) {
-  const cacheKey = `current:${seasonId}:live`;
+/** The "Current 2026–27" tab: plain real totals for the season, no
+ *  projection at all — a placeholder until it has any recorded games.
+ *  Sets state.currentIsLive so updateSeasonLabel()/
+ *  syncControlVisibility() know whether to show that placeholder. */
+async function loadCurrentTab(seasonId) {
+  let raw = state.seasonDataCache.get(seasonId);
+  if (!raw) {
+    const data = await loadSeasonStatsFor(seasonId, state.teamMeta);
+    raw = { skaters: data.skaters, goalies: data.goalies };
+    state.seasonDataCache.set(seasonId, raw);
+  }
+  state.currentIsLive = raw.skaters.length > 0;
+  state.rawSkaters = raw.skaters;
+  state.rawGoalies = raw.goalies;
+  applyStatMode();
+}
+
+/** The "Projected 2026–27" tab: once the season has any real recorded
+ *  games, a live rest-of-season blend (buildRestOfSeasonProjection(),
+ *  projections.js — real results so far + a modeled rate, including
+ *  the 3-season-%-games-played-extrapolated-to-84 remaining-games
+ *  figure, for the rest — updates as more games are played); before
+ *  that, the preseason age-curve model (buildProjectedSeason()) so
+ *  there's still something useful to show. */
+async function loadProjectedTab(seasonId) {
+  const cacheKey = `projected:${seasonId}`;
   let raw = state.seasonDataCache.get(cacheKey);
   if (!raw) {
     let currentRaw = state.seasonDataCache.get(seasonId);
@@ -349,112 +309,53 @@ async function loadLiveCurrentSeasonView(seasonId) {
       state.seasonDataCache.set(seasonId, currentRaw);
     }
     const isLive = currentRaw.skaters.length > 0; // has the season actually started yet?
-
-    if (!isLive) {
-      raw = { skaters: [], goalies: [], isLive: false };
-    } else {
-      const { historicalData, bioPool, deployment, settings } = await loadProjectionInputs(seasonId);
-      const built = buildRestOfSeasonProjection({ // projections.js
-        currentSeasonId: seasonId,
-        currentRaw,
-        historicalData,
-        bioPool,
-        teamMeta: state.teamMeta,
-        deployment,
-        settings,
-      });
-      raw = { skaters: built.skaters, goalies: built.goalies, isLive: true };
-    }
-    state.seasonDataCache.set(cacheKey, raw);
-  }
-  state.rawSkaters = raw.skaters;
-  state.rawGoalies = raw.goalies;
-  state.currentIsLive = raw.isLive;
-  applyStatMode();
-}
-
-/** Current Season's "2026–27 (Projections)" sub-tab: the preseason
- *  age-curve model (buildProjectedSeason(), projections.js), always
- *  available regardless of whether the season has started — distinct
- *  from the live rest-of-season blend above. */
-async function loadProjectedCurrentSeasonView(seasonId) {
-  const cacheKey = `current:${seasonId}:projected`;
-  let raw = state.seasonDataCache.get(cacheKey);
-  if (!raw) {
     const { historicalData, bioPool, deployment, settings } = await loadProjectionInputs(seasonId);
-    const built = buildProjectedSeason({ // projections.js
-      projectedSeasonId: seasonId,
-      historicalData,
-      bioPool,
-      teamMeta: state.teamMeta,
-      deployment,
-      settings,
-    });
+    const built = isLive
+      ? buildRestOfSeasonProjection({ // projections.js
+        currentSeasonId: seasonId, currentRaw, historicalData, bioPool, teamMeta: state.teamMeta, deployment, settings,
+      })
+      : buildProjectedSeason({ // projections.js
+        projectedSeasonId: seasonId, historicalData, bioPool, teamMeta: state.teamMeta, deployment, settings,
+      });
     raw = { skaters: built.skaters, goalies: built.goalies };
     state.seasonDataCache.set(cacheKey, raw);
   }
   state.rawSkaters = raw.skaters;
   state.rawGoalies = raw.goalies;
-  state.currentIsLive = false; // the projection tab is never the "live blend" — always the modeled view
   // Projections are meant to be read power-ranking-first — default to
-  // sorting by it every time this sub-tab loads (falls back gracefully
-  // via ensureValidSort() in activateView() if 'overall' isn't one of
-  // the user's active columns). A manual header click still overrides
-  // this for the rest of that visit, same as any other sort.
+  // sorting by it every time this tab loads (falls back gracefully via
+  // ensureValidSort() in activateView() if 'overall' somehow isn't an
+  // active column). A manual header click still overrides this for the
+  // rest of that visit, same as any other sort.
   state.sort.skaters = { key: 'overall', dir: 'desc' };
   state.sort.goalies = { key: 'overall', dir: 'desc' };
   applyStatMode();
 }
 
-/** Dispatches to whichever of Current Season's 2 sub-tabs is active. */
-async function loadCurrentSeasonView() {
-  const seasonId = upcomingSeasonId();
-  if (state.currentSubView === 'projected') {
-    await loadProjectedCurrentSeasonView(seasonId);
-  } else {
-    await loadLiveCurrentSeasonView(seasonId);
-  }
+/** The one loader dispatch for whichever tab is active. */
+async function loadForTab(tabKey) {
+  const tab = STATS_SEASON_TABS.find((t) => t.key === tabKey);
+  if (tabKey === 'projected') await loadProjectedTab(tab.seasonId);
+  else if (tabKey === 'current') await loadCurrentTab(tab.seasonId);
+  else await loadStatsForSeason(tab.seasonId);
 }
 
-async function selectHistoricalSeason(seasonId) {
-  if (state.period === 'historical' && state.historicalSeasonId === seasonId) return;
-  state.historicalSeasonId = seasonId;
-  await activateView('historical');
-}
-
-/** The one loader dispatch for whichever period is active — both the
- *  top-level toggle and the Historical season picker ultimately call
- *  activateView(), which calls this. */
-async function loadForView(period) {
-  if (period === 'historical') {
-    const seasonId = state.historicalSeasonId ?? historicalSeasonIdsUI()[0];
-    state.historicalSeasonId = seasonId;
-    if (seasonId != null) await loadStatsForSeason(seasonId);
-    return;
-  }
-  // First time Current Season is entered this page-load, pick a default
-  // sub-tab (see defaultCurrentSubView()) — afterward whatever the user
-  // picked sticks, even if they bounce over to Historical and back.
-  if (state.currentSubView == null) state.currentSubView = defaultCurrentSubView(upcomingSeasonId());
-  await loadCurrentSeasonView();
-}
-
-/** Central dispatch for the period control surface (top-level
- *  Historical/Current Season toggle + the Historical season picker) —
- *  sets state, loads the right data, and refreshes every dependent bit
- *  of UI (control visibility/active states, the header label, sort
- *  validity, the table itself). */
-async function activateView(period) {
+/** Central dispatch for the season tab bar — sets state, loads the
+ *  right data, and refreshes every dependent bit of UI (control
+ *  visibility/active states, the header label, sort validity, the
+ *  table itself). */
+async function activateView(tabKey) {
   el.statsContent.hidden = false; // reveal search/filters/table on the first pick — stays visible from here on
   toggleSkeleton(true);
   hideBanner();
   try {
-    state.period = period;
-    await loadForView(period);
+    state.tabKey = tabKey;
+    await loadForTab(tabKey);
     syncControlVisibility();
     updateActiveStates();
     updateSeasonLabel();
     ensureValidSort();
+    renderTableHeaders(); // active columns depend on state.tabKey (PWR forced on Current/Projected) — rebuild every switch, not just at init
     render();
   } catch (err) {
     showBanner(`Couldn't load stats (${err.message}).`);
@@ -464,31 +365,18 @@ async function activateView(period) {
 }
 
 function syncControlVisibility() {
-  el.historicalSeasonGroup.hidden = state.period !== 'historical';
-  el.currentSeasonSubGroup.hidden = state.period !== 'current';
-  // The "live" sub-tab, before the season has any real games, shows a
+  // The Current tab, before the season has any real games, shows a
   // placeholder instead of the search/filters/table — nothing to look
-  // through yet. The "projected" sub-tab always has data.
-  const showPlaceholder = state.period === 'current' && state.currentSubView === 'live' && !state.currentIsLive;
+  // through yet. The historical tabs and the Projected tab (which
+  // falls back to the preseason model) always have data.
+  const showPlaceholder = state.tabKey === 'current' && !state.currentIsLive;
   el.currentPlaceholder.hidden = !showPlaceholder;
   el.statsListArea.hidden = showPlaceholder;
 }
 
 function updateActiveStates() {
-  el.periodButtons.forEach((b) => {
-    const active = b.dataset.period === state.period;
-    b.classList.toggle('active', active);
-    b.setAttribute('aria-selected', active ? 'true' : 'false');
-    const cta = b.querySelector('.period-card-cta');
-    if (cta) cta.textContent = active ? '● Viewing' : 'View →';
-  });
-  el.historicalSeasonGroup.querySelectorAll('.toggle-btn').forEach((b) => {
-    const active = state.period === 'historical' && Number(b.dataset.season) === state.historicalSeasonId;
-    b.classList.toggle('active', active);
-    b.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
-  el.currentSeasonSubGroup.querySelectorAll('.toggle-btn').forEach((b) => {
-    const active = state.period === 'current' && b.dataset.currentView === state.currentSubView;
+  el.seasonTabGroup.querySelectorAll('.toggle-btn').forEach((b) => {
+    const active = b.dataset.tabKey === state.tabKey;
     b.classList.toggle('active', active);
     b.setAttribute('aria-selected', active ? 'true' : 'false');
   });
@@ -496,20 +384,19 @@ function updateActiveStates() {
 
 function updateSeasonLabel() {
   const statModeLabel = state.statMode === 'perGame' ? 'Per Game' : 'Total';
+  const tab = STATS_SEASON_TABS.find((t) => t.key === state.tabKey);
 
-  if (state.period === 'historical') {
-    el.seasonLabel.textContent = `${seasonLabel(state.historicalSeasonId)} (Historical) · Regular Season stats · ${statModeLabel}`;
+  if (state.tabKey === 'projected') {
+    el.seasonLabel.textContent = `${tab.label} · ${statModeLabel} — real results so far blended with a modeled rate for the rest of the season; each player's remaining games are their own 3-season average of % of games played, extrapolated to an ${SEASON_GAME_COUNT}-game season. Updates as more games are played. Tune under Admin → Projections.`;
     return;
   }
-
-  const seasonId = upcomingSeasonId();
-  if (state.currentSubView === 'projected') {
-    el.seasonLabel.textContent = `${seasonLabel(seasonId)} (Projections) · ${statModeLabel} — a preseason model built from recent-season history and age curves. Tune under Admin → Projections.`;
+  if (state.tabKey === 'current') {
+    el.seasonLabel.textContent = state.currentIsLive
+      ? `${tab.label} · Regular Season stats · ${statModeLabel}`
+      : `${tab.label} — hasn't started yet. Stats will appear here automatically once real games are played.`;
     return;
   }
-  el.seasonLabel.textContent = state.currentIsLive
-    ? `${seasonLabel(seasonId)} · Current Season · ${statModeLabel} — real results so far blended with a modeled rate for the rest of the season — updates as more games are played. Tune under Admin → Projections.`
-    : `${seasonLabel(seasonId)} · Current Season — hasn't started yet. Stats will appear here automatically once real games are played.`;
+  el.seasonLabel.textContent = `${tab.label} (Historical) · Regular Season stats · ${statModeLabel}`;
 }
 
 /* ------------------------------ init ------------------------------ */
@@ -530,14 +417,13 @@ async function init() {
     state.seasonDataCache.set(seasonId, { skaters, goalies });
 
     populateTeamSelect();
-    populateHistoricalSeasonGroup();
-    populateCurrentSeasonSubGroup();
+    populateSeasonTabGroup();
     renderTableHeaders();
 
-    // state.seasonId's own rated pool, fixed regardless of whatever
-    // period/view ends up displayed below — feeds the shared
+    // state.seasonId's own rated pool, fixed regardless of which
+    // season tab ends up displayed below — feeds the shared
     // player-modal.js's Rating Trend "Live" point and its in-modal
-    // Compare search pool. Computed once here, not per-view.
+    // Compare search pool. Computed once here, not per-tab.
     const skRatedById = ratedPoolFor(skaters, 'skaters');
     const goRatedById = ratedPoolFor(goalies, 'goalies');
     state.currentSeasonRatedSkaters = Array.from(skRatedById.values());
@@ -553,11 +439,7 @@ async function init() {
       searchPool: [...state.currentSeasonRatedSkaters, ...state.currentSeasonRatedGoalies],
     });
 
-    // Landing state: just the Historical / Current Season cards, nothing
-    // fetched or rendered for either view yet — picking one is what
-    // triggers activateView() (see el.periodButtons' click handler) and
-    // reveals el.statsContent (search/filters/table).
-    el.seasonLabel.textContent = 'Pick Historical or Current Season below to see stats.';
+    await activateView('current'); // land straight on the Current tab — no more pick-a-card landing step
   } catch (err) {
     showBanner(`Couldn't load NHL data (${err.message}). Make sure the local server is running, then retry.`);
   }
@@ -852,14 +734,6 @@ el.qualifiedToggleBtn.addEventListener('click', () => {
   el.qualifiedToggleBtn.classList.toggle('active', state.qualifiedOnly);
   el.qualifiedToggleBtn.setAttribute('aria-selected', state.qualifiedOnly ? 'true' : 'false');
   render();
-});
-
-el.periodButtons.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const period = btn.dataset.period;
-    if (state.period === period) return;
-    activateView(period);
-  });
 });
 
 el.teamSelect.addEventListener('change', () => {
