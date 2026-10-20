@@ -80,6 +80,7 @@ model User {
   cards        UserCard[]          // unused in Phase 1
   packOpenings PackOpening[]       // unused in Phase 1
   trades       Trade[]             // ACTIVE — Fantasy Hub page's Trade Analyzer
+  tradeHubEntry TradeHubEntry?      // ACTIVE — Fantasy Hub page's Trade Hub (one row per manager)
 }
 
 // The SINGLE site administrator — a completely separate concept from
@@ -128,78 +129,31 @@ model CreditTransaction {
   createdAt DateTime @default(now())
 }
 
-// ---------- Cached Yahoo data ----------
-// Pulled with ONE commissioner-level OAuth token via a scheduled
-// job, not per-user tokens — Yahoo's access rules are based on
-// league membership, so one token can read the whole league. ACTIVE
-// as of the Yahoo Fantasy import feature (api/_lib/yahoo.js) — the
-// "deferred entirely" note above (and in fantasy-hub/README.md) is now
-// stale for this section specifically; every other "unused in Phase 1"
-// model in this file is still accurate.
-
-// The one OAuth credential (singleton, like ProjectionSettings/
-// RatingSettings above) — a single commissioner connects their Yahoo
-// account once via Admin -> Yahoo League, and every visitor's page
-// view reads from the *cache* tables below, never Yahoo directly.
-// accessToken is short-lived (~1hr, Yahoo-controlled); refreshToken is
-// long-lived and is what actually matters for staying connected —
-// getValidAccessToken() in api/_lib/yahoo.js refreshes and rewrites
-// both plus expiresAt whenever the access token's stale, so this row
-// is always the current pair, not just the original grant.
-// leagueKey/gameKey are set once via Admin -> Yahoo League after
-// connecting (a Yahoo login can belong to several leagues/seasons;
-// see discoverLeagues() in api/_lib/yahoo.js) and drive every sync.
-model YahooToken {
-  id           String    @id @default("singleton")
-  accessToken  String
-  refreshToken String
-  expiresAt    DateTime
-  leagueKey    String? // e.g. "453.l.12345" — which league syncGames() pulls
-  leagueName   String? // cached display name, set alongside leagueKey — avoids a Yahoo round trip just to show "connected to <league>"
-  gameKey      String? // e.g. "453" — the sport+season Yahoo "game" the league belongs to
-  updatedAt    DateTime  @updatedAt
-}
-
-model YahooMatchupCache {
-  matchupKey String   @id // Yahoo's matchup identifier
-  weekKey    String
-  rawData    Json
-  fetchedAt  DateTime @default(now())
-}
-
-// Whole-league standings table, refreshed in full each sync (there's
-// only ever one current standings view, so — like YahooToken above —
-// this is a singleton row, not one per team; ideas like
-// "how has this changed since last sync" aren't needed for Phase 1).
-model YahooStandingsCache {
-  id        String   @id @default("singleton")
-  rawData   Json
-  fetchedAt DateTime @default(now())
-}
-
-// One row per Yahoo team, its current roster — separate from
-// YahooMatchupCache/YahooStandingsCache since rosters are fetched
-// per-team (one Yahoo API call each) rather than as a single
-// whole-league payload.
-model YahooRosterCache {
-  teamKey   String   @id // e.g. "453.l.12345.t.4"
-  teamName  String
-  rawData   Json
-  fetchedAt DateTime @default(now())
-}
-
-model YahooTransactionCache {
-  transactionKey String   @id // Yahoo's transaction identifier
-  rawData         Json
-  fetchedAt       DateTime @default(now())
-}
-
-// Full draft-results list for the league, refreshed in full each sync
-// (a completed draft never changes) — singleton like standings above.
-model YahooDraftCache {
-  id        String   @id @default("singleton")
-  rawData   Json
-  fetchedAt DateTime @default(now())
+// ---------- Fantasy Hub page: Trade Hub ----------
+// Replaced the short-lived Yahoo Fantasy import (never got the OAuth
+// app approved — see git history around the removal). One row per
+// manager, upserted wholesale on every save from fantasy-hub.html's
+// Trade Hub — a manager has exactly one block/targets/roster at a
+// time, not a history of them. All four Json fields are snapshots,
+// not live FKs to anything: blockPlayers/targetPlayers are
+// [{ nhlPlayerId, name, team, pos }, ...] (pos here is each player's
+// real NHL position, data.js's own roster pool); targetCategories is a
+// bare array of columns.js stat ids the manager is looking to
+// improve; roster is { slotKey: [{ nhlPlayerId, name, team, pos } |
+// null, ...], ... } keyed by the fixed slot layout fantasy-hub.js
+// defines (2C/2LW/2RW/3D/1 Util/2 G/3 BN/2 IR) — pos INSIDE a roster
+// slot is deliberately editable separately from the player's real NHL
+// pos (Yahoo's fantasy-position eligibility differs from the NHL's
+// own), so it's stored per-slot rather than looked up live.
+model TradeHubEntry {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  blockPlayers     Json     @default("[]")
+  targetPlayers    Json     @default("[]")
+  targetCategories Json     @default("[]")
+  roster           Json     @default("{}")
+  updatedAt        DateTime @updatedAt
 }
 
 // ---------- Game 1: Betting (matchup / category / over-under) ----------

@@ -23,8 +23,11 @@ const MAX_AVATAR_REQUEST_LENGTH = 2_000_000;
 
    GET    -> "am I logged in" check (was me.js)
    POST   -> unified first-time-setup-or-login (was login.js)
-   PATCH  -> submit an avatar change request (see handlePatch's doc
-             comment) -- new, not part of the original 3-file merge
+   PATCH  -> body.type dispatch (default, no type sent, is the original
+             "submit an avatar change request" behavior — see
+             handleAvatarRequest's doc comment); body.type === 'trade-hub'
+             upserts the logged-in user's Trade Hub entry (see
+             handleTradeHubSave's doc comment)
    DELETE -> logout (was logout.js) */
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') return handleMe(req, res);
@@ -89,10 +92,20 @@ function handleLogout(req, res) {
   res.status(200).json({ ok: true });
 }
 
-/* PATCH — session required. Body: { avatarRequestUrl, avatarRequestNote? }.
-   Submits (or replaces) a pending avatar-change request — this does NOT
-   touch avatarUrl itself, it only stages a request for the commissioner
-   to review and approve/reject from Admin -> Users
+/* PATCH — session required, dispatches on body.type. No type (or any
+   type other than 'trade-hub') falls through to the original avatar-
+   request behavior, so fantasy-hub.js's existing avatar call (which
+   never sends a type) keeps working unchanged. */
+async function handlePatch(req, res) {
+  const body = await readJsonBody(req);
+  if (body.type === 'trade-hub') return handleTradeHubSave(body, req, res);
+  return handleAvatarRequest(body, req, res);
+}
+
+/* Body: { avatarRequestUrl, avatarRequestNote? }. Submits (or
+   replaces) a pending avatar-change request — this does NOT touch
+   avatarUrl itself, it only stages a request for the commissioner to
+   review and approve/reject from Admin -> Users
    (api/fantasy/admin-users.js's POST). avatarRequestUrl is expected to
    be a data: URI (fantasy-hub.js resizes/compresses the picked file to
    one client-side before ever sending it) — there's no file-upload/CDN
@@ -102,7 +115,7 @@ function handleLogout(req, res) {
    as-is). Submitting again while a request is already pending simply
    replaces it (no queue, last request wins) — that's normal and
    expected, not an error. */
-async function handlePatch(req, res) {
+async function handleAvatarRequest(body, req, res) {
   try {
     const prisma = getPrisma();
     const user = await getSessionUser(req, prisma);
@@ -111,7 +124,6 @@ async function handlePatch(req, res) {
       return;
     }
 
-    const body = await readJsonBody(req);
     const avatarRequestUrl = typeof body.avatarRequestUrl === 'string' ? body.avatarRequestUrl.trim() : '';
     const avatarRequestNote = typeof body.avatarRequestNote === 'string' ? body.avatarRequestNote.trim().slice(0, 500) : null;
 
@@ -131,6 +143,88 @@ async function handlePatch(req, res) {
     res.status(200).json({ ok: true, user: await toUserPayload(prisma, updated) });
   } catch (err) {
     console.error('fantasy/session (PATCH) error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+}
+
+// Fixed slot layout for the Trade Hub roster builder — key -> slot
+// count. Mirrors exactly what fantasy-hub.js renders; kept here too so
+// a malformed/forged roster body (wrong key, wrong slot count) is
+// rejected server-side rather than trusted as-is.
+const TRADE_HUB_ROSTER_SLOTS = { C: 2, LW: 2, RW: 2, D: 3, UTIL: 1, G: 2, BN: 3, IR: 2 };
+const TRADE_HUB_MAX_LIST = 40; // sanity cap on block/target player lists — a real roster need is nowhere near this
+
+function isPlayerEntry(p) {
+  return p && typeof p === 'object'
+    && Number.isInteger(p.nhlPlayerId)
+    && typeof p.name === 'string' && p.name.trim()
+    && typeof p.team === 'string'
+    && typeof p.pos === 'string';
+}
+
+function sanitizePlayerList(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(isPlayerEntry).slice(0, TRADE_HUB_MAX_LIST).map((p) => ({
+    nhlPlayerId: p.nhlPlayerId,
+    name: p.name.trim().slice(0, 100),
+    team: p.team.trim().slice(0, 10),
+    pos: p.pos.trim().slice(0, 10),
+  }));
+}
+
+function sanitizeRoster(roster) {
+  const out = {};
+  if (!roster || typeof roster !== 'object') roster = {};
+  for (const [slotKey, count] of Object.entries(TRADE_HUB_ROSTER_SLOTS)) {
+    const slots = Array.isArray(roster[slotKey]) ? roster[slotKey] : [];
+    out[slotKey] = Array.from({ length: count }, (_, i) => {
+      const entry = slots[i];
+      return isPlayerEntry(entry) ? {
+        nhlPlayerId: entry.nhlPlayerId,
+        name: entry.name.trim().slice(0, 100),
+        team: entry.team.trim().slice(0, 10),
+        pos: entry.pos.trim().slice(0, 10), // manager's own fantasy-position override, not necessarily the NHL pos
+      } : null;
+    });
+  }
+  return out;
+}
+
+/* Body: { type: 'trade-hub', blockPlayers, targetPlayers, targetCategories, roster }.
+   Session required — always upserts the LOGGED-IN user's own single
+   TradeHubEntry row wholesale (no partial-field patching: the client
+   always sends the full current state of all four fields, same "last
+   write wins, no merge" spirit as the avatar request above). Every
+   field is sanitized server-side rather than trusted — this is public
+   data (public-config.js's `?type=trade-hub` read has no login gate),
+   so a forged body could otherwise plant arbitrary content visible to
+   the whole league. */
+async function handleTradeHubSave(body, req, res) {
+  try {
+    const prisma = getPrisma();
+    const user = await getSessionUser(req, prisma);
+    if (!user) {
+      res.status(401).json({ ok: false, error: 'unauthenticated' });
+      return;
+    }
+
+    const data = {
+      blockPlayers: sanitizePlayerList(body.blockPlayers),
+      targetPlayers: sanitizePlayerList(body.targetPlayers),
+      targetCategories: Array.isArray(body.targetCategories)
+        ? [...new Set(body.targetCategories.filter((c) => typeof c === 'string').map((c) => c.trim().slice(0, 30)))].slice(0, 20)
+        : [],
+      roster: sanitizeRoster(body.roster),
+    };
+
+    await prisma.tradeHubEntry.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, ...data },
+      update: data,
+    });
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('fantasy/session (PATCH trade-hub) error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 }

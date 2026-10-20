@@ -191,7 +191,6 @@
     projection: document.getElementById('subtabProjection'),
     rating: document.getElementById('subtabRating'),
     jerseys: document.getElementById('subtabJerseys'),
-    yahoo: document.getElementById('subtabYahoo'),
   };
 
   function showSubtab(name) {
@@ -210,7 +209,6 @@
     if (name === 'projection' && window.__adminProjectionTab) window.__adminProjectionTab.ensureLoaded();
     if (name === 'rating' && window.__adminRatingTab) window.__adminRatingTab.ensureLoaded();
     if (name === 'jerseys' && window.__adminJerseysTab) window.__adminJerseysTab.ensureLoaded();
-    if (name === 'yahoo' && window.__adminYahooTab) window.__adminYahooTab.ensureLoaded();
   }
 
   subtabButtons.forEach((btn) => {
@@ -218,8 +216,7 @@
   });
 
   // Deep link support, e.g. admin.html?tab=range (range.html now
-  // redirects here with that query param — see range.html; also how
-  // the Yahoo OAuth callback lands back on its own tab, admin-yahoo.js).
+  // redirects here with that query param — see range.html).
   // Deferred a tick (setTimeout 0, not called inline here) so every
   // later <script defer> tag on the page — every admin-*Tab module,
   // since this script (admin.js) loads before all of them in document
@@ -227,9 +224,7 @@
   // showSubtab() goes looking for it; called inline, whichever tab's
   // module hasn't loaded yet just silently never gets ensureLoaded()'d,
   // leaving that tab visible but blank until the user clicks away and
-  // back (only actually noticeable landing here via a real deep link,
-  // e.g. straight after Yahoo's OAuth redirect — a plain click always
-  // finds the module already loaded).
+  // back (only actually noticeable landing here via a real deep link).
   const requestedTab = new URLSearchParams(location.search).get('tab');
   if (requestedTab) setTimeout(() => showSubtab(requestedTab), 0);
 })();

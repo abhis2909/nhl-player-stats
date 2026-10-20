@@ -15,7 +15,7 @@
       <span class="brand-icon" aria-hidden="true">🤝</span>
       <div>
         <h1>Hockey Hub</h1>
-        <p class="subtitle">Tools, Recent Transactions, and your Fantasy Hub account.</p>
+        <p class="subtitle">Trade Hub, Recent Transactions, and your Fantasy Hub account.</p>
       </div>
     </div>
     <div id="fhAuthSlot" class="fh-auth-slot"></div>
@@ -34,58 +34,69 @@
 
   <div class="fh-hub-grid" id="hubGrid" hidden>
 
-    <section class="fh-panel fh-panel-wide" id="panelTools">
+    <section class="fh-panel fh-panel-wide" id="panelTradeHubMine">
       <div class="fh-panel-head">
-        <h2>🛠 Tools</h2>
+        <h2>🔁 My Trade Hub</h2>
       </div>
-      <div class="mg-grid">
-        <a href="trade-analyzer.html" class="mg-game-card">
-          <span class="mg-game-icon" aria-hidden="true">🤝</span>
-          <h2>Trade Analyzer</h2>
-          <p>Pick players for each side and see who wins, graded by the same rating engine behind Player Ratings.</p>
-          <span class="mg-game-cta">Open →</span>
-        </a>
-        <a href="power-rankings.html" class="mg-game-card">
-          <span class="mg-game-icon" aria-hidden="true">🏅</span>
-          <h2>Power Rankings</h2>
-          <p>The live skater and goalie leaderboard, same percentile-based rating engine behind Player Ratings.</p>
-          <span class="mg-game-cta">Open →</span>
-        </a>
-        <a href="schedule.html" class="mg-game-card">
-          <span class="mg-game-icon" aria-hidden="true">🗓</span>
-          <h2>Schedule</h2>
-          <p>Team-by-team weekly grid with off-nights, back-to-backs, and matchup-strength coloring — good for spotting streaming targets.</p>
-          <span class="mg-game-cta">Open →</span>
-        </a>
-        <a href="totw.html" class="mg-game-card">
-          <span class="mg-game-icon" aria-hidden="true">🏆</span>
-          <div class="mg-game-title-row">
-            <h2>Team of the Week</h2>
-            <span class="totw-new-badge" id="totwBoxNewBadge" hidden>NEW</span>
+      <p id="tradeHubLoginHint" class="admin-hint" hidden>
+        <a href="#" id="tradeHubLoginLink">Log in</a> to set up your own trading block, targets, and roster.
+      </p>
+      <p id="tradeHubLoadingNote" class="admin-hint" hidden>Loading player pool…</p>
+      <div id="tradeHubEditor" hidden>
+        <div class="fh-tool-block">
+          <div class="fh-tool-block-head">
+            <h3>Trading Block</h3>
+            <p>Players you're willing to move.</p>
           </div>
-          <p>The top-rated skater at every position for the current (or any past) week, with a full reveal ceremony.</p>
-          <span class="mg-game-cta">Open →</span>
-        </a>
+          <div class="fh-player-search">
+            <input type="text" id="blockSearch" placeholder="Search a player…" autocomplete="off">
+            <div class="fh-suggestions" id="blockSuggestions" hidden></div>
+          </div>
+          <ul class="fh-trade-list" id="blockList"></ul>
+        </div>
+
+        <div class="fh-tool-block">
+          <div class="fh-tool-block-head">
+            <h3>Looking For — Players</h3>
+            <p>Players you'd like to target in a trade.</p>
+          </div>
+          <div class="fh-player-search">
+            <input type="text" id="targetSearch" placeholder="Search a player…" autocomplete="off">
+            <div class="fh-suggestions" id="targetSuggestions" hidden></div>
+          </div>
+          <ul class="fh-trade-list" id="targetList"></ul>
+        </div>
+
+        <div class="fh-tool-block">
+          <div class="fh-tool-block-head">
+            <h3>Looking For — Categories</h3>
+            <p>Stat categories you're trying to improve.</p>
+          </div>
+          <div class="checkbox-grid" id="categoryChecks"></div>
+        </div>
+
+        <div class="fh-tool-block">
+          <div class="fh-tool-block-head">
+            <h3>My Roster</h3>
+            <p>Fill in your lineup. The position shown next to each name is your own call (set it to match your Yahoo
+              eligibility) — it doesn't have to match the player's real NHL position.</p>
+          </div>
+          <div id="rosterBuilder" class="th-roster-builder"></div>
+        </div>
+
+        <div class="admin-buttons">
+          <button type="button" id="tradeHubSaveBtn" class="primary-btn">Save my Trade Hub</button>
+          <span id="tradeHubSaveStatus" class="save-status" aria-live="polite"></span>
+        </div>
       </div>
     </section>
 
-    <section class="fh-panel fh-panel-wide" id="panelLeague" hidden>
+    <section class="fh-panel fh-panel-wide" id="panelTradeHubBoard">
       <div class="fh-panel-head">
-        <h2>🏒 League</h2>
-        <div class="toggle-group" id="leagueSubtabs" role="tablist" aria-label="League section">
-          <button class="toggle-btn active" data-league-tab="standings" role="tab" aria-selected="true">Standings</button>
-          <button class="toggle-btn" data-league-tab="matchups" role="tab" aria-selected="false">Matchups</button>
-          <button class="toggle-btn" data-league-tab="rosters" role="tab" aria-selected="false">Rosters</button>
-          <button class="toggle-btn" data-league-tab="transactions" role="tab" aria-selected="false">Transactions</button>
-          <button class="toggle-btn" data-league-tab="draft" role="tab" aria-selected="false">Draft</button>
-        </div>
+        <h2>🏒 League Trade Board</h2>
       </div>
-      <p id="leagueFetchedNote" class="admin-hint"></p>
-      <div id="leagueStandings" class="league-subpanel"></div>
-      <div id="leagueMatchups" class="league-subpanel" hidden></div>
-      <div id="leagueRosters" class="league-subpanel" hidden></div>
-      <div id="leagueTransactions" class="league-subpanel" hidden></div>
-      <div id="leagueDraft" class="league-subpanel" hidden></div>
+      <p id="tradeHubBoardEmpty" class="admin-hint" hidden>Nobody's set up their Trade Hub yet.</p>
+      <div id="tradeHubBoard" class="th-board"></div>
     </section>
 
     <section class="fh-panel" id="panelTransactions">
@@ -115,8 +126,9 @@
 
 <script src="data.js" defer></script>
 <script src="avatar.js" defer></script>
+<script src="columns.js" defer></script>
 <script src="fantasy-auth.js" defer></script>
-<script src="league.js" defer></script>
+<script src="trade-hub.js" defer></script>
 <script src="fantasy-hub.js" defer></script>
 </body>
 </html>
